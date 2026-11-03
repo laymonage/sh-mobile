@@ -1,0 +1,27 @@
+{
+  "name": "silent-hill-mobile-analysis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reproducible analysis of the Silent Hill J2ME games, for a future JavaScript port. Contains no game files.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "all": "node scripts/all.mjs",
+    "pin": "node scripts/pin-inputs.mjs",
+    "verify": "node scripts/verify-inputs.mjs",
+    "compare": "node scripts/compare-builds.mjs",
+    "analyze": "node scripts/analyze-data.mjs",
+    "opcodes": "node scripts/opcode-table.mjs",
+    "render": "node scripts/render-rooms.mjs",
+    "code-volume": "node scripts/code-volume.mjs",
+    "decompile": "node scripts/decompile.mjs",
+    "test": "node --test",
+    "format": "biome format --write",
+    "format:check": "biome format"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.5"
+  }
+}

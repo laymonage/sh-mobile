@@ -1,0 +1,13 @@
+# Game files and tools are supplied locally and must never be committed.
+*.jar
+*.jad
+*.zip
+sh1/
+sh2/
+sh3/
+
+# Generated output contains game art and decompiled code.
+build/
+
+.DS_Store
+node_modules/
