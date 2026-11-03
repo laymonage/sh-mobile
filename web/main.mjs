@@ -198,7 +198,7 @@ function run(game, renderer) {
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   for (const button of document.querySelectorAll('#actions button')) {
     button.addEventListener('click', () => {
-      game.pressKey(button.dataset.key);
+      if (button.dataset.key) game.pressKey(button.dataset.key);
       button.blur();
     });
   }
