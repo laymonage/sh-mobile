@@ -13,6 +13,7 @@ import {
   usesWideZones,
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
+import { controlsText, GAMEPLAY_TEXT, MainMenu, parseIni, soundLabel } from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -59,7 +60,7 @@ export const EVENT = {
 };
 
 // Menu IDs from Ext and ExtBase. Popups are this port's own simpler form.
-export const MENU = { CHOICE: 2, INVENTORY: 3, SAY: 6, RECEIVED: 7, TEXT_FADE: 28, VERBS: 50, POPUP: 52 };
+export const MENU = { CHOICE: 2, INVENTORY: 3, SAY: 6, PAUSE: 17, RECEIVED: 7, TEXT_FADE: 28, VERBS: 50, POPUP: 52 };
 
 export const VERB = { LOOK: 0, HAND: 1, MOUTH: 2, INVENTORY: 3 };
 const VERB_EVENTS = {
@@ -102,6 +103,7 @@ const SPEAKER_COLORS = [
 ];
 
 const SAVE_VERSION = 1;
+const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
 const NOTICE_MS = 2000;
 
 // Engine text indexes in localization/*.properties.
@@ -110,6 +112,17 @@ const CHOICE_USE = -2;
 const TEXT = {
   SELECT: 7,
   BACK: 9,
+  YES: 10,
+  NO: 11,
+  SETTINGS: 16,
+  HELP: 17,
+  GAMEPLAY: 23,
+  CONTROLS: 24,
+  SAVE: 35,
+  MENU: 45,
+  MAIN_MENU: 46,
+  CONTINUE: 59,
+  LEAVE_GAME: 81,
   MAP: 43,
   NEXT: 147,
   SKIP: 148,
@@ -133,6 +146,10 @@ const TEXT = {
 
 // Commands this prototype runs past: chunk downloads, which a JAR doesn't need, and vibration.
 const NO_OP = new Set([47, 56]);
+
+// The text files write a line break as a backslash and an n, and a space that lines
+// mustn't break at as a plus, as in French punctuation. ExtBase.wrapString converts both.
+const displayText = (text) => text.replaceAll('\\n', '\n').replaceAll('+', '\u00a0');
 
 class RoomObject {
   constructor(source, game) {
@@ -401,7 +418,7 @@ export class Game {
   constructor(
     data,
     {
-      language = 'en',
+      language = null,
       roomSize = 256,
       now = () => Date.now(),
       random = Math.random,
@@ -415,12 +432,12 @@ export class Game {
     this.random = random;
     this.storage = storage;
     this.audio = audio;
-    this.language = language;
-    this.gameTexts = parseLan(data.entries.get(`${data.dataDir}/lan/${language}.lan`));
-    this.engineTexts = new TextDecoder('utf-8')
-      .decode(data.files.get(`localization/${language}.properties`))
-      .split(/\r?\n/)
-      .filter((line) => line.length > 0);
+    this.mainMenu = null;
+    this.languages = this.findLanguages();
+    const stored = language ?? this.storedLanguage();
+    // The original asks on the first run.
+    this.languageChosen = this.languages.length === 1 || this.languages.includes(stored);
+    this.loadLanguage(this.languages.includes(stored) ? stored : this.languages[0]);
     this.scripts = new Map();
     this.images = new Map();
     this.vars = new Map();
@@ -520,6 +537,27 @@ export class Game {
     this.audio?.stop();
   }
 
+  get soundOn() {
+    return this.audio?.enabled ?? true;
+  }
+
+  // Port of M.soundToggle.
+  toggleSound() {
+    this.audio?.setEnabled(!this.soundOn);
+    if (this.soundOn) this.playSound('sh_shot', 1);
+  }
+
+  // The logo and everything after it, for a page that has just loaded the game.
+  showStartup() {
+    this.mainMenu = new MainMenu(this);
+    this.mainMenu.startLogo();
+  }
+
+  showMainMenu() {
+    this.mainMenu = new MainMenu(this);
+    this.mainMenu.showMainMenu();
+  }
+
   // Variables: M's inkServer store, keeping the type hint beside each value.
   setRaw(name, value, hint) {
     this.vars.set(name, { value, hint });
@@ -562,6 +600,57 @@ export class Game {
   }
 
   // Text.
+  findLanguages() {
+    const { entries, files } = this.data;
+    const settings = files.get('settings.ini');
+    const listed = settings ? (parseIni(settings).get('INK-Languages') ?? '').split(',') : [];
+    const present = listed.filter(
+      (language) =>
+        entries.has(`${this.dataDir}/lan/${language}.lan`) && files.has(`localization/${language}.properties`),
+    );
+    return present.length ? present : ['en'];
+  }
+
+  storedLanguage() {
+    try {
+      return this.storage?.getItem(LANGUAGE_PREFERENCE) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  loadLanguage(language) {
+    this.language = language;
+    this.gameTexts = parseLan(this.data.entries.get(`${this.dataDir}/lan/${language}.lan`)).map(displayText);
+    this.engineTexts = new TextDecoder('utf-8')
+      .decode(this.data.files.get(`localization/${language}.properties`))
+      .split(/\r?\n/)
+      .filter((line) => line.length > 0)
+      .map(displayText);
+  }
+
+  setLanguage(language) {
+    this.loadLanguage(language);
+    this.languageChosen = true;
+    this.scripts.clear();
+    try {
+      this.storage?.setItem(LANGUAGE_PREFERENCE, language);
+    } catch {
+      // The choice just won't last beyond this visit.
+    }
+  }
+
+  get manifest() {
+    const bytes = this.data.files.get('META-INF/MANIFEST.MF');
+    const lines = bytes
+      ? new TextDecoder('utf-8')
+          .decode(bytes)
+          .replace(/\r?\n /g, '')
+          .split(/\r?\n/)
+      : [];
+    return Object.fromEntries(lines.map((line) => line.split(/:\s*/, 2)));
+  }
+
   gameText(index) {
     const number = typeof index === 'string' ? Number.parseInt(index, 36) : index;
     return this.gameTexts[number] ?? '???';
@@ -1052,6 +1141,7 @@ export class Game {
   }
 
   resetRun() {
+    this.mainMenu = null;
     this.vars.clear();
     this.actionKeys.clear();
     this.menus = [];
@@ -1062,13 +1152,18 @@ export class Game {
     this.ended = false;
     this.pendingClick = false;
     this.pendingKeys = [];
+    this.pendingRoom = null;
+    this.tickObject = null;
+    this.hideCursor = false;
+    this.notice = null;
     this.resetBattle();
     this.stopSound();
   }
 
   // Saving. A save is the variables and action keys, as in ExtBase.saveGameInRMS,
   // so it holds no running script. The key keeps saves from mixing between builds
-  // whose scripts or text differ, because variables can hold game text.
+  // whose scripts or text differ, because variables can hold game text. As in the
+  // original, there's one save whichever language is chosen.
   get saveKey() {
     if (!this.cachedSaveKey) {
       let hash = 0x811c9dc5;
@@ -1076,18 +1171,34 @@ export class Game {
       for (const name of names) {
         for (const byte of this.data.entries.get(name)) hash = Math.imul(hash ^ byte, 0x01000193);
       }
-      this.cachedSaveKey = `silent-hill-mobile:${this.dataDir}:${this.language}:${(hash >>> 0).toString(16)}`;
+      this.cachedSaveKey = `silent-hill-mobile:${this.dataDir}:${(hash >>> 0).toString(16)}`;
     }
     return this.cachedSaveKey;
   }
 
   readSave() {
     try {
-      const save = JSON.parse(this.storage.getItem(this.saveKey));
+      const save = JSON.parse(this.storage.getItem(this.saveKey) ?? this.storage.getItem(this.englishSaveKey));
       return save?.version === SAVE_VERSION && Array.isArray(save.vars) && Array.isArray(save.actionKeys) ? save : null;
     } catch {
       return null;
     }
+  }
+
+  // Where a save was kept when each language had its own.
+  get englishSaveKey() {
+    return this.saveKey.replace(/:(?=[^:]+$)/, ':en:');
+  }
+
+  // The original's new game removes the old save, after warning that it will.
+  removeSave() {
+    try {
+      this.storage.removeItem(this.saveKey);
+      this.storage.removeItem(this.englishSaveKey);
+    } catch {
+      return;
+    }
+    this.cachedHasSave = false;
   }
 
   hasSave() {
@@ -1303,12 +1414,17 @@ export class Game {
       this.handleInventoryInput(menu, clicked, keys);
       return;
     }
+    if (menu?.id === MENU.PAUSE) {
+      if (this.menus.at(-1) === menu) this.handlePauseInput(menu, clicked, keys);
+      return;
+    }
     if (menu) {
       if (clicked) this.handleMenuClick(menu);
       return;
     }
     if (clicked) this.handleRoomClick();
     if (keys.includes('back')) this.goBack();
+    if (keys.includes('pause')) this.openPauseMenu();
     if (keys.includes('map')) this.showMap();
     if (keys.includes('inventory')) this.openInventory();
     this.runActionKeys(keys);
@@ -1333,6 +1449,7 @@ export class Game {
   // What the phone's two soft keys do now, from Ext.appPaint and the key handling.
   // The page shows them as buttons.
   softKeys() {
+    if (this.mainMenu) return this.mainMenu.softKeys();
     if (!this.objects || this.ended) return {};
     const key = (text, action) => ({ label: this.engineText(text), action });
     const menu = this.menus.at(-1);
@@ -1341,15 +1458,17 @@ export class Game {
         if (this.isStoryRoom()) return { left: key(TEXT.NEXT, 'click'), right: key(TEXT.SKIP, 'escape') };
         return menu.id === MENU.SAY ? { left: key(TEXT.OK, 'click') } : {};
       }
+      if (menu.id === MENU.PAUSE) return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'Escape') };
       if (menu.id === MENU.RECEIVED || menu.id === MENU.POPUP) return { left: key(TEXT.OK, 'click') };
       return { left: key(TEXT.SELECT, 'click'), right: key(TEXT.BACK, 'escape') };
     }
     const room = this.currentRoom.toLowerCase();
     if (room.includes('intro')) return {};
     if (room.includes('floor') || room === 'children_drawing') return { right: key(TEXT.BACK, 'back') };
-    if (room.includes('puzzle')) return { left: key(TEXT.BACK, 'back') };
-    if (!this.battleMode && this.inventorySize('invMap') > 0) return { left: key(TEXT.MAP, 'map') };
-    return {};
+    const pause = this.canPause() ? key(TEXT.MENU, 'pause') : undefined;
+    if (room.includes('puzzle')) return { left: key(TEXT.BACK, 'back'), right: pause };
+    if (!this.battleMode && this.inventorySize('invMap') > 0) return { left: key(TEXT.MAP, 'map'), right: pause };
+    return { right: pause };
   }
 
   pressSoftKey(side) {
@@ -1359,6 +1478,93 @@ export class Game {
     else if (key.action === 'escape') this.pressKey('Escape');
     else this.pressKey(key.action);
     return true;
+  }
+
+  // The rooms that are purely story hide the cursor, and have nothing to pause for.
+  canPause() {
+    return (
+      Boolean(this.objects) &&
+      !this.hideCursor &&
+      !this.pausedThread &&
+      !this.menus.length &&
+      !this.attackAnim &&
+      !this.currentRoom.toLowerCase().includes('intro')
+    );
+  }
+
+  // Port of ExtBase.createEscapeMenu, without the Reload choice it offers when a room
+  // fails to load.
+  openPauseMenu() {
+    if (!this.canPause()) return;
+    const choices = [{ id: 'continue', text: this.engineText(TEXT.CONTINUE) }];
+    if (this.canSave()) choices.push({ id: 'save', text: this.engineText(TEXT.SAVE) });
+    choices.push(
+      { id: 'settings', text: this.engineText(TEXT.SETTINGS) },
+      { id: 'help', text: this.engineText(TEXT.HELP) },
+      { id: 'leave', text: this.engineText(TEXT.MAIN_MENU) },
+    );
+    this.openPausePage(choices);
+  }
+
+  openPausePage(choices, title = null) {
+    this.menus.push({ id: MENU.PAUSE, title, choices, selected: 0, rows: [] });
+  }
+
+  handlePauseInput(menu, clicked, keys) {
+    const count = menu.choices.length;
+    if (keys.includes('ArrowUp')) menu.selected = (menu.selected + count - 1) % count;
+    if (keys.includes('ArrowDown')) menu.selected = (menu.selected + 1) % count;
+    if (clicked && menu.hovered !== null && menu.hovered !== undefined) menu.selected = menu.hovered;
+    else if (!keys.includes('Enter')) return;
+    this.choosePauseItem(menu, menu.choices[menu.selected].id);
+  }
+
+  choosePauseItem(menu, id) {
+    switch (id) {
+      case 'continue':
+      case 'no':
+        this.menus.pop();
+        break;
+      case 'save':
+        this.menus.pop();
+        if (this.canSave()) this.saveGame();
+        break;
+      case 'settings':
+        this.openPausePage([{ id: 'sound', text: soundLabel(this) }]);
+        break;
+      case 'sound':
+        this.toggleSound();
+        menu.choices = [{ id: 'sound', text: soundLabel(this) }];
+        break;
+      case 'help':
+        this.openPausePage([
+          { id: 'gameplay', text: this.engineText(TEXT.GAMEPLAY) },
+          { id: 'controls', text: this.engineText(TEXT.CONTROLS) },
+        ]);
+        break;
+      case 'gameplay':
+        this.say(this.engineText(GAMEPLAY_TEXT), null);
+        this.menus.at(-1).fromPause = true;
+        break;
+      case 'controls':
+        this.say(controlsText(this), null);
+        this.menus.at(-1).fromPause = true;
+        break;
+      case 'leave':
+        this.openPausePage(
+          [
+            { id: 'yes', text: this.engineText(TEXT.YES) },
+            { id: 'no', text: this.engineText(TEXT.NO) },
+          ],
+          this.engineText(TEXT.LEAVE_GAME),
+        );
+        this.menus.at(-1).selected = 1;
+        break;
+      case 'yes':
+        this.endGameRequested = true;
+        break;
+      default:
+    }
   }
 
   // Ext.scrGoBack: does what the room's own "back" hotspot does.
@@ -1411,6 +1617,10 @@ export class Game {
   battleInput(clicked, keys) {
     this.battleState = toInt(this.getRaw('sys_battleState'));
     if (this.battleState === 0) return false;
+    if (keys.includes('Escape') || keys.includes('pause')) {
+      this.openPauseMenu();
+      return true;
+    }
     if (clicked && this.ammo > 0 && !this.reloading) this.shot = true;
     this.applyRecoil();
     if (!this.attackAnim) this.runActionKeys(keys);
@@ -1495,6 +1705,11 @@ export class Game {
     const room = this.currentRoom.toLowerCase();
     if (!menu) {
       if (room.includes('floor') || room === 'children_drawing' || room.includes('puzzle')) this.goBack();
+      else this.openPauseMenu();
+      return;
+    }
+    if (menu.fromPause) {
+      this.menus.pop();
       return;
     }
     const isStory = this.isStoryRoom();
@@ -1521,6 +1736,10 @@ export class Game {
   // One 60 ms engine tick. M.tickBasedTimeUpdate advances the animation clock by
   // the same amount.
   tick() {
+    if (this.mainMenu) {
+      this.mainMenu.tick();
+      return;
+    }
     if (this.ended) return;
     this.tickTime += TICK_MS;
     if (this.notice && this.now() >= this.notice.until) this.notice = null;
@@ -1535,18 +1754,20 @@ export class Game {
       this.tickObject.executeEvent(EVENT.TICK, null);
     }
     this.paintPhase();
-    // M.endGame returns to the main menu, which the page draws.
+    // M.endGame returns to the main menu.
     if (this.endGameRequested) {
       this.endGameRequested = false;
       this.resetRun();
       this.ended = true;
+      this.showMainMenu();
     }
   }
 
   // The game logic that Ext.appPaint runs once per frame, before it draws.
   paintPhase() {
     this.battleState = toInt(this.getRaw('sys_battleState'));
-    if (this.battleMode) this.battleUpdate();
+    // Unlike the original, a paused battle stops. There, only a phone call stopped it.
+    if (this.battleMode && !this.menus.some((menu) => menu.id === MENU.PAUSE)) this.battleUpdate();
     this.life = toInt(this.getRaw('sys_health'));
     this.isWaiting();
     this.syncGunState();

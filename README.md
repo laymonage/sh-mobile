@@ -23,20 +23,22 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | Input | What it does |
 | --- | --- |
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
+| Up and Down arrows, Enter | Move through and choose from the main and pause menus. Up and Down, or the mouse wheel, also scroll Help and About |
+| Left and Right arrows | Change a setting in the main menu |
 | 1, or the Gun button | Draws or puts away the gun |
 | 3, or the First aid button | Uses a first-aid kit |
-| Esc | Skips the opening, or goes back from a puzzle or the map |
+| Esc | Skips the opening, goes back from a menu, a puzzle or the map, or opens the pause menu |
 | M | Opens the map, once you have it |
 | I, or the Inventory button | Opens the inventory. Arrow keys or clicks move between items and actions |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
 
-The opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes, battles, the flashlight, the HUD, saving and sound work. The original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+The startup screens, main menu, pause menu, all of the JAR's languages, the opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes, battles, the flashlight, the HUD, saving and sound work. The original's room transition effects aren't there yet, and nobody has played it to the end.
 
-The original's Map, Back and OK keys appear as buttons when they apply. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
+The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
-Browsers only allow sound after you click or press a key, so a dev link that starts by itself stays silent until then.
+Browsers only allow sound after you click or press a key. The sound question after the logo gets that click, so the splash screen's music can play.
 
 ### Soundfonts
 
@@ -44,7 +46,7 @@ The game's music is MIDI, which needs instrument sounds from somewhere. Without 
 
 To skip the file picker during development, put a `.sf2` in the ignored `soundfonts/` folder and add it to the link, for example `?jar=sh1-2007-a31&soundfont=name.sf2`.
 
-There's one save for each version of the game's data. It's kept in this browser's local storage, so clearing site data deletes it.
+There's one save for each version of the game's data, whichever language is chosen. It's kept in this browser's local storage, so clearing site data deletes it. As in the original, starting a new game deletes it, after a warning.
 
 ## Requirements
 

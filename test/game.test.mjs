@@ -535,7 +535,12 @@ test('dying shows a message and ends the run', () => {
 
 function memoryStorage() {
   const items = new Map();
-  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, value), items };
+  return {
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => items.set(key, value),
+    removeItem: (key) => items.delete(key),
+    items,
+  };
 }
 
 // A new game on `storage`, skipped to the first room.
@@ -567,7 +572,15 @@ function settle(game) {
 
 function recordingAudio() {
   const calls = [];
-  return { calls, play: (name, loops) => calls.push(['play', name, loops]), stop: () => calls.push(['stop']) };
+  return {
+    calls,
+    enabled: true,
+    play: (name, loops) => calls.push(['play', name, loops]),
+    stop: () => calls.push(['stop']),
+    setEnabled(enabled) {
+      this.enabled = enabled;
+    },
+  };
 }
 
 test('scripts play sounds, and only the last one requested keeps playing', () => {
@@ -683,9 +696,9 @@ test('soft keys show what they do in each situation', () => {
     const { left, right } = game.softKeys();
     return [left?.label ?? null, right?.label ?? null];
   };
-  assert.deepEqual(labels(), [null, null]);
+  assert.deepEqual(labels(), [null, 'Menu']);
   game.setInventory('invMap', 1);
-  assert.deepEqual(labels(), ['Map', null]);
+  assert.deepEqual(labels(), ['Map', 'Menu']);
   game.say('Hello', null);
   assert.deepEqual(labels(), ['OK', null]);
   game.menus = [{ id: MENU.VERBS, options: [], x: 0, y: 0 }];
@@ -693,13 +706,13 @@ test('soft keys show what they do in each situation', () => {
   game.menus = [];
   game.roomInit('clockPuzzle', false);
   settle(game);
-  assert.deepEqual(labels(), ['Back', null]);
+  assert.deepEqual(labels(), ['Back', 'Menu']);
   game.roomInit('control', false);
   settle(game);
   assert.deepEqual(labels(), ['Next', 'Skip']);
   game.endGameRequested = true;
   game.advance();
-  assert.deepEqual(labels(), [null, null]);
+  assert.deepEqual(labels(), ['Select', null]);
 });
 
 test('the map key offers the floors, and Back leaves them', () => {
@@ -737,7 +750,6 @@ test("Esc goes back from a puzzle, using the room's own back hotspot", () => {
 test('a soft key with no action does nothing', () => {
   const game = savableGame(memoryStorage());
   assert.equal(game.pressSoftKey('left'), false);
-  assert.equal(game.pressSoftKey('right'), false);
 });
 
 test('there is no cursor before a game starts or after it ends', () => {
@@ -999,4 +1011,400 @@ test('the port accepts or explains every JAR, from its data alone', async () => 
     'sh2 rejected damaged': 1,
   });
   assert.equal(buildsOf('sh1').length + buildsOf('sh2').length, 200);
+});
+
+// A game on the startup screens, with a clock the test moves.
+function startupGame(options = {}) {
+  let clock = 1000;
+  const game = new Game(data, {
+    now: () => clock,
+    random: () => 0.5,
+    storage: memoryStorage(),
+    audio: recordingAudio(),
+    ...options,
+  });
+  game.advance = (ms = 60) => {
+    clock += ms;
+    game.tick();
+  };
+  game.showStartup();
+  return game;
+}
+
+const menuTexts = (game) => game.mainMenu.current.choices.map(({ text }) => text);
+
+function choose(game, text) {
+  const menu = game.mainMenu.current;
+  menu.hovered = menu.choices.findIndex((choice) => choice.text === text);
+  assert.notEqual(menu.hovered, -1, text);
+  game.click();
+  game.advance();
+}
+
+// Past the logo, the questions and the splash screen, to the main menu.
+function toMainMenu(game) {
+  for (let i = 0; i < 6; i++) game.advance(1000);
+  if (game.mainMenu.current.kind === 'language') choose(game, 'English');
+  choose(game, 'Continue');
+  game.advance(3001);
+  assert.equal(game.mainMenu.current.kind, 'main');
+}
+
+function savedStorage() {
+  const storage = memoryStorage();
+  assert.equal(savableGame(storage).saveGame(), true);
+  return storage;
+}
+
+test('the logo fades in over four steps, then holds for a second', () => {
+  const game = startupGame();
+  const { screen } = game.mainMenu;
+  assert.equal(screen.kind, 'logo');
+  assert.equal(screen.alpha, 0);
+  for (const alpha of [63, 127, 191, 255]) {
+    game.advance(166);
+    assert.notEqual(screen.alpha, alpha);
+    game.advance(1);
+    assert.equal(screen.alpha, alpha);
+  }
+  game.advance(999);
+  assert.equal(game.mainMenu.screen.kind, 'logo');
+  game.advance(1);
+  assert.equal(game.mainMenu.screen, null);
+});
+
+test('the first run asks for a language, from the ones in the JAR', () => {
+  const game = startupGame();
+  for (let i = 0; i < 6; i++) game.advance(1000);
+  assert.deepEqual(game.languages, ['en', 'fr', 'de', 'it', 'es', 'pt']);
+  assert.deepEqual(menuTexts(game), ['English', 'Français', 'Deutsch', 'Italiano', 'Español', 'Português']);
+  assert.equal(game.softKeys().right, null);
+  choose(game, 'Français');
+  assert.equal(game.language, 'fr');
+  assert.equal(game.storage.getItem('silent-hill-mobile:language'), 'fr');
+  assert.equal(game.mainMenu.current.kind, 'sound');
+  assert.equal(game.gameText(0), parseLan(data.entries.get('sh/lan/fr.lan'))[0]);
+});
+
+test('a chosen language is remembered, and goes straight to the sound question', () => {
+  const storage = memoryStorage();
+  storage.setItem('silent-hill-mobile:language', 'de');
+  const game = startupGame({ storage });
+  for (let i = 0; i < 6; i++) game.advance(1000);
+  assert.equal(game.language, 'de');
+  assert.equal(game.mainMenu.current.kind, 'sound');
+  assert.equal(game.engineText(14), 'Spielen');
+});
+
+test('the sound question plays the shot when sound goes on, and the splash plays the music', () => {
+  const audio = recordingAudio();
+  const storage = memoryStorage();
+  storage.setItem('silent-hill-mobile:language', 'en');
+  const game = startupGame({ audio, storage });
+  for (let i = 0; i < 6; i++) game.advance(1000);
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Continue']);
+  assert.equal(game.softKeys().left.label, 'Change');
+  choose(game, 'Sound: On');
+  assert.equal(audio.enabled, false);
+  assert.deepEqual(menuTexts(game), ['Sound: Off', 'Continue']);
+  choose(game, 'Sound: Off');
+  assert.equal(audio.enabled, true);
+  assert.deepEqual(audio.calls.at(-1), ['play', 'sh_shot', 1]);
+
+  choose(game, 'Continue');
+  assert.deepEqual(audio.calls.at(-1), ['play', 'sh_bgmusic', 1]);
+  const { screen } = game.mainMenu;
+  assert.deepEqual([screen.kind, screen.image, screen.color], ['splash', 'gfx/splash.png', 0]);
+  game.click();
+  game.advance(1000);
+  assert.equal(game.mainMenu.screen.kind, 'splash');
+  game.advance(2001);
+  assert.equal(game.mainMenu.current.kind, 'main');
+  assert.notDeepEqual(audio.calls.at(-1), ['stop']);
+});
+
+test('Play starts a new game when there is no save', () => {
+  const game = startupGame();
+  toMainMenu(game);
+  assert.deepEqual(menuTexts(game), ['Play', 'Settings', 'Help', 'About']);
+  choose(game, 'Play');
+  assert.equal(game.mainMenu, null);
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'control');
+});
+
+test('Play offers the saved game, and a new game removes it only after a warning', () => {
+  const storage = savedStorage();
+  const game = startupGame({ storage });
+  toMainMenu(game);
+  choose(game, 'Play');
+  assert.deepEqual(menuTexts(game), ['Saved game', 'New game']);
+  choose(game, 'New game');
+  assert.equal(game.mainMenu.current.title, game.engineText(119));
+  assert.equal(game.mainMenu.current.choices[game.mainMenu.current.selected].text, 'No');
+  choose(game, 'No');
+  assert.deepEqual(menuTexts(game), ['Saved game', 'New game']);
+  assert.equal(game.hasSave(), true);
+  choose(game, 'New game');
+  choose(game, 'Yes');
+  assert.equal(game.mainMenu, null);
+  assert.equal(game.hasSave(), false);
+  assert.equal(game.readSave(), null);
+});
+
+test('Saved game loads the save', () => {
+  const game = startupGame({ storage: savedStorage() });
+  toMainMenu(game);
+  choose(game, 'Play');
+  choose(game, 'Saved game');
+  assert.equal(game.mainMenu, null);
+  settle(game);
+  assert.equal(game.currentRoomId, '0');
+});
+
+test('a save from when each language had its own is still found, and in any language', () => {
+  const storage = savedStorage();
+  const game = new Game(data, { storage, language: 'fr' });
+  const [[, save]] = storage.items.entries().filter(([key]) => key === game.saveKey);
+  storage.items.delete(game.saveKey);
+  storage.setItem(game.saveKey.replace('sh:', 'sh:en:'), save);
+  assert.equal(game.hasSave(), true);
+  game.removeSave();
+  assert.equal(game.hasSave(), false);
+  assert.equal(game.readSave(), null);
+});
+
+test('Settings changes sound and language, in place, and arrow keys move the highlight', () => {
+  const game = startupGame();
+  toMainMenu(game);
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(game.mainMenu.current.selected, 1);
+  for (const expected of [0, 3, 2, 1]) {
+    game.pressKey('ArrowUp');
+    game.advance();
+    assert.equal(game.mainMenu.current.selected, expected);
+  }
+  game.pressKey('Enter');
+  game.advance();
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Language: English']);
+
+  game.pressKey('ArrowDown');
+  game.advance();
+  choose(game, 'Language: English');
+  assert.equal(game.language, 'fr');
+  assert.deepEqual(menuTexts(game), [
+    `${game.engineText(19)} ${game.engineText(21)}`,
+    `${game.engineText(0)} Français`,
+  ]);
+  assert.equal(game.mainMenu.current.selected, 1);
+  game.pressKey('ArrowLeft');
+  game.advance();
+  assert.equal(game.language, 'en');
+  game.pressKey('ArrowLeft');
+  game.advance();
+  assert.equal(game.language, 'pt');
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.mainMenu.current.kind, 'main');
+  assert.equal(menuTexts(game)[0], game.engineText(14));
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.mainMenu.current.kind, 'main');
+});
+
+test('Help and About show the original text, with its placeholders filled in', () => {
+  const game = startupGame();
+  toMainMenu(game);
+  choose(game, 'Help');
+  assert.deepEqual(menuTexts(game), ['Gameplay', 'Controls']);
+  choose(game, 'Gameplay');
+  const gameplay = game.mainMenu.current;
+  assert.match(gameplay.text, /^Use the softkeys to interact with menu or message window\.\n\nThe eye/);
+  assert.equal(game.softKeys().right.label, 'Back');
+  game.pressKey('Escape');
+  game.advance();
+  choose(game, 'Controls');
+  const controls = game.mainMenu.current.text;
+  assert.doesNotMatch(controls, /<JAVA|\\n/);
+  assert.match(
+    controls,
+    /^Move cursor \(or crosshair\):\nUp \(Num\u00a02\) \/ Down \(Num\u00a08\) \/ Left \(Num\u00a04\) \/ Right \(Num\u00a06\)/,
+  );
+  assert.match(controls, /Equip \/ Unequip weapon:\nNum\u00a01/);
+  game.pressKey('Escape');
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  choose(game, 'About');
+  const about = game.mainMenu.current.text;
+  assert.match(about, /Name: Silent Hill\nVersion: 0\.1\.0\nVendor: Konami/);
+  assert.match(about, /Made with INK Technology\.$/);
+});
+
+test('a text page scrolls by line and by page, within its limits', () => {
+  const game = startupGame();
+  toMainMenu(game);
+  choose(game, 'About');
+  const page = game.mainMenu.current;
+  page.maxScroll = 30;
+  page.pageLines = 16;
+  game.pressKey('ArrowUp');
+  game.advance();
+  assert.equal(page.scroll, 0);
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(page.scroll, 1);
+  page.hoveredArrow = 1;
+  game.click();
+  game.advance();
+  assert.equal(page.scroll, 17);
+  game.click();
+  game.advance();
+  assert.equal(page.scroll, 30);
+  page.hoveredArrow = -1;
+  game.click();
+  game.advance();
+  assert.equal(page.scroll, 14);
+});
+
+test('Esc opens the pause menu in a room, and pauses nothing else', () => {
+  const game = savableGame(memoryStorage());
+  assert.equal(game.softKeys().right.action, 'pause');
+  game.pressKey('Escape');
+  game.advance();
+  const menu = game.menus.at(-1);
+  assert.equal(menu.id, MENU.PAUSE);
+  assert.deepEqual(
+    menu.choices.map(({ text }) => text),
+    ['Continue', 'Save', 'Settings', 'Help', 'Main menu'],
+  );
+  assert.deepEqual([game.softKeys().left.label, game.softKeys().right.label], ['Select', 'Back']);
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+
+  game.roomInit('control', false);
+  settle(game);
+  game.menus = [];
+  game.pausedThread = null;
+  game.hideCursor = true;
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.at(-1)?.id, undefined);
+});
+
+function pauseChoice(game, text) {
+  const menu = game.menus.at(-1);
+  menu.hovered = menu.choices.findIndex((choice) => choice.text === text);
+  assert.notEqual(menu.hovered, -1, text);
+  game.click();
+  game.advance();
+}
+
+test('the pause menu continues, saves, and changes sound', () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  const open = () => {
+    game.pressSoftKey('right');
+    game.advance();
+  };
+  open();
+  pauseChoice(game, 'Continue');
+  assert.equal(game.menus.length, 0);
+  open();
+  pauseChoice(game, 'Save');
+  assert.equal(game.menus.length, 0);
+  assert.equal(game.hasSave(), true);
+  assert.equal(game.notice.text, game.engineText(80));
+  open();
+  pauseChoice(game, 'Settings');
+  pauseChoice(game, 'Sound: On');
+  assert.equal(audio.enabled, false);
+  assert.deepEqual(
+    game.menus.at(-1).choices.map(({ text }) => text),
+    ['Sound: Off'],
+  );
+});
+
+test('the pause menu shows help, and Esc returns from it', () => {
+  const game = savableGame(memoryStorage());
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Help');
+  pauseChoice(game, 'Controls');
+  const help = game.menus.at(-1);
+  assert.equal(help.id, MENU.SAY);
+  assert.match(help.text, /^Move cursor/);
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.PAUSE);
+  assert.deepEqual(
+    game.menus.at(-1).choices.map(({ text }) => text),
+    ['Gameplay', 'Controls'],
+  );
+});
+
+test('leaving for the main menu asks first, and a new game afterwards starts clean', () => {
+  const game = savableGame(memoryStorage());
+  game.roomInit('2', false);
+  settle(game);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Main menu');
+  assert.equal(game.menus.at(-1).title, game.engineText(81));
+  assert.equal(game.menus.at(-1).choices[game.menus.at(-1).selected].text, 'No');
+  pauseChoice(game, 'No');
+  assert.equal(game.menus.at(-1).choices.at(-1).text, 'Main menu');
+  pauseChoice(game, 'Main menu');
+  pauseChoice(game, 'Yes');
+  assert.equal(game.mainMenu.current.kind, 'main');
+  assert.equal(game.objects, null);
+  assert.deepEqual(game.audio, null);
+  choose(game, 'Play');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'control');
+  assert.equal(game.menus.at(-1).text, text('j4'));
+});
+
+test('a battle stops while paused, and offers no save', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  assert.equal(game.battleMode, true);
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.PAUSE);
+  assert.ok(!game.menus.at(-1).choices.some(({ id }) => id === 'save'));
+  const paused = game.enemyStateTime;
+  for (let i = 0; i < 20; i++) game.advance();
+  assert.equal(game.enemyStateTime, paused);
+  game.pressKey('Escape');
+  game.advance();
+  game.advance();
+  assert.notEqual(game.enemyStateTime, paused);
+});
+
+test('a plus in the text files is a space that lines do not break at', () => {
+  const game = new Game(data, { language: 'fr' });
+  assert.equal(
+    game.engineText(81),
+    'Voulez-vous quitter cette partie\u00a0? Les données non sauvegardées seront perdues.',
+  );
+  assert.ok(!game.gameTexts.some((line) => line.includes('+')));
+  assert.ok(game.gameTexts.some((line) => line.includes('\u00a0!')));
+});
+
+test('the builds the port accepts offer the languages they have files for', async () => {
+  const counts = new Map();
+  for (const { id } of buildsOf('sh1')) {
+    const inspection = await inspectJar(readInput(id));
+    if (inspection.status === 'rejected') continue;
+    const { languages } = new Game(inspection.data, { roomSize: inspection.roomSize });
+    counts.set(languages.join(), (counts.get(languages.join()) ?? 0) + 1);
+  }
+  assert.deepEqual(Object.fromEntries(counts), { 'en,fr,de,it,es,pt': 94, 'en,fr': 4, en: 7 });
 });

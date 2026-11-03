@@ -79,9 +79,6 @@
     }
     body.playing #panel { display: flex; }
     #actions { display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
-    #start { display: none; gap: 8px; }
-    body.choosing #start { display: flex; }
-    body.choosing #actions, body.choosing #help { display: none; }
     #panel button, #volume-control {
       min-height: 36px;
       padding: 4px 10px;
@@ -112,8 +109,9 @@
     #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
     body.playing #drop { display: none; }
     body.playing #game { display: block; }
-    body.playing:not(.choosing) #help { display: block; }
-    body.playing:not(.choosing) #actions { display: flex; }
+    body.playing #help { display: block; }
+    body.playing #actions { display: flex; }
+    body.in-menu .in-game, body.in-menu #help { display: none; }
   </style>
 </head>
 <body>
@@ -127,11 +125,11 @@
   <div id="panel">
     <div id="actions">
       <button type="button" id="soft-left" hidden></button>
-      <button type="button" data-key="1">Gun (1)</button>
-      <button type="button" data-key="3">First aid (3)</button>
-      <button type="button" data-key="inventory">Inventory (I)</button>
-      <button type="button" id="save">Save</button>
-      <button type="button" id="load">Load</button>
+      <button type="button" class="in-game" data-key="1">Gun (1)</button>
+      <button type="button" class="in-game" data-key="3">First aid (3)</button>
+      <button type="button" class="in-game" data-key="inventory">Inventory (I)</button>
+      <button type="button" class="in-game" id="save">Save</button>
+      <button type="button" class="in-game" id="load">Load</button>
       <button type="button" id="sound" aria-pressed="true">Sound: on</button>
       <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
       <button type="button" id="soundfont">Choose soundfont</button>
@@ -139,12 +137,8 @@
       <input id="soundfont-file" type="file" accept=".sf2" hidden>
       <button type="button" id="soft-right" hidden></button>
     </div>
-    <div id="start">
-      <button type="button" id="continue">Continue</button>
-      <button type="button" id="new-game">New game</button>
-    </div>
   </div>
-  <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening or goes back, I opens the inventory and M opens the map.</p>
+  <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening, goes back or opens the menu, I opens the inventory and M opens the map.</p>
   <script type="module" src="main.mjs"></script>
 </body>
 </html>

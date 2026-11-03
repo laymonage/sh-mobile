@@ -229,7 +229,7 @@ A save holds every script variable and the action keys, as in `ExtBase.saveGameI
 
 99 of the 112 rooms are save points. As in the original, saving is also refused during text, while a script is paused and in a battle. Five scripts save by themselves at story moments.
 
-The port differs in three ways: saves go to the browser's local storage, the confirmation is a brief on-screen notice rather than a popup that needs a key press, and a simple Continue or New game choice stands in for the main menu.
+The port differs in three ways: saves go to the browser's local storage, the confirmation is a brief on-screen notice rather than a popup that needs a key press, and a save from before a language change keeps any game text held in its variables in the old language, as the original's would.
 
 Save and load were tested in the browser by saving in one room, reloading the page and continuing. Saves from late in the game haven't been tried, and neither have the story moments that save by themselves, beyond a test of the first one.
 
@@ -241,7 +241,31 @@ Text boxes use the original's notepad art, tiled as in `ExtBase.menuPaintIngameI
 
 The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width, centered on the cursor, showing one item's name and picture, with arrows to the others and its actions below. The script's named first item always comes first. After that, the original's order came from a Java hash table, and the port's is the order items were picked up.
 
-The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. The Pause key's menu isn't ported, since the page's buttons cover saving and sound.
+The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. 
+### Menus
+
+The startup follows `ExtBase`: the Konami logo fades in over four steps on white and holds for a second, then the language menu on the first run, the sound question, and the splash screen from `splash.ini` for 3 seconds with `sh_bgmusic`, which carries on into the main menu. The sound question's click is also what lets a browser start that music.
+
+The main menu has Play, Settings, Help and About, all drawn on `ENGINE_MENU_BG_COLOR` paper in the original's notepad art. Play offers the saved game and a new game when there's a save. Help's two pages and About use the JAR's own text, so they still describe the phone's soft keys. Settings has sound and language.
+
+The JARs list their languages in `settings.ini`. Of the 105 Silent Hill builds the port accepts, 94 have all six, 4 have English and French and 7 have only English. The menu offers those whose text files are present, and a build with one language never asks.
+
+The text files write a line break as `\n` and a non-breaking space as `+`, which `ExtBase.wrapString` converts. That's why the controls page's `Num+1` reads "Num 1", and why French punctuation stays with its word.
+
+The pause menu from `ExtBase.createEscapeMenu` opens with Esc or the Menu button: Continue, Save where allowed, Settings, Help and Main menu. As in the original, Esc goes back rather than pausing on the map's floors and the children's drawing, and the port also goes back from puzzles. Leaving asks first, using the original's text.
+
+The port differs in these ways:
+
+- There's no Quit, because a web page has nothing to quit to.
+- The logo and splash art sit closer together, because the port's screen is shorter than the phone's. Without the phone's soft key bars, the logo sits at the very top.
+- The sound question has a Continue row, because a mouse can't press the soft key that does this on a phone.
+- The warnings about a new game and leaving a game are lists with No highlighted, rather than popups answered with soft keys.
+- A battle stops while the pause menu is open. In the original, only a phone call or hiding the app stopped it.
+- The pause menu doesn't stop sound, as the original does.
+- The original's Reload choice, for a room that fails to load, isn't there.
+- The original asks before leaving only if something changed since the last save. The port always asks.
+
+The startup, every menu, language switching, saving from the pause menu, leaving for the main menu and loading afterwards were tried in the browser with real clicks and keys, with the game stepped by a timer because the test pane doesn't run animation frames. Whether the music sounds right hasn't been checked by ear. Pausing a battle is only tested in Node, and only `sh1-2007-a31` was tried in the browser.
 
 ### Sound
 

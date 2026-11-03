@@ -12,6 +12,20 @@ const ITEM_SIZE = 32;
 const IMAGE_SECTION = 35;
 const ARROW_REACH = 6;
 
+// From ExtBase.menuPaintEngine and Ext's constants.
+const ENGINE_PAPER = 0xeae2b2;
+const ENGINE_SELECTED = 0x7c7462;
+const ENGINE_PADDING = 4;
+const ENGINE_ROW = 14;
+const ENGINE_ROW_GAP = 2;
+const ENGINE_TEXT_STEP = 14;
+const ENGINE_TOP_GAP = 10;
+// The original's screen is taller than this port's, so its logo and splash art sit
+// closer together here, and in a wider gap. These fit them exactly.
+const LOGO_TOP = 2;
+const SPLASH_DROP = 7;
+const RIGHTS_FROM_BOTTOM = 28;
+
 // Where the highlight goes on each arm of the verb wheel, from Ext.menuPaintOMS.
 const WHEEL_ARMS = { [VERB.LOOK]: [1, -20], [VERB.HAND]: [21, -1], [VERB.MOUTH]: [0, 18], [VERB.INVENTORY]: [-20, -1] };
 
@@ -24,13 +38,18 @@ export class Renderer {
     this.context = canvas.getContext('2d');
     this.scale = (SCALE * 256) / game.roomWidth;
     this.images = new Map();
-    this.compassLetters = null;
+    this.art = new Map();
   }
 
   async loadImages({ dataDir, entries, files }) {
     const bitmap = (bytes) => createImageBitmap(new Blob([bytes], { type: 'image/png' }));
-    const letters = files.get(`gfx/HUD_NESW_${this.game.language}.png`);
-    if (letters) this.compassLetters = await bitmap(letters);
+    await Promise.all(
+      [...files]
+        .filter(([name]) => name.startsWith('gfx/') && name.endsWith('.png'))
+        .map(async ([name, bytes]) => {
+          this.art.set(name, await bitmap(bytes));
+        }),
+    );
 
     const prefix = `${dataDir}/gfx/transform0/`;
     await Promise.all(
@@ -60,6 +79,10 @@ export class Renderer {
     const { context: c, game } = this;
     c.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     c.imageSmoothingEnabled = false;
+    if (game.mainMenu) {
+      this.drawMainMenu(game.mainMenu);
+      return;
+    }
     c.fillStyle = css(game.backgroundColor);
     c.fillRect(0, 0, game.roomWidth, game.roomHeight);
 
@@ -72,14 +95,10 @@ export class Renderer {
   }
 
   drawItem(item) {
-    const c = this.context;
+    const { context: c, game } = this;
     if (item.kind === 'compass-letters') {
-      if (this.compassLetters)
-        c.drawImage(
-          this.compassLetters,
-          item.x - (this.compassLetters.width >> 1),
-          item.y - (this.compassLetters.height >> 1),
-        );
+      const letters = this.art.get(`gfx/HUD_NESW_${game.language}.png`);
+      if (letters) c.drawImage(letters, item.x - (letters.width >> 1), item.y - (letters.height >> 1));
     } else if (item.clip) {
       c.save();
       c.beginPath();
@@ -184,9 +203,9 @@ export class Renderer {
 
   // Port of ExtBase.menuPaintIngameImageBorders: the notepad page's edges, tiled
   // around a paper-colored box, with its punched holes down the left.
-  notepad(x, y, width, height) {
+  notepad(x, y, width, height, color = this.game.menuColor) {
     const c = this.context;
-    c.fillStyle = css(this.game.menuColor);
+    c.fillStyle = css(color);
     c.fillRect(x, y, width, height);
     const tile = (id, step, count, place) => {
       const image = this.images.get(id);
@@ -383,6 +402,46 @@ export class Renderer {
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }
 
+  // The original's pause menu sits in the bottom right corner of the screen.
+  drawPause(menu) {
+    const c = this.context;
+    const { game } = this;
+    const { menuMargin: margin, menuLineSpacing: spacing } = game;
+    const step = LINE_HEIGHT + spacing;
+    const width = menu.title ? (game.roomWidth * 3) >> 2 : game.roomWidth >> 1;
+    c.font = FONT;
+    const titleLines = menu.title ? this.wrap(menu.title, width - margin * 2) : [];
+    const titleHeight = titleLines.length ? titleLines.length * step + margin + this.delimiterHeight + margin : 0;
+    const height = titleHeight + menu.choices.length * step - spacing + margin * 2;
+    const x = game.roomWidth - width - this.borderRight;
+    const y = game.roomHeight - height - this.borderBottom;
+    this.notepad(x, y, width, height);
+
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+    c.fillStyle = css(game.menuTextColor);
+    titleLines.forEach((line, index) => c.fillText(line, x + margin, y + margin + index * step));
+    if (titleLines.length) this.delimiter(x, y + margin + titleLines.length * step + (margin >> 1), width);
+    const rowsTop = y + margin + titleHeight;
+    menu.rows = menu.choices.map((_, index) => ({
+      x,
+      y: rowsTop + index * step - (spacing >> 1),
+      width,
+      height: step,
+    }));
+    this.updateHoveredRow();
+    menu.choices.forEach(({ text }, index) => {
+      const rowY = rowsTop + index * step;
+      if (menu.selected === index) {
+        c.fillStyle = css(game.menuSelectedColor);
+        c.fillRect(x, rowY, width, LINE_HEIGHT);
+      }
+      c.fillStyle = css(game.menuTextColor);
+      this.rowText(text, x + margin, rowY, LINE_HEIGHT);
+    });
+    this.drawImage('cursorIdle', game.cursorX, game.cursorY);
+  }
+
   // Port of ExtBase.inventoryMenuPaint and menuUpdateIngame's layout for this menu:
   // the item's name, its picture between arrows, then what can be done with it.
   drawInventory(menu) {
@@ -490,14 +549,134 @@ export class Renderer {
       case MENU.INVENTORY:
         this.drawInventory(menu);
         break;
+      case MENU.PAUSE:
+        this.drawPause(menu);
+        break;
       default:
     }
+  }
+
+  // The logo, splash and menu screens, from ExtBase.logoPaint, splashPaint and menuPaintEngine.
+  drawMainMenu(mainMenu) {
+    const c = this.context;
+    const { game } = this;
+    const { screen } = mainMenu;
+    if (screen?.kind === 'logo') {
+      c.fillStyle = '#fff';
+      c.fillRect(0, 0, game.roomWidth, game.roomHeight);
+      const logo = this.art.get('gfx/konami_logo.png');
+      c.globalAlpha = screen.alpha / 255;
+      c.drawImage(logo, (game.roomWidth >> 1) + 5 - (logo.width >> 1), (game.roomHeight - logo.height) >> 1);
+      c.globalAlpha = 1;
+      return;
+    }
+    c.fillStyle = css(screen?.kind === 'splash' ? screen.color : 0);
+    c.fillRect(0, 0, game.roomWidth, game.roomHeight);
+    this.drawArtCentered('gfx/menu_logo.png', LOGO_TOP);
+    if (screen?.kind === 'splash') {
+      this.drawArtCentered('gfx/konami_right.png', game.roomHeight - RIGHTS_FROM_BOTTOM);
+      const image = this.art.get(screen.image);
+      if (image) c.drawImage(image, 0, ((game.roomHeight - image.height) >> 1) + SPLASH_DROP);
+      return;
+    }
+    const menu = mainMenu.current;
+    if (menu.kind === 'text') this.drawTextPage(menu);
+    else this.drawEngineMenu(menu);
+    this.drawImage('cursorIdle', game.cursorX, game.cursorY);
+  }
+
+  drawArtCentered(name, y) {
+    const image = this.art.get(name);
+    if (image) this.context.drawImage(image, (this.game.roomWidth - image.width) >> 1, y);
+  }
+
+  drawEngineMenu(menu) {
+    const c = this.context;
+    const { game } = this;
+    c.font = FONT;
+    const maxWidth = (game.roomWidth * 4) / 5 - ENGINE_PADDING * 2;
+    const titleLines = menu.title ? this.wrap(menu.title, maxWidth) : [];
+    const widest = Math.max(
+      ...[...titleLines, ...menu.choices.map(({ text }) => text)].map((text) => c.measureText(text).width),
+    );
+    const titleHeight = titleLines.length * ENGINE_TEXT_STEP;
+    const rowsHeight = menu.choices.length * (ENGINE_ROW + ENGINE_ROW_GAP) - ENGINE_ROW_GAP;
+    const width = Math.ceil(widest) + ENGINE_PADDING * 2;
+    const height = rowsHeight + ENGINE_PADDING * 2 + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
+    const x = (game.roomWidth - width) >> 1;
+    const y = (game.roomHeight - height) >> 1;
+    this.notepad(x, y, width, height, ENGINE_PAPER);
+
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+    c.fillStyle = '#000';
+    titleLines.forEach((line, index) =>
+      c.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP),
+    );
+    const rowsTop = y + ENGINE_PADDING + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
+    menu.rows = menu.choices.map((_, index) => ({
+      x,
+      y: rowsTop + index * (ENGINE_ROW + ENGINE_ROW_GAP),
+      width,
+      height: ENGINE_ROW,
+    }));
+    this.updateHoveredRow();
+    menu.choices.forEach(({ text }, index) => {
+      const rect = menu.rows[index];
+      if (menu.selected === index) {
+        c.fillStyle = css(ENGINE_SELECTED);
+        c.fillRect(rect.x, rect.y, rect.width, rect.height);
+      }
+      c.fillStyle = '#000';
+      this.rowText(text, rect.x + ENGINE_PADDING, rect.y, rect.height);
+    });
+  }
+
+  // A page that fills the screen, with arrows when there's more to scroll to.
+  drawTextPage(menu) {
+    const c = this.context;
+    const { game } = this;
+    const x = this.borderLeft;
+    const y = this.borderTop;
+    const width = game.roomWidth - this.borderLeft - this.borderRight;
+    const height = game.roomHeight - this.borderTop - this.borderBottom;
+    this.notepad(x, y, width, height, ENGINE_PAPER);
+    const up = this.images.get('arrow_up');
+    const down = this.images.get('arrow_down');
+    c.font = FONT;
+    const lines = this.wrap(menu.text, width - ENGINE_PADDING * 3 - (down?.info.width ?? 0));
+    menu.pageLines = Math.max(1, Math.floor((height - ENGINE_PADDING * 2) / ENGINE_TEXT_STEP));
+    menu.maxScroll = Math.max(0, lines.length - menu.pageLines);
+    menu.scroll = Math.min(menu.scroll, menu.maxScroll);
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+    c.fillStyle = '#000';
+    lines
+      .slice(menu.scroll, menu.scroll + menu.pageLines)
+      .forEach((line, index) => c.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP));
+
+    menu.arrows = [];
+    const place = (arrow, arrowY, step) => {
+      if (!arrow) return;
+      const arrowX = x + width - ENGINE_PADDING - arrow.info.width;
+      c.drawImage(arrow.bitmap, arrowX, arrowY);
+      menu.arrows.push({
+        x: arrowX - ARROW_REACH,
+        y: arrowY - ARROW_REACH,
+        width: arrow.info.width + ARROW_REACH * 2,
+        height: arrow.info.height + ARROW_REACH * 2,
+        step,
+      });
+    };
+    if (menu.scroll > 0) place(up, y + ENGINE_PADDING, -1);
+    if (menu.scroll < menu.maxScroll) place(down, y + height - ENGINE_PADDING - (down?.info.height ?? 0), 1);
+    this.updateHoveredRow();
   }
 
   // Tells list menus which row is under the cursor, because their layout lives here.
   updateHoveredRow() {
     const { game } = this;
-    const menu = game.menus.at(-1);
+    const menu = game.mainMenu ? game.mainMenu.current : game.menus.at(-1);
     if (!menu?.rows) return;
     const inside = (rect) =>
       game.cursorX >= rect.x &&
@@ -506,6 +685,12 @@ export class Renderer {
       game.cursorY < rect.y + rect.height;
     const index = menu.rows.findIndex(inside);
     menu.hovered = index === -1 ? null : index;
+    if (menu.arrows) menu.hoveredArrow = menu.arrows.find(inside)?.step ?? null;
+    // A resting mouse doesn't take the highlight back from the keyboard.
+    const moved = game.cursorX !== this.hoverX || game.cursorY !== this.hoverY;
+    this.hoverX = game.cursorX;
+    this.hoverY = game.cursorY;
+    if ((game.mainMenu || menu.id === MENU.PAUSE) && moved && index !== -1) menu.selected = index;
     if (menu.id === MENU.INVENTORY) {
       if (index !== -1) menu.selected = index;
       menu.hoveredArrow = menu.arrows.find(inside)?.step ?? null;

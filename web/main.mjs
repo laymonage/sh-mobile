@@ -8,7 +8,7 @@ import { Renderer } from './renderer.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
-const INVENTORY_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
+const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
@@ -16,8 +16,7 @@ const message = document.getElementById('message');
 const canvas = document.getElementById('game');
 const saveButton = document.getElementById('save');
 const loadButton = document.getElementById('load');
-const continueButton = document.getElementById('continue');
-const newGameButton = document.getElementById('new-game');
+const soundButton = document.getElementById('sound');
 
 function browserStorage() {
   try {
@@ -50,8 +49,7 @@ async function start(bytes) {
   setUpSaving(game);
   setUpSound(game, audio);
   await setUpSoundFont(audio);
-  if (game.hasSave()) offerStart(game);
-  else game.startNewGame();
+  game.showStartup();
   // Lets the browser pane and tests inspect and step a running game.
   window.game = game;
   window.renderer = renderer;
@@ -66,19 +64,7 @@ function showPanelArt({ files }) {
   document.getElementById('panel').style.backgroundImage = `url(${url})`;
 }
 
-// The page's stand-in for the original's main menu.
-function offerStart(game) {
-  continueButton.hidden = !game.hasSave();
-  document.body.classList.add('choosing');
-}
-
 function setUpSaving(game) {
-  const begin = (start) => {
-    start();
-    document.body.classList.remove('choosing');
-  };
-  continueButton.addEventListener('click', () => begin(() => game.loadGame()));
-  newGameButton.addEventListener('click', () => begin(() => game.startNewGame()));
   saveButton.addEventListener('click', () => game.canSave() && game.saveGame());
 
   // Loading discards progress, so it takes a second click to confirm.
@@ -99,13 +85,15 @@ function setUpSaving(game) {
   });
 }
 
+// The game's own menus can also turn sound on or off, so this follows them.
+function showSoundState(audio) {
+  const label = `Sound: ${audio.enabled ? 'on' : 'off'}`;
+  if (soundButton.textContent === label) return;
+  soundButton.textContent = label;
+  soundButton.setAttribute('aria-pressed', String(audio.enabled));
+}
+
 function setUpSound(game, audio) {
-  const button = document.getElementById('sound');
-  const show = () => {
-    button.textContent = `Sound: ${audio.enabled ? 'on' : 'off'}`;
-    button.setAttribute('aria-pressed', String(audio.enabled));
-  };
-  show();
   const volume = document.getElementById('volume');
   volume.value = Math.round(audio.volume * 100);
   volume.addEventListener('input', () => audio.setVolume(volume.valueAsNumber / 100));
@@ -113,9 +101,8 @@ function setUpSound(game, audio) {
     audio.play('sh_shot');
     volume.blur();
   });
-  button.addEventListener('click', () => {
+  soundButton.addEventListener('click', () => {
     audio.setEnabled(!audio.enabled);
-    show();
     if (audio.enabled) audio.play('sh_shot');
   });
   for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => audio.unlock());
@@ -213,11 +200,22 @@ function run(game, renderer) {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
     if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
-    if (game.menus.at(-1)?.id === MENU.INVENTORY && INVENTORY_KEYS.has(event.key)) {
+    const menuId = game.menus.at(-1)?.id;
+    if ((game.mainMenu || menuId === MENU.INVENTORY || menuId === MENU.PAUSE) && MENU_KEYS.has(event.key)) {
       game.pressKey(event.key);
       event.preventDefault();
     }
   });
+
+  canvas.addEventListener(
+    'wheel',
+    (event) => {
+      if (game.mainMenu?.current?.kind !== 'text') return;
+      game.pressKey(event.deltaY > 0 ? 'ArrowDown' : 'ArrowUp');
+      event.preventDefault();
+    },
+    { passive: false },
+  );
 
   let last = performance.now();
   let pending = 0;
@@ -232,7 +230,9 @@ function run(game, renderer) {
     }
     if (pending > TICK_MS) pending = 0;
     renderer.draw();
-    if (game.ended && !document.body.classList.contains('choosing')) offerStart(game);
+    document.body.classList.toggle('in-menu', Boolean(game.mainMenu));
+    document.documentElement.lang = game.language;
+    if (game.audio) showSoundState(game.audio);
     const keys = game.softKeys();
     for (const [side, button] of Object.entries(softButtons)) {
       button.hidden = !keys[side];
