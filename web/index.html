@@ -70,7 +70,7 @@
     #message.error { color: var(--error); }
     #game {
       display: none;
-      width: min(calc(100vw - 32px), calc((100vh - 100px) / 1.27));
+      width: min(calc(100vw - 32px), calc((100vh - 32px) / 1.27));
       aspect-ratio: 1;
       background: #000;
       cursor: none;
@@ -81,7 +81,7 @@
     #panel {
       display: none;
       align-items: center;
-      width: min(calc(100vw - 32px), calc((100vh - 100px) / 1.27));
+      width: min(calc(100vw - 32px), calc((100vh - 32px) / 1.27));
       aspect-ratio: 240 / 64;
       container: panel / inline-size;
       margin-top: -12px;
@@ -95,12 +95,15 @@
       display: none;
       flex: 1;
       min-width: 0;
-      grid-template-columns: 17% minmax(0, 1fr) 17%;
+      grid-template-columns: max(17%, 84px) minmax(0, 1fr) max(17%, 84px);
       gap: var(--plate-gap);
     }
     #controls { display: grid; grid-auto-rows: var(--plate-height); gap: var(--plate-gap); min-width: 0; }
     .plate-row { display: flex; gap: var(--plate-gap); min-width: 0; }
     .plate-row > * { flex: 1 1 0; min-width: 0; }
+    /* These labels never change, so they can take the space they need. */
+    #item-keys > * { flex-basis: auto; }
+    #panel #sound { flex: 0 0 74px; }
     #soundfont-control { flex-grow: 1.5; display: flex; gap: 2px; }
     #soundfont { flex: 1; min-width: 0; }
     #soundfont-remove { flex: 0 0 var(--plate-height); padding: 0; }
@@ -127,6 +130,15 @@
       image-rendering: auto;
     }
     #panel button { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #panel kbd {
+      margin-left: 3px;
+      padding: 1px 4px;
+      color: var(--paper);
+      background: #000;
+      border: 1px solid var(--plate-edge);
+      border-radius: 2px;
+      font: 600 0.6875rem ui-monospace, monospace;
+    }
     #panel button:hover:not(:disabled) { color: #fff; border-color: var(--blood); box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), inset 0 0 8px rgba(163, 35, 27, 0.55), 0 1px 3px #000; }
     #panel button:active:not(:disabled) { background-color: #000; box-shadow: inset 0 2px 4px #000; transform: translateY(1px); }
     #panel button:focus-visible, #volume:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
@@ -138,10 +150,8 @@
     #volume::-webkit-slider-thumb { width: 8px; height: 14px; margin-top: -6px; background: linear-gradient(var(--paper), var(--rust)); border: 1px solid #000; border-radius: 1px; appearance: none; }
     #volume::-moz-range-thumb { width: 6px; height: 12px; background: linear-gradient(var(--paper), var(--rust)); border: 1px solid #000; border-radius: 1px; }
     @media (pointer: coarse) { :root { --plate-height: 36px; } }
-    /* A short window keeps the game whole, and the README has the same help. */
-    @media (max-height: 640px) { body.playing #help { display: none; } }
     /* Too narrow for tall soft keys at the sides, so they get a row of their own. */
-    @container panel (max-width: 440px) {
+    @container panel (max-width: 420px) {
       #actions { grid-template-columns: 1fr 1fr; grid-template-rows: var(--plate-height) auto; }
       #soft-left { grid-area: 1 / 1; }
       #soft-right { grid-area: 1 / 2; }
@@ -161,12 +171,10 @@
     }
     button:hover { border-color: var(--accent); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
     body.playing #drop { display: none; }
     body.playing #game { display: block; }
-    body.playing #help { display: block; }
     body.playing #actions { display: grid; }
-    body.in-menu .in-game, body.in-menu #help { visibility: hidden; }
+    body.in-menu .in-game { visibility: hidden; }
   </style>
 </head>
 <body>
@@ -181,10 +189,10 @@
     <div id="actions">
       <button type="button" id="soft-left" hidden></button>
       <div id="controls">
-        <div class="plate-row in-game">
-          <button type="button" data-key="1">Gun (1)</button>
-          <button type="button" data-key="3">First aid (3)</button>
-          <button type="button" data-key="inventory">Inventory (I)</button>
+        <div class="plate-row in-game" id="item-keys">
+          <button type="button" data-key="1" aria-keyshortcuts="1">Gun <kbd>1</kbd></button>
+          <button type="button" data-key="3" aria-keyshortcuts="3">First aid <kbd>3</kbd></button>
+          <button type="button" data-key="inventory" aria-keyshortcuts="I">Inventory <kbd>I</kbd></button>
         </div>
         <div class="plate-row in-game">
           <button type="button" id="save">Save</button>
@@ -203,7 +211,6 @@
       <button type="button" id="soft-right" hidden></button>
     </div>
   </div>
-  <p id="help">Click to look around and to continue text, and right-click to go back or open the menu. WASD or the arrow keys take the room's exits. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening, goes back or opens the menu, I opens the inventory and M opens the map.</p>
   <script type="module" src="main.mjs"></script>
 </body>
 </html>
