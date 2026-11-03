@@ -597,7 +597,9 @@ export class Renderer {
     const maxWidth = (game.roomWidth * 4) / 5 - ENGINE_PADDING * 2;
     const titleLines = menu.title ? this.wrap(menu.title, maxWidth) : [];
     const widest = Math.max(
-      ...[...titleLines, ...menu.choices.map(({ text }) => text)].map((text) => c.measureText(text).width),
+      ...[...titleLines, ...menu.choices.flatMap(({ text, values }) => values ?? [text])].map(
+        (text) => c.measureText(text).width,
+      ),
     );
     const titleHeight = titleLines.length * ENGINE_TEXT_STEP;
     const rowsHeight = menu.choices.length * (ENGINE_ROW + ENGINE_ROW_GAP) - ENGINE_ROW_GAP;

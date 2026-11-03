@@ -63,8 +63,28 @@ export function languageName(game, language) {
   return LANGUAGE_NAMES[language] === undefined ? language : game.engineText(LANGUAGE_NAMES[language]);
 }
 
-export function soundLabel(game) {
-  return `${game.engineText(TEXT.SOUND)} ${game.engineText(game.soundOn ? TEXT.ON : TEXT.OFF)}`;
+export function soundLabel(game, on = game.soundOn) {
+  return `${game.engineText(TEXT.SOUND)} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
+}
+
+// A setting's row. The menu is as wide as the row's longest value, so that it keeps
+// its size as the value changes.
+function soundChoice(game) {
+  return {
+    id: 'sound',
+    text: soundLabel(game),
+    softKey: TEXT.CHANGE,
+    values: [soundLabel(game, true), soundLabel(game, false)],
+  };
+}
+
+// Choosing a language translates the row's label too, so each value is in its own language.
+function languageChoice(game) {
+  const label = (language) => {
+    const texts = game.readEngineTexts(language);
+    return `${texts[TEXT.LANGUAGE]} ${texts[LANGUAGE_NAMES[language]] ?? language}`;
+  };
+  return { id: 'language', text: label(game.language), softKey: TEXT.CHANGE, values: game.languages.map(label) };
 }
 
 function aboutText(game) {
@@ -156,10 +176,7 @@ export class MainMenu {
     return this.list(
       'sound',
       null,
-      [
-        { id: 'sound', text: soundLabel(this.game), softKey: TEXT.CHANGE },
-        { id: 'continue', text: this.game.engineText(TEXT.CONTINUE) },
-      ],
+      [soundChoice(this.game), { id: 'continue', text: this.game.engineText(TEXT.CONTINUE) }],
       { noBack: true },
     );
   }
@@ -201,13 +218,8 @@ export class MainMenu {
 
   settingsMenu() {
     const { game } = this;
-    const choices = [{ id: 'sound', text: soundLabel(game), softKey: TEXT.CHANGE }];
-    if (game.languages.length > 1)
-      choices.push({
-        id: 'language',
-        text: `${game.engineText(TEXT.LANGUAGE)} ${languageName(game, game.language)}`,
-        softKey: TEXT.CHANGE,
-      });
+    const choices = [soundChoice(game)];
+    if (game.languages.length > 1) choices.push(languageChoice(game));
     return this.list('settings', null, choices);
   }
 

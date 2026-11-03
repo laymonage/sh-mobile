@@ -1103,6 +1103,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
   const game = startupGame({ audio, storage });
   for (let i = 0; i < 6; i++) game.advance(1000);
   assert.deepEqual(menuTexts(game), ['Sound: On', 'Continue']);
+  assert.deepEqual(game.mainMenu.current.choices[0].values, ['Sound: On', 'Sound: Off']);
   assert.equal(game.softKeys().left.label, 'Change');
   choose(game, 'Sound: On');
   assert.equal(audio.enabled, false);
@@ -1189,6 +1190,14 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   game.pressKey('Enter');
   game.advance();
   assert.deepEqual(menuTexts(game), ['Sound: On', 'Language: English']);
+  assert.deepEqual(game.mainMenu.current.choices[1].values, [
+    'Language: English',
+    'Langue : Français',
+    'Sprache: Deutsch',
+    'Lingua: Italiano',
+    'Idioma: Español',
+    'Idioma: Português',
+  ]);
 
   game.pressKey('ArrowDown');
   game.advance();

@@ -622,7 +622,11 @@ export class Game {
   loadLanguage(language) {
     this.language = language;
     this.gameTexts = parseLan(this.data.entries.get(`${this.dataDir}/lan/${language}.lan`)).map(displayText);
-    this.engineTexts = new TextDecoder('utf-8')
+    this.engineTexts = this.readEngineTexts(language);
+  }
+
+  readEngineTexts(language) {
+    return new TextDecoder('utf-8')
       .decode(this.data.files.get(`localization/${language}.properties`))
       .split(/\r?\n/)
       .filter((line) => line.length > 0)
