@@ -92,7 +92,7 @@ export class Renderer {
     const menu = game.menus.at(-1);
     if (menu) this.drawMenu(menu);
     else this.drawCursor(game.cursorView());
-    if (game.notice) this.drawNotice(game.notice.text);
+    if (game.notice) this.drawPopup(game.notice.text);
   }
 
   drawItem(item) {
@@ -162,9 +162,23 @@ export class Renderer {
     }
   }
 
-  drawNotice(text) {
-    this.context.font = BOLD_FONT;
-    this.outlinedText(text, this.game.roomWidth / 2, 24, 'center');
+  // Port of Ext.popupPaint: a notepad page sized to its text, in the middle of the screen.
+  drawPopup(text) {
+    const c = this.context;
+    const { game } = this;
+    c.font = FONT;
+    const lines = this.wrap(text, game.roomWidth - this.borderLeft - this.borderRight - ENGINE_PADDING * 2);
+    const step = ENGINE_ROW + ENGINE_ROW_GAP;
+    const width = Math.ceil(Math.max(...lines.map((line) => c.measureText(line).width))) + ENGINE_PADDING * 2;
+    const height = lines.length * step - ENGINE_ROW_GAP + ENGINE_PADDING * 2;
+    const x = (game.roomWidth - width) >> 1;
+    const y = (game.roomHeight - height) >> 1;
+    this.notepad(x, y, width, height);
+    c.textAlign = 'left';
+    c.fillStyle = css(game.menuTextColor);
+    lines.forEach((line, index) =>
+      this.rowText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * step, ENGINE_ROW),
+    );
   }
 
   outlinedText(text, x, y, align) {
@@ -536,8 +550,10 @@ export class Renderer {
   drawMenu(menu) {
     switch (menu.id) {
       case MENU.SAY:
-      case MENU.POPUP:
         this.drawSay(menu);
+        break;
+      case MENU.POPUP:
+        this.drawPopup(menu.text);
         break;
       case MENU.RECEIVED:
         this.drawReceived(menu);
