@@ -228,6 +228,16 @@ export class Renderer {
     return this.images.get('delimiter')?.info.height ?? 1;
   }
 
+  // Centers a line in a row by its capital letters, whose height is measured because
+  // a font's own metrics place text differently from browser to browser.
+  rowText(text, x, rowY, rowHeight) {
+    const c = this.context;
+    c.textBaseline = 'alphabetic';
+    const capHeight = c.measureText('H').actualBoundingBoxAscent;
+    c.fillText(text, x, rowY + (rowHeight + capHeight) / 2);
+    c.textBaseline = 'top';
+  }
+
   // A page across the bottom of the room, sized to what it holds.
   bottomPage(contentHeight) {
     const { game } = this;
@@ -368,7 +378,7 @@ export class Renderer {
         c.fillRect(rect.x, rect.y, rect.width, rect.height);
       }
       c.fillStyle = color;
-      c.fillText(row, rect.x + margin, rect.y + 2);
+      this.rowText(row, rect.x + margin, rect.y, rect.height);
     });
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }
@@ -450,7 +460,7 @@ export class Renderer {
         c.fillRect(x, rowY, width, LINE_HEIGHT);
       }
       c.fillStyle = css(game.menuTextColor);
-      c.fillText(text, x + margin, rowY);
+      this.rowText(text, x + margin, rowY, LINE_HEIGHT);
     });
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }
