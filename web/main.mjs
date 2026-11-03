@@ -180,9 +180,12 @@ function run(game, renderer) {
   canvas.addEventListener('pointerdown', (event) => {
     game.moveCursor(...toRoom(event));
     renderer.updateHoveredRow();
-    game.click();
+    // On a Mac, Control-click is also a right-click.
+    if (event.button === 2 || event.ctrlKey) game.pressSoftKey('right');
+    else game.click();
     event.preventDefault();
   });
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   for (const button of document.querySelectorAll('#actions button')) {
     button.addEventListener('click', () => {
       game.pressKey(button.dataset.key);

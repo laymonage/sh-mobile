@@ -23,6 +23,7 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | Input | What it does |
 | --- | --- |
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
+| Right-click | Does what the right soft key button shows, such as Back or Menu |
 | Up and Down arrows, Enter | Move through and choose from the main and pause menus. Up and Down, or the mouse wheel, also scroll Help and About |
 | Left and Right arrows | Change a setting in the main menu |
 | 1, or the Gun button | Draws or puts away the gun |
