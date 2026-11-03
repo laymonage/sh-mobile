@@ -1417,3 +1417,95 @@ test('the builds the port accepts offer the languages they have files for', asyn
   }
   assert.deepEqual(Object.fromEntries(counts), { 'en,fr,de,it,es,pt': 94, 'en,fr': 4, en: 7 });
 });
+
+// A game standing in `room`, with the room's opening text and scripts out of the way.
+function standIn(game, room) {
+  game.menus = [];
+  game.pausedThread = null;
+  game.waitStop = 0;
+  game.pendingRoom = null;
+  game.roomInit(room, false);
+  for (let i = 0; i < 3; i++) {
+    game.advance();
+    game.menus = [];
+    game.pausedThread = null;
+    game.waitStop = 0;
+  }
+  assert.equal(game.currentRoomId, room);
+}
+
+test('a movement key takes the exit in that direction, nearest the cursor if there are two', () => {
+  const game = savableGame(memoryStorage());
+  for (const [x, room] of [
+    [100, 'c'],
+    [160, 'd'],
+  ]) {
+    standIn(game, 'a');
+    game.moveCursor(x, 20);
+    game.pressKey('move-forward');
+    game.advance();
+    assert.equal(game.currentRoomId, room);
+  }
+  standIn(game, 'a');
+  game.pressKey('move-back');
+  game.advance();
+  assert.equal(game.currentRoomId, '9');
+});
+
+test('a movement key does nothing without an exit, over a menu or with the cursor hidden', () => {
+  const game = savableGame(memoryStorage());
+  standIn(game, 'a');
+  game.pressKey('move-left');
+  game.advance();
+  assert.equal(game.currentRoomId, 'a');
+  game.say('Hello', null);
+  game.pressKey('move-back');
+  game.advance();
+  assert.equal(game.currentRoomId, 'a');
+  game.menus = [];
+  game.hideCursor = true;
+  game.pressKey('move-back');
+  game.advance();
+  assert.equal(game.currentRoomId, 'a');
+});
+
+test('a movement key does nothing during a battle', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  assert.equal(game.battleMode, true);
+  game.pressKey('move-back');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'r');
+});
+
+test('rooms have at most two directions, and only two have two exits in one direction', () => {
+  const game = savableGame(memoryStorage());
+  const rooms = [...data.entries.keys()]
+    .filter((name) => name.startsWith('sh/rom/'))
+    .map((name) => name.slice('sh/rom/'.length).replace(/\.[^.]*$/, ''));
+  assert.equal(rooms.length, 112);
+  let loaded = 0;
+  let withExits = 0;
+  const repeated = [];
+  for (const room of rooms) {
+    try {
+      standIn(game, room);
+    } catch {
+      continue;
+    }
+    loaded++;
+    const directions = (game.objects ?? [])
+      .map((object) => object.executeEvent(EVENT.GETMOVEDIR, null))
+      .filter((direction) => typeof direction === 'string');
+    const distinct = new Set(directions);
+    assert.ok(distinct.size <= 2, room);
+    if (directions.length) withExits++;
+    if (distinct.size < directions.length) repeated.push(room);
+  }
+  assert.equal(loaded, 110);
+  assert.equal(withExits, 92);
+  assert.deepEqual(repeated.sort(), ['10', 'a']);
+});

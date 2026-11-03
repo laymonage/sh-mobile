@@ -1429,6 +1429,8 @@ export class Game {
     if (clicked) this.handleRoomClick();
     if (keys.includes('back')) this.goBack();
     if (keys.includes('pause')) this.openPauseMenu();
+    const move = keys.find((key) => key.startsWith('move-'));
+    if (move) this.moveInDirection(move.slice('move-'.length));
     if (keys.includes('map')) this.showMap();
     if (keys.includes('inventory')) this.openInventory();
     this.runActionKeys(keys);
@@ -1667,8 +1669,26 @@ export class Game {
   handleRoomClick() {
     const object = this.overObject;
     if (!object || this.hideCursor) return;
+    this.useObject(object);
+  }
+
+  useObject(object) {
     if (object.executeEvent(EVENT.CLICK, -1) === null) return;
     this.openVerbMenu(object);
+  }
+
+  // This port's own addition: the original's keys only moved the cursor. A key does
+  // what clicking the room's exit in that direction would do. Two rooms have two
+  // forward exits, and the one nearer the cursor is used.
+  moveInDirection(direction) {
+    if (this.hideCursor) return;
+    const distance = ({ left, right, top, bottom }) =>
+      ((left + right) / 2 - this.cursorX) ** 2 + ((top + bottom) / 2 - this.cursorY) ** 2;
+    const exits = (this.objects ?? []).filter(
+      (object) => object.visible && object.active && object.executeEvent(EVENT.GETMOVEDIR, null) === direction,
+    );
+    if (exits.length)
+      this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
   }
 
   handleMenuClick(menu) {

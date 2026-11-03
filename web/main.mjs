@@ -8,6 +8,16 @@ import { Renderer } from './renderer.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
+const MOVE_KEYS = {
+  w: 'forward',
+  arrowup: 'forward',
+  s: 'back',
+  arrowdown: 'back',
+  a: 'left',
+  arrowleft: 'left',
+  d: 'right',
+  arrowright: 'right',
+};
 const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
 
 const drop = document.getElementById('drop');
@@ -203,6 +213,19 @@ function run(game, renderer) {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
     if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
+    const move = MOVE_KEYS[event.key.toLowerCase()];
+    if (
+      move &&
+      !game.mainMenu &&
+      !game.menus.length &&
+      !event.repeat &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      game.pressKey(`move-${move}`);
+      event.preventDefault();
+    }
     const menuId = game.menus.at(-1)?.id;
     if ((game.mainMenu || menuId === MENU.INVENTORY || menuId === MENU.PAUSE) && MENU_KEYS.has(event.key)) {
       game.pressKey(event.key);
