@@ -1,6 +1,6 @@
 # Silent Hill Mobile analysis
 
-Reproducible analysis of the three Silent Hill J2ME games, as groundwork for a JavaScript port. It answers three questions:
+Reproducible analysis of the three Silent Hill J2ME games, and the start of a JavaScript port. The analysis answers three questions:
 
 - How different are the available builds?
 - Which build should a port be based on?
@@ -9,6 +9,18 @@ Reproducible analysis of the three Silent Hill J2ME games, as groundwork for a J
 **This repo contains no game files.** The JARs, zips, decompiled code and rendered art are copyrighted, so you supply the downloads yourself and everything derived from them goes in the ignored `build/` folder. `inputs.json` records only each build's location, size and hash.
 
 See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
+
+## Playing the prototype
+
+`web/` is an early browser port of the first game. It reads your own JAR locally and doesn't upload it. Start it with:
+
+```bash
+npm run play
+```
+
+Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:8123/?jar=sh1-2007-a31> to load a pinned build. Click to look around and to continue text, and press Esc to skip the opening.
+
+The opening, rooms, hotspots, the verb wheel, text, choices, inventory and room changes work. Battles, sound, saving, the HUD, the map and transition effects aren't there yet, and nobody has played it to the end.
 
 ## Requirements
 
@@ -44,6 +56,7 @@ You can also run each step on its own:
 
 | Command | What it does | Output |
 | --- | --- | --- |
+| `npm run play` | Serves the browser port on this machine only | `http://localhost:8123/` |
 | `npm run verify` | Checks every build's hash | Console |
 | `npm run compare` | Compares every build of each game | `build/reports/builds-sh1.md`, `builds-sh2.md`, `builds-sh3.md`, `builds.json` |
 | `npm run analyze` | Decodes every INK script and room | `build/reports/data.json` |
@@ -71,7 +84,8 @@ node scripts/decompile.mjs sh2-2008-a7
 
 ## Layout
 
-- `src/`: parsers for ZIP, class files, PNG, INK engine data and SH3 archives, plus the renderer and build comparison
+- `web/`: the browser port, with the engine and shared format parsers in `web/engine/`
+- `src/`: Node analysis code: class files, SH3 archives, the room renderer and build comparison
 - `scripts/`: the command-line steps above
 - `test/`: pins each number and claim in the findings
 - `docs/FINDINGS.md`: what the analysis found and what it doesn't show

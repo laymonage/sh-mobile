@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "play": "node scripts/serve.mjs",
     "all": "node scripts/all.mjs",
     "pin": "node scripts/pin-inputs.mjs",
     "verify": "node scripts/verify-inputs.mjs",

@@ -1,30 +1,7 @@
-import { parseRoom, ROOM_OBJECT_GFX, usesWideZones } from './ink.mjs';
+import { parseRoom, ROOM_OBJECT_GFX, TRANSFORMS, usesWideZones } from '../web/engine/format.mjs';
 import { decodePng } from './png.mjs';
 
 const ZONE_COLOR = [255, 64, 64];
-
-// Maps a source pixel to its transformed position, for the indices used by
-// MyCanvas.transformTable. Placement follows M.getLeft and M.getTop.
-const TRANSFORMS = [
-  { swap: false, pixel: (x, y) => [x, y], left: (w, h, rx) => rx, top: (w, h, rx, ry) => ry },
-  { swap: false, pixel: (x, y, w) => [w - 1 - x, y], left: (w, h, rx) => w - rx, top: (w, h, rx, ry) => ry },
-  { swap: true, pixel: (x, y, w, h) => [h - 1 - y, x], left: (w, h, rx, ry) => h - ry, top: (w, h, rx) => rx },
-  {
-    swap: true,
-    pixel: (x, y, w, h) => [h - 1 - y, w - 1 - x],
-    left: (w, h, rx, ry) => h - ry,
-    top: (w, h, rx) => w - rx,
-  },
-  {
-    swap: false,
-    pixel: (x, y, w, h) => [w - 1 - x, h - 1 - y],
-    left: (w, h, rx) => w - rx,
-    top: (w, h, rx, ry) => h - ry,
-  },
-  { swap: false, pixel: (x, y, w, h) => [x, h - 1 - y], left: (w, h, rx) => rx, top: (w, h, rx, ry) => h - ry },
-  { swap: true, pixel: (x, y, w) => [y, w - 1 - x], left: (w, h, rx, ry) => ry, top: (w, h, rx) => w - rx },
-  { swap: true, pixel: (x, y) => [y, x], left: (w, h, rx, ry) => ry, top: (w, h, rx) => rx },
-];
 
 const ALPHA_THRESHOLD = 128;
 

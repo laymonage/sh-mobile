@@ -1,36 +1,9 @@
 import { deflateSync, inflateSync } from 'node:zlib';
+import { pngChunks as chunks, pngInfo } from '../web/engine/format.mjs';
 
 const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
-function* chunks(buffer) {
-  let p = 8;
-  while (p < buffer.length) {
-    const length = buffer.readUInt32BE(p);
-    yield { type: buffer.toString('latin1', p + 4, p + 8), data: buffer.subarray(p + 8, p + 8 + length) };
-    p += 12 + length;
-  }
-}
-
-export function pngInfo(buffer) {
-  if (!buffer.subarray(0, 8).equals(SIGNATURE)) throw new Error('Not a PNG');
-  const info = {
-    width: buffer.readUInt32BE(16),
-    height: buffer.readUInt32BE(20),
-    depth: buffer[24],
-    colorType: buffer[25],
-    regX: 0,
-    regY: 0,
-    hasRegPoint: false,
-  };
-  for (const chunk of chunks(buffer)) {
-    if (chunk.type === 'oFFs') {
-      info.regX = chunk.data.readInt32BE(0);
-      info.regY = chunk.data.readInt32BE(4);
-      info.hasRegPoint = true;
-    }
-  }
-  return info;
-}
+export { pngInfo };
 
 const CHANNELS = { 2: 3, 3: 1, 6: 4 };
 

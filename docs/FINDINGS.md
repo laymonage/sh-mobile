@@ -195,9 +195,25 @@ From reading the code: `GameMidlet` has a 78-row table of trigger, condition and
 
 `sh3-en-v160` stores its assets as 215 loose PNGs with real names, such as `b_enigma1_telephone.png`, including 97 objects and 22 puzzle images. Its art differs from the top tier, so these names haven't been mapped to the archive entries.
 
+## The prototype
+
+`web/` runs Silent Hill's own scripts in a browser, following `sh1-2014-a7`'s decompiled engine. The tests play from a new game through the tutorial and intro to the first room, open the verb wheel, read a door's text, walk through it and look at an inventory item. Every one of the 112 rooms loads and updates without hitting a command the port doesn't handle, although that only runs each room's entry scripts.
+
+From its data alone, the port accepts or explains every Silent Hill and Mobile 2 build:
+
+| Result | Builds |
+| --- | --- |
+| Accepted | The 88 full-resolution Silent Hill builds |
+| Accepted with a warning about smaller art | The other 17 Silent Hill INK builds |
+| Rejected: no INK data | 25 Silent Hill and 8 Mobile 2 low-end builds |
+| Rejected: Mobile 2 isn't supported yet | 61 Mobile 2 builds |
+| Rejected: damaged | `sh2-2008-konno-a3` |
+
+Only `sh1-2007-a31` has been run in the browser. Being accepted means a build's data has the expected form, not that the build has been played.
+
 ## What hasn't been checked
 
-- No build has been run or played through, so it's unconfirmed that any game can be completed.
-- INK bytecode has been decoded but not executed, so command behavior is only known from reading the code.
+- No game has been played through, so it's unconfirmed that any can be completed in the port or the original.
+- Mobile 2 and Mobile 3 scripts haven't been run, and most of Silent Hill's have been reached only by the tests above, so most command behavior is only known from reading the code.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.
