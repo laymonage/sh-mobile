@@ -1,4 +1,4 @@
-import { Game } from './engine/game.mjs';
+import { Game, MENU } from './engine/game.mjs';
 import { inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
@@ -8,6 +8,7 @@ import { Renderer } from './renderer.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
+const INVENTORY_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
@@ -211,6 +212,11 @@ function run(game, renderer) {
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
+    if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
+    if (game.menus.at(-1)?.id === MENU.INVENTORY && INVENTORY_KEYS.has(event.key)) {
+      game.pressKey(event.key);
+      event.preventDefault();
+    }
   });
 
   let last = performance.now();

@@ -58,18 +58,8 @@ export const EVENT = {
   GETTIME: 33,
 };
 
-// Menu IDs from Ext and ExtBase. Inventory lists and popups are this port's own
-// simplified forms of the original's menus.
-export const MENU = {
-  CHOICE: 2,
-  INVENTORY: 3,
-  SAY: 6,
-  RECEIVED: 7,
-  TEXT_FADE: 28,
-  VERBS: 50,
-  ITEM_ACTIONS: 51,
-  POPUP: 52,
-};
+// Menu IDs from Ext and ExtBase. Popups are this port's own simpler form.
+export const MENU = { CHOICE: 2, INVENTORY: 3, SAY: 6, RECEIVED: 7, TEXT_FADE: 28, VERBS: 50, POPUP: 52 };
 
 export const VERB = { LOOK: 0, HAND: 1, MOUTH: 2, INVENTORY: 3 };
 const VERB_EVENTS = {
@@ -115,6 +105,8 @@ const SAVE_VERSION = 1;
 const NOTICE_MS = 2000;
 
 // Engine text indexes in localization/*.properties.
+const CHOICE_BACK = -3;
+const CHOICE_USE = -2;
 const TEXT = {
   SELECT: 7,
   BACK: 9,
@@ -443,6 +435,7 @@ export class Game {
     this.menuMargin = 4;
     this.menuLineSpacing = 2;
     this.useItemText = '';
+    this.firstInventoryItem = null;
     this.hideCursor = false;
     this.specialCursor = { idle: null, hover: null };
     this.actionKeys = new Map();
@@ -823,6 +816,9 @@ export class Game {
       case 's_use':
         this.useItemText = String(value);
         return;
+      case 's_firstInventoryItem':
+        this.firstInventoryItem = String(value);
+        return;
       case 's_2':
       case 's_3':
       case 's_4':
@@ -833,7 +829,6 @@ export class Game {
       case 's_dynamicSayHeight':
       case 's_useScrollArrows':
       case 's_delimiterMode':
-      case 's_firstInventoryItem':
       case 's_storyScreenRowByRow':
         return;
       case 's_animCursor':
@@ -954,29 +949,43 @@ export class Game {
     object.executeEvent(event, null);
   }
 
+  // Port of ExtBase.menuInvSetup and createInventory: one item at a time, starting
+  // from the first, with the item the setup script names always first.
   openInventory() {
-    this.menus.push({
-      id: MENU.INVENTORY,
-      items: this.inventoryItems().map((item) => ({
-        id: item,
-        name: this.itemName(item),
-        image: this.inventoryImage(item),
-        size: this.inventorySize(item),
-      })),
-    });
+    const items = this.inventoryItems().sort(
+      (left, right) => Number(right === this.firstInventoryItem) - Number(left === this.firstInventoryItem),
+    );
+    if (!items.length) return;
+    this.menus.push(this.inventoryPage(items, 0));
   }
 
-  // Ext.addItemChoices, as a menu of its own.
-  openItemActions(item) {
-    this.itemId = item.id;
+  inventoryPage(items, index) {
+    const id = items[index];
+    this.itemId = id;
+    const size = this.inventorySize(id);
+    const name = this.itemName(id);
+    return {
+      id: MENU.INVENTORY,
+      items,
+      index,
+      title: size > 1 ? `${name} (${size})` : name,
+      image: this.inventoryImage(id),
+      choices: this.itemChoices(id),
+      selected: 0,
+      x: this.cursorX,
+      y: this.cursorY,
+    };
+  }
+
+  // Ext.addItemChoices.
+  itemChoices(item) {
     const choices = [];
-    const script = this.getScript(item.id);
+    const script = this.getScript(item);
     if (script && (script.hasEvent(EVENT.EQUIP) || script.hasEvent(EVENT.UNEQUIP))) {
       const equipable = toBoolean(this.executeEvent(script, EVENT.ISEQUIPABLE, null));
       const equipped = toBoolean(this.executeEvent(script, EVENT.ISEQUIPED, null));
       if (script.hasEvent(EVENT.EQUIP) && equipable && !equipped) {
-        const label =
-          item.id === 'invBulletClips' ? TEXT.EQUIP_CLIPS : item.id === 'invGun' ? TEXT.EQUIP_GUN : TEXT.EQUIP;
+        const label = item === 'invBulletClips' ? TEXT.EQUIP_CLIPS : item === 'invGun' ? TEXT.EQUIP_GUN : TEXT.EQUIP;
         choices.push({ id: EVENT.EQUIP, text: this.engineText(label) });
       }
       if (script.hasEvent(EVENT.UNEQUIP) && equipable && equipped)
@@ -985,14 +994,42 @@ export class Game {
     if (this.overObject) {
       const direction = this.overObject.executeEvent(EVENT.GETMOVEDIR, null);
       if (!['back', 'right', 'left', 'forward'].includes(direction))
-        choices.push({ id: -2, text: this.engineText(TEXT.USE) });
+        choices.push({ id: CHOICE_USE, text: this.engineText(TEXT.USE) });
     }
     choices.push({ id: EVENT.LOOKAT, text: this.engineText(TEXT.LOOK_AT) });
-    this.menus.push({ id: MENU.ITEM_ACTIONS, title: item.name, choices });
+    choices.push({ id: CHOICE_BACK, text: this.engineText(TEXT.BACK) });
+    return choices;
+  }
+
+  // The left and right keys in ExtBase.inventoryUseItemMenuKeyHandling.
+  cycleInventory(step) {
+    const menu = this.menus.at(-1);
+    if (menu.items.length < 2) return;
+    const index = (menu.index + step + menu.items.length) % menu.items.length;
+    // The original re-centers on the cursor here. A keypad's cursor stays still, but a
+    // mouse's is on the arrow, so the page keeps its place instead of jumping away.
+    this.menus[this.menus.length - 1] = { ...this.inventoryPage(menu.items, index), x: menu.x, y: menu.y };
+  }
+
+  handleInventoryInput(menu, clicked, keys) {
+    for (const key of keys) {
+      if (this.menus.at(-1) !== menu) return;
+      if (key === 'ArrowLeft') this.cycleInventory(-1);
+      else if (key === 'ArrowRight') this.cycleInventory(1);
+      else if (key === 'ArrowUp') menu.selected = (menu.selected + menu.choices.length - 1) % menu.choices.length;
+      else if (key === 'ArrowDown') menu.selected = (menu.selected + 1) % menu.choices.length;
+      else if (key === 'Enter') this.chooseItemAction(menu.choices[menu.selected].id);
+    }
+    if (!clicked || this.menus.at(-1) !== menu) return;
+    if (menu.hoveredArrow) this.cycleInventory(menu.hoveredArrow);
+    else if (menu.hovered !== undefined && menu.hovered !== null) this.chooseItemAction(menu.choices[menu.hovered].id);
+    else if (menu.overPage === false) this.menus.pop();
   }
 
   chooseItemAction(choiceId) {
-    if (choiceId === -2) {
+    if (choiceId === CHOICE_BACK) {
+      this.menus.pop();
+    } else if (choiceId === CHOICE_USE) {
       if (this.overObject.executeEvent(EVENT.USEITEM, 0) === 0) this.say(this.useItemText, null);
     } else if (choiceId === EVENT.EQUIP || choiceId === EVENT.UNEQUIP) {
       // Port of Ext.inventoryEquipUnequipHandling.
@@ -1262,6 +1299,10 @@ export class Game {
     if (this.isWaiting()) return;
 
     if (keys.includes('Escape')) this.handleEscape(menu);
+    if (menu?.id === MENU.INVENTORY) {
+      this.handleInventoryInput(menu, clicked, keys);
+      return;
+    }
     if (menu) {
       if (clicked) this.handleMenuClick(menu);
       return;
@@ -1269,6 +1310,7 @@ export class Game {
     if (clicked) this.handleRoomClick();
     if (keys.includes('back')) this.goBack();
     if (keys.includes('map')) this.showMap();
+    if (keys.includes('inventory')) this.openInventory();
     this.runActionKeys(keys);
   }
 
@@ -1439,14 +1481,6 @@ export class Game {
         menu.selected = this.verbAtCursor(menu);
         if (menu.selected === null) this.menus.pop();
         else this.chooseVerb(menu.selected);
-        return;
-      case MENU.INVENTORY:
-        if (menu.hovered === undefined || menu.hovered === null) this.menus.pop();
-        else this.openItemActions(menu.items[menu.hovered]);
-        return;
-      case MENU.ITEM_ACTIONS:
-        if (menu.hovered === undefined || menu.hovered === null) this.menus.pop();
-        else this.chooseItemAction(menu.choices[menu.hovered].id);
         return;
       case MENU.POPUP:
         this.menus.pop();

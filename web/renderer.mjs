@@ -8,6 +8,9 @@ const FONT = `${FONT_SIZE}px system-ui, sans-serif`;
 const BOLD_FONT = `600 ${FONT}`;
 const SAY_LINES = 4;
 const ARROW_BLINK_MS = 600;
+const ITEM_SIZE = 32;
+const IMAGE_SECTION = 35;
+const ARROW_REACH = 6;
 
 // Where the highlight goes on each arm of the verb wheel, from Ext.menuPaintOMS.
 const WHEEL_ARMS = { [VERB.LOOK]: [1, -20], [VERB.HAND]: [21, -1], [VERB.MOUTH]: [0, 18], [VERB.INVENTORY]: [-20, -1] };
@@ -370,6 +373,88 @@ export class Renderer {
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }
 
+  // Port of ExtBase.inventoryMenuPaint and menuUpdateIngame's layout for this menu:
+  // the item's name, its picture between arrows, then what can be done with it.
+  drawInventory(menu) {
+    const c = this.context;
+    const { game } = this;
+    const { menuMargin: margin, menuLineSpacing: spacing } = game;
+    const step = LINE_HEIGHT + spacing;
+    const delimiter = this.delimiterHeight;
+    const width = game.roomWidth >> 1;
+    c.font = FONT;
+    const titleLines = this.wrap(menu.title, width - margin * 2);
+    const textHeight = titleLines.length * step - spacing;
+    const choicesHeight = menu.choices.length * step - spacing;
+
+    const delimiter1 = margin + textHeight + margin;
+    const imageTop = delimiter1 + delimiter;
+    const delimiter2 = margin + textHeight + IMAGE_SECTION + delimiter + margin + 3;
+    const choicesTop = margin + textHeight + IMAGE_SECTION + delimiter + margin * 2 + delimiter + 3;
+    const height = choicesTop + choicesHeight + margin;
+
+    // Centered on the cursor, kept on screen and clear of the health display.
+    const life = this.images.get('HUD_life')?.info.height ?? 0;
+    const x = Math.max(this.borderLeft, Math.min(game.roomWidth - width - this.borderRight, menu.x - (width >> 1)));
+    const lowest = game.roomHeight - height - this.borderBottom;
+    const y = Math.max(10 + life + this.borderTop, Math.min(lowest, menu.y - (height >> 1)));
+    this.notepad(x, y, width, height);
+
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+    c.fillStyle = css(game.menuTextColor);
+    titleLines.forEach((line, index) => c.fillText(line, x + margin, y + margin + index * step));
+    this.delimiter(x, y + delimiter1, width);
+    this.delimiter(x, y + delimiter2, width);
+
+    const centerX = x + (width >> 1);
+    const imageY = y + imageTop + 3;
+    this.drawCentered(menu.image, centerX, imageY + (ITEM_SIZE >> 1));
+    menu.arrows = [];
+    if (menu.items.length > 1) {
+      const place = (id, left, step_) => {
+        const image = this.images.get(id);
+        if (!image) return;
+        const arrowY = imageY + ((ITEM_SIZE - image.info.height) >> 1);
+        const arrowX = left ? centerX - (ITEM_SIZE >> 1) - 3 - image.info.width : centerX + (ITEM_SIZE >> 1) + 3;
+        c.drawImage(image.bitmap, arrowX, arrowY);
+        menu.arrows.push({
+          x: arrowX - ARROW_REACH,
+          y: imageY,
+          width: image.info.width + ARROW_REACH * 2,
+          height: ITEM_SIZE,
+          step: step_,
+        });
+      };
+      place('inv_arrowLeft', true, -1);
+      place('inv_arrowRight', false, 1);
+    }
+
+    menu.page = {
+      x: x - this.borderLeft,
+      y: y - this.borderTop,
+      width: width + this.borderLeft + this.borderRight,
+      height: height + this.borderTop + this.borderBottom,
+    };
+    menu.rows = menu.choices.map((_, index) => ({
+      x,
+      y: y + choicesTop + index * step - (spacing >> 1),
+      width,
+      height: step,
+    }));
+    this.updateHoveredRow();
+    menu.choices.forEach(({ text }, index) => {
+      const rowY = y + choicesTop + index * step;
+      if (menu.selected === index) {
+        c.fillStyle = css(game.menuSelectedColor);
+        c.fillRect(x, rowY, width, LINE_HEIGHT);
+      }
+      c.fillStyle = css(game.menuTextColor);
+      c.fillText(text, x + margin, rowY);
+    });
+    this.drawImage('cursorIdle', game.cursorX, game.cursorY);
+  }
+
   drawMenu(menu) {
     switch (menu.id) {
       case MENU.SAY:
@@ -393,18 +478,7 @@ export class Renderer {
         );
         break;
       case MENU.INVENTORY:
-        this.drawList(
-          menu,
-          null,
-          menu.items.map(({ name, size }) => (size > 1 ? `${name} (${size})` : name)),
-        );
-        break;
-      case MENU.ITEM_ACTIONS:
-        this.drawList(
-          menu,
-          menu.title,
-          menu.choices.map(({ text }) => text),
-        );
+        this.drawInventory(menu);
         break;
       default:
     }
@@ -415,13 +489,17 @@ export class Renderer {
     const { game } = this;
     const menu = game.menus.at(-1);
     if (!menu?.rows) return;
-    const index = menu.rows.findIndex(
-      (row) =>
-        game.cursorX >= row.x &&
-        game.cursorX < row.x + row.width &&
-        game.cursorY >= row.y &&
-        game.cursorY < row.y + row.height,
-    );
+    const inside = (rect) =>
+      game.cursorX >= rect.x &&
+      game.cursorX < rect.x + rect.width &&
+      game.cursorY >= rect.y &&
+      game.cursorY < rect.y + rect.height;
+    const index = menu.rows.findIndex(inside);
     menu.hovered = index === -1 ? null : index;
+    if (menu.id === MENU.INVENTORY) {
+      if (index !== -1) menu.selected = index;
+      menu.hoveredArrow = menu.arrows.find(inside)?.step ?? null;
+      menu.overPage = inside(menu.page);
+    }
   }
 }

@@ -239,6 +239,8 @@ The original's screen is 240x320: a 256-pixel-tall room, panning sideways with t
 
 Text boxes use the original's notepad art, tiled as in `ExtBase.menuPaintIngameImageBorders`. Text takes its speaker's color: Ben `#1C0E70`, Moon `#A30C0C` and Karen `#A20B8A`. The box positions follow the room's bottom rather than the phone's screen, and they hold four lines rather than scrolling, so they're larger than the original's. The fonts are the browser's, not the phone's.
 
+The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width, centered on the cursor, showing one item's name and picture, with arrows to the others and its actions below. The script's named first item always comes first. After that, the original's order came from a Java hash table, and the port's is the order items were picked up.
+
 The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. The Pause key's menu isn't ported, since the page's buttons cover saving and sound.
 
 ### Sound

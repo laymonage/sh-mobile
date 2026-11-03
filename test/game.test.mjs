@@ -164,26 +164,156 @@ test('the room draws sprites at their recorded places', () => {
   assert.ok(images.some((item) => item.id === 'h6' && item.x === 64 && item.transform === 1));
 });
 
-test('the wheel opens the inventory, and items can be looked at', () => {
-  const game = newGame();
-  playTo(game, '0');
+// Opens the inventory from the wheel on a hotspot, as a player would.
+function openBackpack(game) {
   hover(game, 230, 120);
   game.click();
   game.advance();
   chooseVerb(game, VERB.INVENTORY);
   const inventory = game.menus.at(-1);
   assert.equal(inventory.id, MENU.INVENTORY);
-  assert.deepEqual(inventory.items.map(({ id }) => id).sort(), ['2j', 'invGun']);
+  return inventory;
+}
 
-  inventory.hovered = inventory.items.findIndex(({ id }) => id === '2j');
+test('the inventory shows one item, with what can be done with it', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.setInventory('invMap', 1);
+  const page = openBackpack(game);
+  assert.equal(page.items[0], 'invMap');
+  assert.deepEqual(page.items.slice().sort(), ['2j', 'invGun', 'invMap']);
+  assert.equal(page.index, 0);
+  assert.equal(page.title, 'Map');
+  assert.equal(page.image, 'gz');
+  assert.deepEqual(
+    page.choices.map(({ text }) => text),
+    ['Use', 'Look at', 'Back'],
+  );
+  assert.equal(page.selected, 0);
+});
+
+test('the arrows move between items, and wrap around', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.setInventory('invMap', 1);
+  const page = openBackpack(game);
+  const shown = () => game.menus.at(-1).items[game.menus.at(-1).index];
+  const first = shown();
+  game.pressKey('ArrowRight');
+  game.advance();
+  assert.notEqual(shown(), first);
+  assert.equal(game.itemId, shown());
+  game.pressKey('ArrowLeft');
+  game.advance();
+  assert.equal(shown(), first);
+  game.pressKey('ArrowLeft');
+  game.advance();
+  assert.equal(game.menus.at(-1).index, page.items.length - 1);
+  game.menus.at(-1).hoveredArrow = 1;
   game.click();
   game.advance();
-  const actions = game.menus.at(-1);
-  assert.equal(actions.id, MENU.ITEM_ACTIONS);
-  actions.hovered = actions.choices.findIndex(({ id }) => id === EVENT.LOOKAT);
+  assert.equal(game.menus.at(-1).index, 0);
+});
+
+test('the page stays in place while moving between items', () => {
+  const game = newGame();
+  playTo(game, '0');
+  const page = openBackpack(game);
+  const { x, y } = page;
+  game.moveCursor(10, 10);
+  game.pressKey('ArrowRight');
+  game.advance();
+  assert.notEqual(game.menus.at(-1), page);
+  assert.deepEqual([game.menus.at(-1).x, game.menus.at(-1).y], [x, y]);
+});
+
+test('a single item has nowhere to move to', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.vars.delete('inv-2j');
+  const page = openBackpack(game);
+  assert.equal(page.items.length, 1);
+  game.pressKey('ArrowRight');
+  game.advance();
+  assert.equal(game.menus.at(-1), page);
+});
+
+test('the up and down keys choose an action, and Enter does it', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.setInventory('invMap', 1);
+  game.setVariable('m6', 1);
+  const page = openBackpack(game);
+  game.pressKey('ArrowUp');
+  game.advance();
+  assert.equal(page.choices[page.selected].text, 'Back');
+  game.pressKey('ArrowDown');
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(page.choices[page.selected].text, 'Look at');
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.SAY);
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1), page);
+});
+
+test('Use tries the item on the hotspot, and Back returns to the wheel', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.setInventory('invMap', 1);
+  const page = openBackpack(game);
+  page.hovered = page.choices.findIndex(({ text }) => text === 'Use');
   game.click();
   game.advance();
   assert.equal(game.menus.at(-1).id, MENU.SAY);
+  assert.equal(game.menus.at(-1).text, game.useItemText);
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1), page);
+  page.hovered = page.choices.findIndex(({ text }) => text === 'Back');
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.VERBS);
+});
+
+test('clicking off the page closes it, but clicking blank parts of it does not', () => {
+  const game = newGame();
+  playTo(game, '0');
+  const page = openBackpack(game);
+  page.hovered = null;
+  page.overPage = true;
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1), page);
+  page.overPage = false;
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.VERBS);
+});
+
+test('the inventory key opens it away from any hotspot, where nothing can be used', () => {
+  const game = newGame();
+  playTo(game, '0');
+  hover(game, 128, 20);
+  assert.equal(game.overObject, null);
+  game.pressKey('inventory');
+  game.advance();
+  const page = game.menus.at(-1);
+  assert.equal(page.id, MENU.INVENTORY);
+  assert.ok(!page.choices.some(({ text }) => text === 'Use'));
+  assert.ok(page.choices.some(({ text }) => text === 'Back'));
+});
+
+test('items can be equipped from the inventory', () => {
+  const game = newGame();
+  playTo(game, '0');
+  game.setVariable('m6', 1);
+  const page = openBackpack(game);
+  const gun = page.items.indexOf('invGun');
+  game.menus[game.menus.length - 1] = game.inventoryPage(page.items, gun);
+  assert.ok(game.menus.at(-1).choices.some(({ text }) => text === 'Look at'));
   assert.deepEqual([...game.unsupportedCommands], []);
 });
 
