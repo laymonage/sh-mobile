@@ -126,8 +126,8 @@ const TEXT = {
   HINT_RIGHT: 153,
 };
 
-// Commands this prototype runs past: audio, saving, vibration and visual effects.
-const NO_OP = new Set([23, 47, 49, 56]);
+// Commands this prototype runs past: chunk downloads, which a JAR doesn't need, and vibration.
+const NO_OP = new Set([47, 56]);
 
 class RoomObject {
   constructor(source, game) {
@@ -395,13 +395,21 @@ class RoomObject {
 export class Game {
   constructor(
     data,
-    { language = 'en', roomSize = 256, now = () => Date.now(), random = Math.random, storage = null } = {},
+    {
+      language = 'en',
+      roomSize = 256,
+      now = () => Date.now(),
+      random = Math.random,
+      storage = null,
+      audio = null,
+    } = {},
   ) {
     this.data = data;
     this.dataDir = data.dataDir;
     this.now = now;
     this.random = random;
     this.storage = storage;
+    this.audio = audio;
     this.language = language;
     this.gameTexts = parseLan(data.entries.get(`${data.dataDir}/lan/${language}.lan`));
     this.engineTexts = new TextDecoder('utf-8')
@@ -487,6 +495,20 @@ export class Game {
     this.cursorAnim = null;
     this.dissolve = null;
     this.specialCursor = { idle: null, hover: null };
+  }
+
+  // Port of MyCanvas.playSound. One sound plays at a time. The first "ls" after
+  // loading a save is skipped, as the original skips it.
+  playSound(name, loops = 1) {
+    if (this.firstLoad && name === 'ls') {
+      this.firstLoad = false;
+      return;
+    }
+    this.audio?.play(name, loops);
+  }
+
+  stopSound() {
+    this.audio?.stop();
   }
 
   // Variables: M's inkServer store, keeping the type hint beside each value.
@@ -649,6 +671,9 @@ export class Game {
       case 22:
         this.gotoCommand(thread, args);
         return null;
+      case 23:
+        this.playSound(args[0], count > 1 ? integerArgument(args[1]) : 1);
+        return null;
       case 24:
         this.addChoice(args);
         return null;
@@ -700,6 +725,9 @@ export class Game {
         return null;
       case 48:
         this.saveGame(count === 1 ? toBoolean(args[0]) : true);
+        return null;
+      case 49:
+        this.stopSound();
         return null;
       case 50:
         if (thread.roomObject && thread.roomObject.animationTime <= 0) {
@@ -976,6 +1004,7 @@ export class Game {
     this.pendingClick = false;
     this.pendingKeys = [];
     this.resetBattle();
+    this.stopSound();
   }
 
   // Saving. A save is the variables and action keys, as in ExtBase.saveGameInRMS,
@@ -1065,6 +1094,7 @@ export class Game {
       this.ammoSet(0, true, true);
     }
     this.setupDone = true;
+    this.firstLoad = true;
     this.roomInit('setup', false);
     return true;
   }
@@ -1120,6 +1150,7 @@ export class Game {
     }
     this.nextRoomInit = true;
     this.pendingRoom = room;
+    this.stopSound();
   }
 
   loadPendingRoom() {
@@ -1133,6 +1164,7 @@ export class Game {
     this.objects = parsed.objects.map((source) => new RoomObject(source, this));
     this.roomEntered = false;
     this.roomUpdateNeeded = true;
+    this.enemySoundPlayed = false;
   }
 
   // Port of M.roomCheckUpdate.
@@ -1198,6 +1230,7 @@ export class Game {
   // Port of the original's ExtBase.appKeyHandling, once per tick.
   handleInput() {
     const menu = this.menus.at(-1);
+    if (!menu) this.playEnemyCue();
     if (!menu && !this.isAiming()) this.updateHover();
     const clicked = this.pendingClick;
     const keys = this.pendingKeys;
@@ -1213,6 +1246,29 @@ export class Game {
     }
     if (clicked) this.handleRoomClick();
     this.runActionKeys(keys);
+  }
+
+  // From ExtBase.ingameMoveKeyHandling: a growl the first time the flashlight
+  // finds a monster in a room.
+  playEnemyCue() {
+    if (this.enemySoundPlayed || !this.cursorAnim || !this.objects) return;
+    const info = this.imageInfo(this.cursorAnim.frames[this.cursorAnim.frame]);
+    if (!info) return;
+    const halfWidth = info.width >> 1;
+    const halfHeight = info.height >> 1;
+    for (const object of this.objects) {
+      if (!object.visible || !object.script?.hasEvent(EVENT.ENEMYATTACK)) continue;
+      if (
+        object.x - AIM_RADIUS > this.cursorX - halfWidth &&
+        object.x + AIM_RADIUS < this.cursorX + halfWidth &&
+        object.y - AIM_RADIUS > this.cursorY - halfHeight &&
+        object.y + AIM_RADIUS < this.cursorY + halfHeight
+      ) {
+        this.enemySoundPlayed = true;
+        this.playSound('sh_monster_hurt');
+        return;
+      }
+    }
   }
 
   isAiming() {
@@ -1511,6 +1567,7 @@ export class Game {
 
     if (this.shot) {
       this.shot = false;
+      this.playSound(this.getRaw('sys_gunShotSound') ?? 'sh_shot');
       this.ammoSet(this.ammo - 1, true, true);
       this.recoilVertical += RECOIL_VERTICAL;
       this.recoilHorizontal = this.randomInt(2) === 0 ? -RECOIL_HORIZONTAL : RECOIL_HORIZONTAL;

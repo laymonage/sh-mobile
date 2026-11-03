@@ -233,6 +233,29 @@ The port differs in three ways: saves go to the browser's local storage, the con
 
 Save and load were tested in the browser by saving in one room, reloading the page and continuing. Saves from late in the game haven't been tried, and neither have the story moments that save by themselves, beyond a test of the first one.
 
+### Sound
+
+Silent Hill has 13 very short MIDI files, 1,915 bytes in total, and plays only one at a time, so a new sound cuts off the last. Browsers can't play MIDI, so the port renders it with Web Audio. It has two sound sources:
+
+- **A SoundFont 2 file the player chooses.** The file stays in their browser, and the repo includes none. `web/engine/soundfont.mjs` reads it, covering zones, tuning, loops, the volume envelope, the initial filter, pan and tremolo. It doesn't apply the modulation envelope, vibrato, chorus or reverb.
+- **Built-in voices.** These are rough stand-ins, used without a soundfont or for an instrument the soundfont lacks.
+
+The Series 40 5th Edition FP1 soundfont was tested. Its metadata says "Copyright © Nokia Corporation. All rights reserved", while its listing is reported as CC-BY 4.0. The listing page refuses automated requests, so the license hasn't been confirmed.
+
+### The door sound
+
+`ls`, played on entering rooms through a door, is 48 notes of General MIDI's applause instrument across five octaves, none longer than 0.9 s. In Series 40, that instrument has a 2.5 s attack and a 1.8 s release, so no note reaches full volume, and the result is a slow swell and fade.
+
+That makes it nearly silent at the font's own levels, peaking at 0.02 of full scale. So the port measures each sound through whichever source is in use, and scales it by its peak and its sustained loudness. A real phone's levels weren't measured, so how loud each sound should be compared with the others is a judgment call, and there's a volume slider.
+
+Sounds also end with their MIDI file, with a 0.25 s fade, because the original hands each file to the phone's media player. Whether a real phone cuts off ringing notes at that point, or lets them fade, hasn't been checked.
+
+The door sound starts almost silent, so nothing masked the click from cutting off the previous sound. Sounds now fade over 15 ms when stopped. A crackle was reported at the door's start, and this is the one measured cause found: the setup time and the sample were ruled out, and filtering slowed samples made no measurable difference. Whether it fully fixes what was heard hasn't been confirmed.
+
+There's no limiter. An earlier version had the browser's compressor on the output, but it cut short sounds to about half their level even well below its threshold, and measured levels leave nothing for it to catch.
+
+Every file was rendered in a browser through both sound sources and measured for silence, invalid samples and clipping. Nobody has compared the result with a real phone.
+
 ## What hasn't been checked
 
 - No game has been played through, so it's unconfirmed that any can be completed in the port or the original.

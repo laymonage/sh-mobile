@@ -27,8 +27,18 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | 3, or the First aid button | Uses a first-aid kit |
 | Esc | Skips the opening |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
+| Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
+| Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
 
-The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight, the HUD and saving work. Sound, the map, the original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight, the HUD, saving and sound work. The map, the original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+
+Browsers only allow sound after you click or press a key, so a dev link that starts by itself stays silent until then.
+
+### Soundfonts
+
+The game's music is MIDI, which needs instrument sounds from somewhere. Without a soundfont, the port uses rough built-in voices. For sounds much closer to a Nokia phone, choose a General MIDI SoundFont 2 file such as [Series 40 5th Edition FP1](https://www.musical-artifacts.com/artifacts/693). This repo doesn't include one: check its license yourself. Its listing is reported as CC-BY 4.0, but the file's own metadata says "Copyright © Nokia Corporation. All rights reserved."
+
+To skip the file picker during development, put a `.sf2` in the ignored `soundfonts/` folder and add it to the link, for example `?jar=sh1-2007-a31&soundfont=name.sf2`.
 
 There's one save for each version of the game's data. It's kept in this browser's local storage, so clearing site data deletes it.
 

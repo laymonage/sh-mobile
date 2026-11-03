@@ -1,10 +1,11 @@
 import { readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
-import { input, readInput, ROOT } from '../src/inputs.mjs';
+import { basename, extname, join, normalize, sep } from 'node:path';
+import { INPUT_ROOT, input, readInput, ROOT } from '../src/inputs.mjs';
 
 // A local-only server for the port. /dev-jar/<id> serves a pinned build, so the
-// page can start with ?jar=<id> rather than a file picker.
+// page can start with ?jar=<id> rather than a file picker. In the same way,
+// /dev-soundfont/<file> serves a file from the ignored soundfonts folder.
 const PORT = Number(process.env.PORT ?? 8123);
 const WEB = join(ROOT, 'web');
 const TYPES = {
@@ -29,6 +30,17 @@ function serveStatic(path, response) {
 
 createServer((request, response) => {
   const { pathname } = new URL(request.url, 'http://localhost');
+  const soundFont = pathname.match(/^\/dev-soundfont\/(.+)$/);
+  if (soundFont) {
+    const file = join(INPUT_ROOT, 'soundfonts', basename(decodeURIComponent(soundFont[1])));
+    if (!file.endsWith('.sf2') || !statSync(file, { throwIfNoEntry: false })?.isFile()) {
+      response.writeHead(404).end('Unknown soundfont');
+      return;
+    }
+    response.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' });
+    response.end(readFileSync(file));
+    return;
+  }
   const jar = pathname.match(/^\/dev-jar\/(.+)$/);
   if (!jar) {
     serveStatic(pathname, response);

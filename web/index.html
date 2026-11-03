@@ -80,6 +80,8 @@
       font: inherit;
       cursor: pointer;
     }
+    #volume-control { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+    #volume { width: 96px; accent-color: var(--accent); }
     button:hover { border-color: var(--accent); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
@@ -102,6 +104,11 @@
     <button type="button" data-key="3">First aid (3)</button>
     <button type="button" id="save">Save</button>
     <button type="button" id="load">Load</button>
+    <button type="button" id="sound" aria-pressed="true">Sound: on</button>
+    <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
+    <button type="button" id="soundfont">Choose soundfont</button>
+    <button type="button" id="soundfont-remove" hidden>Remove soundfont</button>
+    <input id="soundfont-file" type="file" accept=".sf2" hidden>
   </div>
   <div id="start">
     <button type="button" id="continue">Continue</button>

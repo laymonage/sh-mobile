@@ -11,3 +11,7 @@ build/
 
 .DS_Store
 node_modules/
+
+# Soundfonts are chosen by each player and have their own licenses.
+*.sf2
+soundfonts/

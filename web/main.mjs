@@ -1,5 +1,8 @@
 import { Game } from './engine/game.mjs';
 import { inspectJar } from './engine/jar.mjs';
+import { SoundFont } from './engine/soundfont.mjs';
+import { SoundPlayer } from './audio.mjs';
+import { deleteStoredSoundFont, loadStoredSoundFont, storeSoundFont } from './soundfont-store.mjs';
 import { Renderer } from './renderer.mjs';
 
 const TICK_MS = 60;
@@ -37,11 +40,14 @@ async function start(bytes) {
   }
   showMessage(inspection.message, inspection.status === 'warning' ? 'warning' : '');
 
-  const game = new Game(inspection.data, { roomSize: inspection.roomSize, storage: browserStorage() });
+  const audio = new SoundPlayer(inspection.data);
+  const game = new Game(inspection.data, { roomSize: inspection.roomSize, storage: browserStorage(), audio });
   const renderer = new Renderer(canvas, game);
   await renderer.loadImages(inspection.data);
   document.body.classList.add('playing');
   setUpSaving(game);
+  setUpSound(game, audio);
+  await setUpSoundFont(audio);
   if (game.hasSave()) offerStart(game);
   else game.startNewGame();
   // Lets the browser pane and tests inspect and step a running game.
@@ -81,6 +87,88 @@ function setUpSaving(game) {
     resetLoadButton();
     game.loadGame();
   });
+}
+
+function setUpSound(game, audio) {
+  const button = document.getElementById('sound');
+  const show = () => {
+    button.textContent = `Sound: ${audio.enabled ? 'on' : 'off'}`;
+    button.setAttribute('aria-pressed', String(audio.enabled));
+  };
+  show();
+  const volume = document.getElementById('volume');
+  volume.value = Math.round(audio.volume * 100);
+  volume.addEventListener('input', () => audio.setVolume(volume.valueAsNumber / 100));
+  volume.addEventListener('change', () => {
+    audio.play('sh_shot');
+    volume.blur();
+  });
+  button.addEventListener('click', () => {
+    audio.setEnabled(!audio.enabled);
+    show();
+    if (audio.enabled) audio.play('sh_shot');
+  });
+  for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => audio.unlock());
+  document.addEventListener('visibilitychange', () => audio.setHidden(document.hidden));
+  window.audio = audio;
+}
+
+// Soundfonts have their own licenses, so players bring their own. The choice is
+// kept in this browser, and is never uploaded.
+async function setUpSoundFont(audio) {
+  const chooseButton = document.getElementById('soundfont');
+  const removeButton = document.getElementById('soundfont-remove');
+  const fileInput = document.getElementById('soundfont-file');
+  const show = (name) => {
+    chooseButton.textContent = name ? `Soundfont: ${name}` : 'Choose soundfont';
+    removeButton.hidden = !name;
+  };
+  const use = async (name, bytes) => {
+    await audio.setSoundFont(new SoundFont(bytes));
+    show(name);
+  };
+
+  chooseButton.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      showMessage('Loading soundfont...');
+      await use(file.name, bytes);
+    } catch {
+      showMessage(`${file.name} isn't a usable SoundFont 2 file.`, 'error');
+      return;
+    }
+    showMessage('');
+    if (!(await storeSoundFont(file.name, bytes)))
+      showMessage("This soundfont will work until you leave, but this browser couldn't keep it.", 'warning');
+  });
+  removeButton.addEventListener('click', async () => {
+    await audio.setSoundFont(null);
+    show(null);
+    await deleteStoredSoundFont();
+  });
+
+  const devName = new URLSearchParams(location.search).get('soundfont');
+  if (devName) {
+    const response = await fetch(`/dev-soundfont/${encodeURIComponent(devName)}`);
+    if (response.ok) {
+      await use(devName, new Uint8Array(await response.arrayBuffer()));
+      return;
+    }
+  }
+  const stored = devName ? null : await loadStoredSoundFont();
+  try {
+    if (stored) {
+      await use(stored.name, stored.bytes);
+      return;
+    }
+  } catch {
+    await deleteStoredSoundFont();
+  }
+  await audio.setSoundFont(null);
 }
 
 function run(game, renderer) {

@@ -435,6 +435,100 @@ function settle(game) {
   for (let i = 0; i < 5; i++) game.advance();
 }
 
+function recordingAudio() {
+  const calls = [];
+  return { calls, play: (name, loops) => calls.push(['play', name, loops]), stop: () => calls.push(['stop']) };
+}
+
+test('scripts play sounds, and only the last one requested keeps playing', () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  audio.calls.length = 0;
+  game.command({ status: 1 }, 23, ['lt']);
+  game.command({ status: 1 }, 23, ['sh_bgmusic', -1]);
+  game.command({ status: 1 }, 49, []);
+  assert.deepEqual(audio.calls, [['play', 'lt', 1], ['play', 'sh_bgmusic', -1], ['stop']]);
+  assert.deepEqual([...game.unsupportedCommands], []);
+});
+
+test('changing room stops the sound, and the new room can start its own', () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  audio.calls.length = 0;
+  game.roomInit('r', false);
+  assert.deepEqual(audio.calls[0], ['stop']);
+  game.advance();
+  game.advance();
+  assert.ok(audio.calls.some(([kind, name]) => kind === 'play' && name === 'sh_bgmusic'));
+});
+
+test('firing plays the gun, even over the sound of a hit', () => {
+  const audio = recordingAudio();
+  const game = new Game(data, { now: Date.now, random: () => 0.5, audio });
+  game.startNewGame();
+  for (let i = 0; i < 3; i++) game.tick();
+  game.pressKey('Escape');
+  for (let i = 0; i < 3; i++) game.tick();
+  game.setRaw('sys_gunShotSound', 'sh_shot', 'S');
+  game.roomInit('r', false);
+  for (let i = 0; i < 3; i++) game.tick();
+  game.menus = [];
+  game.pausedThread = null;
+  game.waitStop = 0;
+  game.itemId = '4u';
+  game.objects.find((object) => object.scriptId === '78').executeEvent(EVENT.USEITEM, 0);
+  game.menus = [];
+  game.pausedThread = null;
+  game.tick();
+  game.pressKey('1');
+  game.tick();
+  game.tick();
+  const target = enemy(game);
+  game.moveCursor(target.x, target.y);
+  game.tick();
+  game.tick();
+  audio.calls.length = 0;
+  game.click();
+  game.tick();
+  assert.deepEqual(
+    audio.calls.map(([, name]) => name),
+    ['sh_monster_hurt', 'sh_shot'],
+  );
+});
+
+test('the flashlight finding a monster growls once per room', () => {
+  const audio = recordingAudio();
+  const game = battleGame();
+  game.audio = audio;
+  game.enemySoundPlayed = false;
+  game.moveCursor(0, 0);
+  game.tick();
+  game.moveCursor(enemy(game).x, enemy(game).y);
+  game.tick();
+  game.tick();
+  game.tick();
+  assert.equal(audio.calls.filter(([, name]) => name === 'sh_monster_hurt').length, 1);
+});
+
+test('the first "ls" after loading is skipped, as in the original', () => {
+  const audio = recordingAudio();
+  const storage = memoryStorage();
+  const game = savableGame(storage, { audio });
+  game.saveGame(false);
+  game.loadGame();
+  audio.calls.length = 0;
+  game.playSound('ls');
+  game.playSound('ls');
+  assert.deepEqual(audio.calls, [['play', 'ls', 1]]);
+});
+
+test('the game runs with no audio at all', () => {
+  const game = savableGame(memoryStorage(), { audio: null });
+  game.playSound('lt');
+  game.stopSound();
+  game.advance();
+});
+
 test('there is no cursor before a game starts or after it ends', () => {
   const game = new Game(data, { storage: memoryStorage() });
   assert.equal(game.cursorView(), null);
