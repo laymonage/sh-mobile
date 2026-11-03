@@ -104,11 +104,24 @@ const BLOOD_SPLATS = 5;
 const BLOOD_PHASES = 3;
 const MAX_BLOOD_BLUR = 4;
 
+// Dialogue colors, by speaker, from ExtBase.
+const SPEAKER_COLORS = [
+  [154, 0x1c0e70],
+  [155, 0xa30c0c],
+  [156, 0xa20b8a],
+];
+
 const SAVE_VERSION = 1;
 const NOTICE_MS = 2000;
 
 // Engine text indexes in localization/*.properties.
 const TEXT = {
+  SELECT: 7,
+  BACK: 9,
+  MAP: 43,
+  NEXT: 147,
+  SKIP: 148,
+  OK: 158,
   SAVED: 80,
   SAVE_FAILED: 118,
   OUT_OF_AMMO: 172,
@@ -426,6 +439,9 @@ export class Game {
     this.backgroundColor = 0;
     this.menuColor = 0xffffff;
     this.menuTextColor = 0;
+    this.menuSelectedColor = 0x7c7462;
+    this.menuMargin = 4;
+    this.menuLineSpacing = 2;
     this.useItemText = '';
     this.hideCursor = false;
     this.specialCursor = { idle: null, hover: null };
@@ -789,6 +805,15 @@ export class Game {
       case 's_0':
         this.menuColor = toInt(value);
         return;
+      case 's_1':
+        this.menuSelectedColor = toInt(value);
+        return;
+      case 's_5':
+        this.menuLineSpacing = toInt(value);
+        return;
+      case 's_6':
+        this.menuMargin = toInt(value);
+        return;
       case 's_7':
         this.menuTextColor = toInt(value);
         return;
@@ -798,12 +823,9 @@ export class Game {
       case 's_use':
         this.useItemText = String(value);
         return;
-      case 's_1':
       case 's_2':
       case 's_3':
       case 's_4':
-      case 's_5':
-      case 's_6':
       case 's_useAny':
       case 's_dissolveFX':
       case 's_battleType':
@@ -1245,7 +1267,75 @@ export class Game {
       return;
     }
     if (clicked) this.handleRoomClick();
+    if (keys.includes('back')) this.goBack();
+    if (keys.includes('map')) this.showMap();
     this.runActionKeys(keys);
+  }
+
+  isStoryRoom() {
+    const room = this.currentRoom.toLowerCase();
+    return (
+      room === 'control' ||
+      room === 'karen_fall_sleep' ||
+      room === 'ben_backtolight' ||
+      room.includes('intro') ||
+      room.includes('end')
+    );
+  }
+
+  speakerColor(speaker) {
+    const match = SPEAKER_COLORS.find(([text]) => this.engineText(text) === speaker);
+    return match ? match[1] : this.menuTextColor;
+  }
+
+  // What the phone's two soft keys do now, from Ext.appPaint and the key handling.
+  // The page shows them as buttons.
+  softKeys() {
+    if (!this.objects || this.ended) return {};
+    const key = (text, action) => ({ label: this.engineText(text), action });
+    const menu = this.menus.at(-1);
+    if (menu) {
+      if (menu.id === MENU.SAY || menu.id === MENU.TEXT_FADE) {
+        if (this.isStoryRoom()) return { left: key(TEXT.NEXT, 'click'), right: key(TEXT.SKIP, 'escape') };
+        return menu.id === MENU.SAY ? { left: key(TEXT.OK, 'click') } : {};
+      }
+      if (menu.id === MENU.RECEIVED || menu.id === MENU.POPUP) return { left: key(TEXT.OK, 'click') };
+      return { left: key(TEXT.SELECT, 'click'), right: key(TEXT.BACK, 'escape') };
+    }
+    const room = this.currentRoom.toLowerCase();
+    if (room.includes('intro')) return {};
+    if (room.includes('floor') || room === 'children_drawing') return { right: key(TEXT.BACK, 'back') };
+    if (room.includes('puzzle')) return { left: key(TEXT.BACK, 'back') };
+    if (!this.battleMode && this.inventorySize('invMap') > 0) return { left: key(TEXT.MAP, 'map') };
+    return {};
+  }
+
+  pressSoftKey(side) {
+    const key = this.softKeys()[side];
+    if (!key) return false;
+    if (key.action === 'click') this.click();
+    else if (key.action === 'escape') this.pressKey('Escape');
+    else this.pressKey(key.action);
+    return true;
+  }
+
+  // Ext.scrGoBack: does what the room's own "back" hotspot does.
+  goBack() {
+    for (const object of this.objects ?? []) {
+      if (
+        object.active &&
+        object.executeEvent(EVENT.GETMOVEDIR, null) === 'back' &&
+        object.executeEvent(EVENT.CLICK, -1) === null
+      )
+        return;
+    }
+  }
+
+  // Ext.showMap: looks at the map item, whose script offers the floors.
+  showMap() {
+    if (this.inventorySize('invMap') === 0) return;
+    this.itemId = 'invMap';
+    this.executeEventById('invMap', EVENT.LOOKAT, null);
   }
 
   // From ExtBase.ingameMoveKeyHandling: a growl the first time the flashlight
@@ -1368,14 +1458,12 @@ export class Game {
   // The back key skips text only in rooms that are purely story, per
   // ExtBase.ingameMenuKeyHandling. It closes other menus.
   handleEscape(menu) {
-    if (!menu) return;
     const room = this.currentRoom.toLowerCase();
-    const isStory =
-      room === 'control' ||
-      room === 'karen_fall_sleep' ||
-      room === 'ben_backtolight' ||
-      room.includes('intro') ||
-      room.includes('end');
+    if (!menu) {
+      if (room.includes('floor') || room === 'children_drawing' || room.includes('puzzle')) this.goBack();
+      return;
+    }
+    const isStory = this.isStoryRoom();
     if (menu.id === MENU.SAY || menu.id === MENU.TEXT_FADE) {
       if (!isStory) return;
       this.menus.pop();

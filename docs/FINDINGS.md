@@ -233,6 +233,14 @@ The port differs in three ways: saves go to the browser's local storage, the con
 
 Save and load were tested in the browser by saving in one room, reloading the page and continuing. Saves from late in the game haven't been tried, and neither have the story moments that save by themselves, beyond a test of the first one.
 
+### Interface
+
+The original's screen is 240x320: a 256-pixel-tall room, panning sideways with the cursor, above `gfx/bigScreenHUD_hor.png`, 64 pixels of rusted steel with blood and cobwebs. The port shows the whole square room instead, without panning, and puts that art behind the page's buttons.
+
+Text boxes use the original's notepad art, tiled as in `ExtBase.menuPaintIngameImageBorders`. Text takes its speaker's color: Ben `#1C0E70`, Moon `#A30C0C` and Karen `#A20B8A`. The box positions follow the room's bottom rather than the phone's screen, and they hold four lines rather than scrolling, so they're larger than the original's. The fonts are the browser's, not the phone's.
+
+The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. The Pause key's menu isn't ported, since the page's buttons cover saving and sound.
+
 ### Sound
 
 Silent Hill has 13 very short MIDI files, 1,915 bytes in total, and plays only one at a time, so a new sound cuts off the last. Browsers can't play MIDI, so the port renders it with Web Audio. It has two sound sources:

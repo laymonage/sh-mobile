@@ -58,16 +58,43 @@
     #message.error { color: var(--error); }
     #game {
       display: none;
-      width: min(calc(100vw - 32px), calc(100vh - 176px));
+      width: min(calc(100vw - 32px), calc((100vh - 100px) / 1.27));
       aspect-ratio: 1;
       background: #000;
       cursor: none;
       touch-action: none;
     }
-    #actions { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    /* The page puts the game's own rusted steel art behind this, once a JAR is loaded. */
+    #panel {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: min(calc(100vw - 32px), calc((100vh - 100px) / 1.27));
+      min-height: calc(min(calc(100vw - 32px), calc((100vh - 100px) / 1.27)) * 0.267);
+      margin-top: -12px;
+      padding: 12px;
+      background-color: #000;
+      background-size: 100% 100%;
+      image-rendering: pixelated;
+    }
+    body.playing #panel { display: flex; }
+    #actions { display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
     #start { display: none; gap: 8px; }
     body.choosing #start { display: flex; }
     body.choosing #actions, body.choosing #help { display: none; }
+    #panel button, #volume-control {
+      min-height: 36px;
+      padding: 4px 10px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 4px;
+      font-size: 0.875rem;
+      image-rendering: auto;
+    }
+    #volume-control { display: flex; align-items: center; gap: 8px; }
+    #volume { width: 72px; accent-color: var(--accent); }
+    #panel button:hover:not(:disabled) { border-color: var(--accent); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button:disabled:hover { border-color: var(--border); }
     button {
@@ -80,8 +107,6 @@
       font: inherit;
       cursor: pointer;
     }
-    #volume-control { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-    #volume { width: 96px; accent-color: var(--accent); }
     button:hover { border-color: var(--accent); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
@@ -99,22 +124,26 @@
   </div>
   <p id="message" role="status"></p>
   <canvas id="game" width="768" height="768" aria-label="Game screen"></canvas>
-  <div id="actions">
-    <button type="button" data-key="1">Gun (1)</button>
-    <button type="button" data-key="3">First aid (3)</button>
-    <button type="button" id="save">Save</button>
-    <button type="button" id="load">Load</button>
-    <button type="button" id="sound" aria-pressed="true">Sound: on</button>
-    <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
-    <button type="button" id="soundfont">Choose soundfont</button>
-    <button type="button" id="soundfont-remove" hidden>Remove soundfont</button>
-    <input id="soundfont-file" type="file" accept=".sf2" hidden>
+  <div id="panel">
+    <div id="actions">
+      <button type="button" id="soft-left" hidden></button>
+      <button type="button" data-key="1">Gun (1)</button>
+      <button type="button" data-key="3">First aid (3)</button>
+      <button type="button" id="save">Save</button>
+      <button type="button" id="load">Load</button>
+      <button type="button" id="sound" aria-pressed="true">Sound: on</button>
+      <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
+      <button type="button" id="soundfont">Choose soundfont</button>
+      <button type="button" id="soundfont-remove" hidden>Remove soundfont</button>
+      <input id="soundfont-file" type="file" accept=".sf2" hidden>
+      <button type="button" id="soft-right" hidden></button>
+    </div>
+    <div id="start">
+      <button type="button" id="continue">Continue</button>
+      <button type="button" id="new-game">New game</button>
+    </div>
   </div>
-  <div id="start">
-    <button type="button" id="continue">Continue</button>
-    <button type="button" id="new-game">New game</button>
-  </div>
-  <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening.</p>
+  <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening or goes back, and M opens the map.</p>
   <script type="module" src="main.mjs"></script>
 </body>
 </html>

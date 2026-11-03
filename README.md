@@ -25,12 +25,15 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
 | 1, or the Gun button | Draws or puts away the gun |
 | 3, or the First aid button | Uses a first-aid kit |
-| Esc | Skips the opening |
+| Esc | Skips the opening, or goes back from a puzzle or the map |
+| M | Opens the map, once you have it |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
 
-The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight, the HUD, saving and sound work. The map, the original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+The opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes, battles, the flashlight, the HUD, saving and sound work. The original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+
+The original's Map, Back and OK keys appear as buttons when they apply. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
 Browsers only allow sound after you click or press a key, so a dev link that starts by itself stays silent until then.
 

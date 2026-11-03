@@ -529,6 +529,87 @@ test('the game runs with no audio at all', () => {
   game.advance();
 });
 
+test('each speaker has their color, and others use the normal text color', () => {
+  const game = savableGame(memoryStorage());
+  assert.equal(game.speakerColor(game.engineText(154)), 0x1c0e70);
+  assert.equal(game.speakerColor('Ben'), 0x1c0e70);
+  assert.equal(game.speakerColor(game.engineText(155)), 0xa30c0c);
+  assert.equal(game.speakerColor(game.engineText(156)), 0xa20b8a);
+  assert.equal(game.speakerColor('Someone else'), game.menuTextColor);
+  assert.equal(game.speakerColor(null), game.menuTextColor);
+});
+
+test("the setup script sets the text box's spacing and colors", () => {
+  const game = savableGame(memoryStorage());
+  assert.equal(game.menuColor, 15393458);
+  assert.equal(game.menuSelectedColor, 8156258);
+  assert.equal(game.menuMargin, 6);
+  assert.equal(game.menuLineSpacing, 2);
+});
+
+test('soft keys show what they do in each situation', () => {
+  const game = savableGame(memoryStorage());
+  const labels = () => {
+    const { left, right } = game.softKeys();
+    return [left?.label ?? null, right?.label ?? null];
+  };
+  assert.deepEqual(labels(), [null, null]);
+  game.setInventory('invMap', 1);
+  assert.deepEqual(labels(), ['Map', null]);
+  game.say('Hello', null);
+  assert.deepEqual(labels(), ['OK', null]);
+  game.menus = [{ id: MENU.VERBS, options: [], x: 0, y: 0 }];
+  assert.deepEqual(labels(), ['Select', 'Back']);
+  game.menus = [];
+  game.roomInit('clockPuzzle', false);
+  settle(game);
+  assert.deepEqual(labels(), ['Back', null]);
+  game.roomInit('control', false);
+  settle(game);
+  assert.deepEqual(labels(), ['Next', 'Skip']);
+  game.endGameRequested = true;
+  game.advance();
+  assert.deepEqual(labels(), [null, null]);
+});
+
+test('the map key offers the floors, and Back leaves them', () => {
+  const game = savableGame(memoryStorage());
+  game.setInventory('invMap', 1);
+  game.setVariable('m6', 0);
+  assert.equal(game.pressSoftKey('left'), true);
+  game.advance();
+  const choices = game.menus.at(-1);
+  assert.equal(choices.id, MENU.CHOICE);
+  assert.equal(choices.choices.length, 3);
+  choices.hovered = choices.choices.findIndex(({ id }) => id === 1);
+  game.click();
+  game.advance();
+  settle(game);
+  assert.equal(game.currentRoomId, 'floor1');
+  assert.equal(game.softKeys().right.label, 'Back');
+  assert.equal(game.pressSoftKey('right'), true);
+  settle(game);
+  assert.equal(game.currentRoomId, '0');
+});
+
+test("Esc goes back from a puzzle, using the room's own back hotspot", () => {
+  const game = savableGame(memoryStorage());
+  game.roomInit('2', false);
+  settle(game);
+  game.roomInit('clockPuzzle', true);
+  settle(game);
+  assert.equal(game.currentRoomId, 'clockPuzzle');
+  game.pressKey('Escape');
+  settle(game);
+  assert.notEqual(game.currentRoomId, 'clockPuzzle');
+});
+
+test('a soft key with no action does nothing', () => {
+  const game = savableGame(memoryStorage());
+  assert.equal(game.pressSoftKey('left'), false);
+  assert.equal(game.pressSoftKey('right'), false);
+});
+
 test('there is no cursor before a game starts or after it ends', () => {
   const game = new Game(data, { storage: memoryStorage() });
   assert.equal(game.cursorView(), null);

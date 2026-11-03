@@ -44,6 +44,7 @@ async function start(bytes) {
   const game = new Game(inspection.data, { roomSize: inspection.roomSize, storage: browserStorage(), audio });
   const renderer = new Renderer(canvas, game);
   await renderer.loadImages(inspection.data);
+  showPanelArt(inspection.data);
   document.body.classList.add('playing');
   setUpSaving(game);
   setUpSound(game, audio);
@@ -54,6 +55,14 @@ async function start(bytes) {
   window.game = game;
   window.renderer = renderer;
   run(game, renderer);
+}
+
+// The rusted steel from under the original's screen, behind the page's controls.
+function showPanelArt({ files }) {
+  const art = files.get('gfx/bigScreenHUD_hor.png');
+  if (!art) return;
+  const url = URL.createObjectURL(new Blob([art], { type: 'image/png' }));
+  document.getElementById('panel').style.backgroundImage = `url(${url})`;
 }
 
 // The page's stand-in for the original's main menu.
@@ -192,8 +201,16 @@ function run(game, renderer) {
       button.blur();
     });
   }
+  const softButtons = { left: document.getElementById('soft-left'), right: document.getElementById('soft-right') };
+  for (const [side, button] of Object.entries(softButtons)) {
+    button.addEventListener('click', () => {
+      game.pressSoftKey(side);
+      button.blur();
+    });
+  }
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
+    if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
   });
 
   let last = performance.now();
@@ -210,6 +227,11 @@ function run(game, renderer) {
     if (pending > TICK_MS) pending = 0;
     renderer.draw();
     if (game.ended && !document.body.classList.contains('choosing')) offerStart(game);
+    const keys = game.softKeys();
+    for (const [side, button] of Object.entries(softButtons)) {
+      button.hidden = !keys[side];
+      if (keys[side] && button.textContent !== keys[side].label) button.textContent = keys[side].label;
+    }
     saveButton.disabled = !game.canSave();
     loadButton.disabled = !game.hasSave();
     requestAnimationFrame(frame);
