@@ -29,8 +29,9 @@ async function start(bytes) {
   await renderer.loadImages(inspection.data);
   game.startNewGame();
   document.body.classList.add('playing');
-  // Lets the browser pane and tests inspect a running game.
+  // Lets the browser pane and tests inspect and step a running game.
   window.game = game;
+  window.renderer = renderer;
   run(game, renderer);
 }
 
@@ -49,6 +50,12 @@ function run(game, renderer) {
     game.click();
     event.preventDefault();
   });
+  for (const button of document.querySelectorAll('#actions button')) {
+    button.addEventListener('click', () => {
+      game.pressKey(button.dataset.key);
+      button.blur();
+    });
+  }
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
   });

@@ -211,6 +211,18 @@ From its data alone, the port accepts or explains every Silent Hill and Mobile 2
 
 Only `sh1-2007-a31` has been run in the browser. Being accepted means a build's data has the expected form, not that the build has been played.
 
+### Battles
+
+From reading the code: battles are aim-and-shoot. Pressing 1 draws the gun, which starts a battle if the room has a monster, and a shot hits if the crosshair is within 8 pixels of the monster's anchor point. Dark rooms need the flashlight, which hides everything outside a circle around the cursor. With the flashlight on, a monster can only attack while the beam is on it.
+
+The tests cover drawing the gun, hits and misses, killing a monster, taking damage, dying and running out of ammo. One fight was also played in the browser, in room `r`, reached by jumping to it rather than by walking there. The other five battle rooms, `y`, `17`, `1d`, `2a` and `2d`, are only tested for not hitting a command the port doesn't handle.
+
+The port differs from the original or leaves things out in these ways:
+
+- Recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does.
+- Timing assumes a 60 ms tick, taken from `M.tickBasedTimeUpdate`. The original's real frame rate depended on the phone, and it hasn't been measured, so how often monsters attack may differ.
+- The `bossDead` and `superBossDead` flags, which lock input and hide text in room `2d`, aren't ported, so the final boss may misbehave.
+
 ## What hasn't been checked
 
 - No game has been played through, so it's unconfirmed that any can be completed in the port or the original.

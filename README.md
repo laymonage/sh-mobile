@@ -18,9 +18,16 @@ See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
 npm run play
 ```
 
-Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:8123/?jar=sh1-2007-a31> to load a pinned build. Click to look around and to continue text, and press Esc to skip the opening.
+Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:8123/?jar=sh1-2007-a31> to load a pinned build.
 
-The opening, rooms, hotspots, the verb wheel, text, choices, inventory and room changes work. Battles, sound, saving, the HUD, the map and transition effects aren't there yet, and nobody has played it to the end.
+| Input | What it does |
+| --- | --- |
+| Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
+| 1, or the Gun button | Draws or puts away the gun |
+| 3, or the First aid button | Uses a first-aid kit |
+| Esc | Skips the opening |
+
+The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight and the HUD work. Sound, saving, the map, the main menu and room transition effects aren't there yet, and nobody has played it to the end.
 
 ## Requirements
 

@@ -218,6 +218,248 @@ test('every room loads and updates without an error', () => {
   assert.deepEqual([...unsupported], []);
 });
 
+// A game in the first battle room, with no random enemy attacks unless asked for.
+function battleGame() {
+  let clock = 1000;
+  const state = { roll: 0.5 };
+  const game = new Game(data, { now: () => clock, random: () => state.roll });
+  game.state = state;
+  game.advance = (ms = 60) => {
+    clock += ms;
+    game.tick();
+  };
+  game.startNewGame();
+  game.advance();
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  game.advance();
+  game.advance(200);
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, '0');
+  game.roomInit('r', false);
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'r');
+
+  // The room starts dark, until the flashlight is used on it.
+  game.itemId = '4u';
+  game.objects.find((object) => object.scriptId === '78').executeEvent(EVENT.USEITEM, 0);
+  game.advance();
+  if (game.menus.length) {
+    game.click();
+    game.advance();
+  }
+  game.advance();
+  assert.ok(game.cursorAnim);
+  return game;
+}
+
+function enemy(game) {
+  return game.objects.find((object) => object.script?.hasEvent(EVENT.ATTACK1));
+}
+
+// Holds the crosshair on the enemy until recoil settles.
+function aimAtEnemy(game) {
+  const target = enemy(game);
+  game.moveCursor(target.x, target.y);
+  for (let i = 0; i < 8; i++) game.advance();
+  assert.deepEqual([game.cursorX, game.cursorY], [target.x, target.y]);
+}
+
+// With the flashlight on, the enemy only attacks once it has settled and the light is on it.
+function waitForAttackWindow(game) {
+  aimAtEnemy(game);
+  for (let i = 0; i < 80 && game.enemyState !== 1; i++) game.advance();
+  assert.equal(game.enemyState, 1);
+}
+
+test('the gun key starts a battle, with a crosshair and the HUD', () => {
+  const game = battleGame();
+  const target = enemy(game);
+  assert.ok(target.visible);
+  assert.equal(game.battleMode, false);
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  assert.equal(game.battleMode, true);
+  assert.equal(game.getRaw('sys_battleState'), '2');
+  assert.equal(game.ammo, 10);
+  assert.equal(game.cursorView().id, 'haircross');
+  assert.ok(game.drawList().some((item) => item.id === 'HUD_numbers'));
+  assert.ok(game.drawList().some((item) => item.id === 'HUD_life'));
+});
+
+test('a shot on target hurts the enemy and uses ammo, and a miss only uses ammo', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  const healthVar = game.getRaw('ny');
+  const health = game.variableAsInteger(healthVar);
+  assert.ok(health > 1);
+
+  hover(game, 10, 10);
+  game.click();
+  game.advance();
+  assert.equal(game.ammo, 9);
+  assert.equal(game.variableAsInteger(healthVar), health);
+
+  aimAtEnemy(game);
+  assert.equal(game.cursorView().id, 'jb');
+  game.click();
+  game.advance();
+  assert.equal(game.ammo, 8);
+  assert.equal(game.variableAsInteger(healthVar), health - 1);
+  assert.equal(game.attackAnim, true);
+});
+
+test('enough shots kill the enemy, and the room carries on', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  const healthVar = game.getRaw('ny');
+  for (let i = 0; i < 20 && game.variableAsInteger(healthVar) > 0; i++) {
+    aimAtEnemy(game);
+    game.click();
+    game.advance();
+    game.advance(700);
+  }
+  assert.equal(game.variableAsInteger(healthVar), 0);
+  assert.equal(game.getRaw('deathAnim'), '1');
+  game.advance(5000);
+  game.advance();
+  assert.equal(game.getRaw('deathAnim'), null);
+  assert.equal(toBoolean(game.getRaw(game.getRaw('enemy_dead'))), true);
+  game.advance();
+  assert.equal(enemy(game).visible, false);
+  assert.deepEqual([...game.unsupportedCommands], []);
+});
+
+test('recoil kicks the crosshair and settles back to the pointer', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  hover(game, 60, 100);
+  game.click();
+  game.advance();
+  game.advance();
+  assert.ok(game.cursorY < 100);
+  for (let i = 0; i < 12; i++) game.advance();
+  assert.deepEqual([game.cursorX, game.cursorY], [60, 100]);
+});
+
+test('an enemy attack costs health and shows blood', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  const before = game.variableAsInteger('sys_health');
+  waitForAttackWindow(game);
+  game.state.roll = 0;
+  game.advance();
+  game.state.roll = 0.5;
+  assert.equal(game.attackAnim, true);
+  assert.ok(game.waitStop > 0);
+  game.advance(800);
+  game.advance();
+  assert.equal(game.variableAsInteger('sys_health'), before - 1);
+  game.advance();
+  assert.ok(game.drawList().some((item) => item.id === 'new_monster_hurt1'));
+  game.advance(5000);
+  assert.equal(game.dissolve, null);
+});
+
+test('dying shows a message and starts a new game', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  game.setVariable('sys_health', 1);
+  waitForAttackWindow(game);
+  game.state.roll = 0;
+  game.advance();
+  game.state.roll = 0.5;
+  game.advance(800);
+  game.advance();
+  assert.equal(game.menus.at(-1)?.text, game.gameText('jn'));
+  assert.equal(game.battleMode, false);
+  game.click();
+  game.advance();
+  game.advance(300);
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'control');
+});
+
+test('the gun can be put away, and runs out of ammo with a message', () => {
+  const game = battleGame();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  for (let i = 0; i < 12; i++) {
+    hover(game, 10, 10);
+    game.click();
+    game.advance();
+    for (let tick = 0; tick < 25; tick++) game.advance();
+    if (game.menus.length) break;
+  }
+  assert.equal(game.ammo, 0);
+  assert.equal(game.getRaw('sys_ammo'), '0');
+  assert.equal(game.menus.at(-1).text, game.engineText(172));
+  game.click();
+  game.advance();
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  assert.equal(game.getRaw('sys_battleState'), null);
+  assert.ok(!['haircross', 'jb'].includes(game.cursorView().id));
+});
+
+test('the gun key starts a battle in every room with enemies', () => {
+  for (const room of ['r', 'y', '17', '1d', '2a', '2d']) {
+    const game = battleGame();
+    game.roomInit(room, false);
+    game.advance();
+    game.advance();
+    game.menus = [];
+    game.pausedThread = null;
+    game.pressKey('1');
+    game.advance();
+    game.advance();
+    assert.equal(game.battleMode, true, room);
+    for (let i = 0; i < 100; i++) {
+      game.moveCursor(i * 2, i * 2);
+      game.click();
+      game.advance(100);
+      game.menus = [];
+      game.pausedThread = null;
+      game.drawList();
+    }
+    assert.deepEqual([...game.unsupportedCommands], [], room);
+  }
+});
+
+test('the flashlight masks everything outside its circle', () => {
+  const game = battleGame();
+  hover(game, 100, 100);
+  const list = game.drawList();
+  const start = list.findIndex((item) => game.cursorAnim.frames.includes(item.id));
+  assert.equal(list[start].x, 100);
+  assert.deepEqual(
+    list.slice(start + 1, start + 5).map((item) => item.kind),
+    ['rect', 'rect', 'rect', 'rect'],
+  );
+  const frame = game.cursorAnim.frame;
+  for (let i = 0; i < 5; i++) game.advance();
+  assert.notEqual(game.cursorAnim.frame, frame);
+});
+
 test('script values convert as the Java engine does', () => {
   assert.equal(toBoolean(null), false);
   assert.equal(toBoolean(0), false);

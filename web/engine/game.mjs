@@ -52,6 +52,10 @@ export const EVENT = {
   HOOVERIN: 54,
   HOOVEROUT: 55,
   TICK: 56,
+  GETHEROATTACKANIM1: 22,
+  ATTACK1: 27,
+  ENEMYATTACK: 29,
+  GETTIME: 33,
 };
 
 // Menu IDs from Ext and ExtBase. Inventory lists and popups are this port's own
@@ -75,13 +79,34 @@ const VERB_EVENTS = {
 };
 const ANIMATION_EVENTS = [EVENT.GETIDLEANIMATION, 19, 20, 21, 22, 23, EVENT.GETRUNANIMATION];
 const ANIMATION_IDLE = 0;
+const ANIMATION_ENEMY_ATTACK_1 = 1;
+const ANIMATION_ENEMY_ATTACK_2 = 2;
+const ANIMATION_HERO_ATTACK_1 = 4;
 const ANIMATION_RUN = 6;
 const VALUES_PER_PART = 4;
 const TICK_MS = 60;
 const TICK_EVENT_INTERVAL = 10;
 
+// Battle constants from Ext.
+const ENEMY_STATE = { WAIT: 0, ATTACK: 1, SHOCK: 2, MOVE_AWAY: 3, DIE: 4 };
+const ENEMY_ATTACK_TIME = 40;
+const ENEMY_SHOCK_TIME = 30;
+const ATTACK_RANDOM_SPAN = 150;
+const AIM_RADIUS = 8;
+const RECOIL_VERTICAL = 15;
+const RECOIL_HORIZONTAL = 3;
+const AMMO_MAX = 10;
+const HUD_MARGIN = 5;
+const HUD_LIFE_WIDTH = 6;
+const HUD_DIGITS = 11;
+const INFO_BAR_TICKS = 40;
+const BLOOD_SPLATS = 5;
+const BLOOD_PHASES = 3;
+const MAX_BLOOD_BLUR = 4;
+
 // Engine text indexes in localization/*.properties.
 const TEXT = {
+  OUT_OF_AMMO: 172,
   RECEIVED: 47,
   LOOK_AT: 48,
   USE: 49,
@@ -97,7 +122,7 @@ const TEXT = {
 };
 
 // Commands this prototype runs past: audio, saving, vibration and visual effects.
-const NO_OP = new Set([23, 45, 47, 48, 49, 56]);
+const NO_OP = new Set([23, 47, 48, 49, 56]);
 
 class RoomObject {
   constructor(source, game) {
@@ -277,6 +302,27 @@ class RoomObject {
     }
   }
 
+  // Port of RoomObject.fightAnimation. The frame goes in the game's fight list,
+  // which replaces the room's usual animations until the fight animation ends.
+  fightAnimation(list, index, now) {
+    if (!this.scriptId) return;
+    const animation = this.animations[index];
+    if (!animation) return;
+    let elapsed = 0;
+    if (this.animationTime === 0) {
+      this.game.attackAnim = true;
+      this.animationTime = now;
+    } else {
+      elapsed = now - this.animationTime;
+      if (elapsed >= animation.duration) {
+        this.game.attackAnim = false;
+        this.animationTime = 0;
+        return;
+      }
+    }
+    this.paintAnimationFrame(list, animation, elapsed);
+  }
+
   // Port of RoomObject.animPaint and runAnimation.
   paintAnimation(list, time) {
     if (!this.scriptId) return;
@@ -386,13 +432,49 @@ export class Game {
     this.choiceId = null;
     this.itemId = null;
 
+    this.resetBattle();
+
     this.menus = [];
-    this.cursorX = roomSize >> 1;
-    this.cursorY = roomSize >> 1;
+    this.pointerX = roomSize >> 1;
+    this.pointerY = roomSize >> 1;
+    this.cursorX = this.pointerX;
+    this.cursorY = this.pointerY;
     this.overObject = null;
     this.hoverObject = null;
     this.pendingClick = false;
     this.pendingKeys = [];
+  }
+
+  resetBattle() {
+    this.battleMode = false;
+    this.battleState = 0;
+    this.enemyState = ENEMY_STATE.WAIT;
+    this.enemyStateTime = 0;
+    this.enemyForceAttack = false;
+    this.attackAnim = false;
+    this.attackAnimState = 0;
+    this.fightDraws = [];
+    this.shot = false;
+    this.recoilVertical = 0;
+    this.recoilHorizontal = 0;
+    this.recoilOffsetX = 0;
+    this.recoilOffsetY = 0;
+    this.battleTimer = 0;
+    this.aimShakeX = 0;
+    this.aimShakeY = 0;
+    this.ammo = 0;
+    this.ammoInGun = 0;
+    this.gunState = false;
+    this.reloading = true;
+    this.noMoreBullets = false;
+    this.life = 0;
+    this.hudReady = false;
+    this.hudAmmoUpdateNeeded = true;
+    this.hudAmmoOffset = 0;
+    this.infoBarTicks = 0;
+    this.cursorAnim = null;
+    this.dissolve = null;
+    this.specialCursor = { idle: null, hover: null };
   }
 
   // Variables: M's inkServer store, keeping the type hint beside each value.
@@ -572,13 +654,18 @@ export class Game {
         this.waitStop = this.now() + integerArgument(args[0]);
         thread.status = STATUS.WAITING;
         return null;
+      case 30:
+        this.battleStartInit();
+        return null;
       case 31:
-        return 0;
+        return this.battleMode ? 1 : 0;
       case 38:
         this.menus = [];
         this.endGameRequested = true;
         return null;
       case 39:
+        this.attackAnim = false;
+        this.battleMode = false;
         this.menus = [];
         this.roomUpdateNeeded = true;
         return null;
@@ -596,6 +683,9 @@ export class Game {
         return this.inventorySize(args[0]);
       case 44:
         return args.slice(1).reduce((value, next) => value - integerArgument(next), integerArgument(args[0]));
+      case 45:
+        this.startDissolve(args);
+        return null;
       case 50:
         if (thread.roomObject && thread.roomObject.animationTime <= 0) {
           thread.roomObject.runAnimLoops = count > 0 ? integerArgument(args[0]) : 1;
@@ -682,6 +772,11 @@ export class Game {
       case 's_storyScreenRowByRow':
         return;
       case 's_animCursor':
+        this.setVariable(name, value);
+        this.cursorAnim = toBoolean(value)
+          ? { interval: toInt(args[2]), frames: args.slice(3), frame: 0, counter: 0 }
+          : null;
+        return;
       case 's_cursorHintDisable':
         this.setVariable(name, value);
         return;
@@ -709,8 +804,20 @@ export class Game {
     this.choiceMenu.choices.push({ id: id ?? this.choiceMenu.choices.length + 1, text });
   }
 
+  // Port of Ext.executeCommand_inventoryAdd, with its special case for ammo clips.
   inventoryAdd(thread, item, amount, announce) {
-    const size = this.inventorySize(item) + amount;
+    let added = amount;
+    if (item === 'invBulletClips') {
+      this.syncGunState();
+      if (this.ammo === 0 && this.inventorySize(item) === 0 && this.inventorySize('invGun') > 0) {
+        const loaded = Math.min(amount, AMMO_MAX);
+        this.ammoSet(loaded, true, true);
+        this.reloading = true;
+        added -= loaded;
+      }
+      this.noMoreBullets = false;
+    }
+    const size = this.inventorySize(item) + added;
     if (size > 0) this.setInventory(item, size);
     this.menus = [];
     this.roomUpdateNeeded = true;
@@ -822,6 +929,14 @@ export class Game {
   chooseItemAction(choiceId) {
     if (choiceId === -2) {
       if (this.overObject.executeEvent(EVENT.USEITEM, 0) === 0) this.say(this.useItemText, null);
+    } else if (choiceId === EVENT.EQUIP || choiceId === EVENT.UNEQUIP) {
+      // Port of Ext.inventoryEquipUnequipHandling.
+      this.menus = [];
+      const before = this.ammo;
+      this.executeEventById(this.itemId, choiceId, null);
+      this.infoBarTicks = INFO_BAR_TICKS;
+      const after = toInt(this.getRaw('sys_ammo'));
+      if (after !== before) this.ammoSet(after, false, false);
     } else {
       this.executeEventById(this.itemId, choiceId, null);
     }
@@ -831,6 +946,7 @@ export class Game {
   startNewGame() {
     this.setupDone = false;
     this.menus = [];
+    this.resetBattle();
     this.roomInit('setup', false);
   }
 
@@ -910,10 +1026,31 @@ export class Game {
 
   // Input.
   moveCursor(x, y) {
-    this.cursorX = Math.max(0, Math.min(this.roomWidth - 1, Math.round(x)));
-    this.cursorY = Math.max(0, Math.min(this.roomHeight - 1, Math.round(y)));
+    this.pointerX = x;
+    this.pointerY = y;
+    this.placeCursor();
     const menu = this.menus.at(-1);
     if (menu?.id === MENU.VERBS) menu.selected = this.verbAtCursor(menu);
+  }
+
+  placeCursor() {
+    this.cursorX = Math.max(0, Math.min(this.roomWidth - 1, Math.round(this.pointerX + this.recoilOffsetX)));
+    this.cursorY = Math.max(0, Math.min(this.roomHeight - 1, Math.round(this.pointerY + this.recoilOffsetY)));
+  }
+
+  // On the original's keypad, recoil moved the cursor and the player steered it
+  // back. A mouse doesn't move by itself, so here the kick settles back by itself.
+  applyRecoil() {
+    if (this.recoilVertical !== 0) {
+      this.recoilOffsetX += this.recoilHorizontal;
+      this.recoilOffsetY -= this.recoilVertical;
+      this.recoilVertical >>= 1;
+      if (this.recoilVertical <= 1) this.recoilVertical = 0;
+    } else {
+      this.recoilOffsetX = Math.trunc(this.recoilOffsetX / 2);
+      this.recoilOffsetY = Math.trunc(this.recoilOffsetY / 2);
+    }
+    this.placeCursor();
   }
 
   verbAtCursor(menu) {
@@ -937,11 +1074,12 @@ export class Game {
   // Port of the original's ExtBase.appKeyHandling, once per tick.
   handleInput() {
     const menu = this.menus.at(-1);
-    if (!menu) this.updateHover();
+    if (!menu && !this.isAiming()) this.updateHover();
     const clicked = this.pendingClick;
     const keys = this.pendingKeys;
     this.pendingClick = false;
     this.pendingKeys = [];
+    if (this.battleMode && !menu && this.battleInput(clicked, keys)) return;
     if (this.isWaiting()) return;
 
     if (keys.includes('Escape')) this.handleEscape(menu);
@@ -950,6 +1088,24 @@ export class Game {
       return;
     }
     if (clicked) this.handleRoomClick();
+    this.runActionKeys(keys);
+  }
+
+  isAiming() {
+    return this.battleMode && toInt(this.getRaw('sys_battleState')) !== 0;
+  }
+
+  // Port of Ext.battleKeyHandling. Returns whether it used the input.
+  battleInput(clicked, keys) {
+    this.battleState = toInt(this.getRaw('sys_battleState'));
+    if (this.battleState === 0) return false;
+    if (clicked && this.ammo > 0 && !this.reloading) this.shot = true;
+    this.applyRecoil();
+    if (!this.attackAnim) this.runActionKeys(keys);
+    return true;
+  }
+
+  runActionKeys(keys) {
     for (const key of keys) {
       const scriptId = this.actionKeys.get(`actionkey_num${key}`);
       if (scriptId) this.executeEventById(scriptId, EVENT.CLICK, -1);
@@ -1074,11 +1230,508 @@ export class Game {
       this.tickInterval = TICK_EVENT_INTERVAL;
       this.tickObject.executeEvent(EVENT.TICK, null);
     }
+    this.paintPhase();
     if (this.endGameRequested) {
       this.endGameRequested = false;
       this.vars.clear();
       this.startNewGame();
     }
+  }
+
+  // The game logic that Ext.appPaint runs once per frame, before it draws.
+  paintPhase() {
+    this.battleState = toInt(this.getRaw('sys_battleState'));
+    if (this.battleMode) this.battleUpdate();
+    this.life = toInt(this.getRaw('sys_health'));
+    this.isWaiting();
+    this.syncGunState();
+    if (this.hudAmmoUpdateNeeded) this.hudUpdate();
+    if (this.infoBarTicks > 0) this.infoBarTicks--;
+    this.battleState = toInt(this.getRaw('sys_battleState'));
+    if (this.battleState > 0) {
+      this.aimShakeX = this.randomInt(2) > 0 ? -1 : 1;
+      this.aimShakeY = this.randomInt(2) > 0 ? -1 : 1;
+    } else {
+      this.aimShakeX = 0;
+      this.aimShakeY = 0;
+    }
+    if (this.cursorAnim) this.advanceCursorAnim();
+    if (this.dissolve) this.updateDissolve();
+  }
+
+  randomInt(limit) {
+    return Math.floor(this.random() * limit);
+  }
+
+  // Port of Ext.battleStartInit.
+  battleStartInit() {
+    this.ammoSet(toInt(this.getRaw('sys_ammo')), false, false);
+    const hasEnemy = this.objects?.some(
+      (object) => object.visible && object.script?.hasEvent(EVENT.GETHEROATTACKANIM1),
+    );
+    if (hasEnemy) {
+      this.enemyForceAttack = false;
+      this.enemyState = ENEMY_STATE.SHOCK;
+      this.enemyStateTime = ENEMY_ATTACK_TIME;
+      this.setRaw('moveAnim', '0', 'I');
+      this.setRaw('sys_battleState', '2', 'I');
+      this.battleState = 2;
+    } else {
+      this.enemyState = ENEMY_STATE.DIE;
+    }
+    this.battleMode = true;
+    this.attackAnim = false;
+    this.roomUpdateNeeded = true;
+  }
+
+  // Port of Ext.enemyAnimUpdate.
+  enemyAnimUpdate() {
+    this.setRaw('moveAnim', '0', 'I');
+    for (const object of this.objects ?? []) {
+      if (object.visible && object.script?.hasEvent(EVENT.GETHEROATTACKANIM1)) {
+        object.update();
+        object.idleAnimationTime = 0;
+      }
+    }
+  }
+
+  // Port of Ext.battleUpdate, which is one long pass over the room's objects.
+  battleUpdate() {
+    const now = this.now();
+    this.fightDraws = [];
+    if (this.battleState === 2 && !this.menus.length && this.inventorySize('invGun') > 0) {
+      this.specialCursor = { idle: 'haircross', hover: 'jb' };
+    }
+
+    if (this.enemyState === ENEMY_STATE.ATTACK || this.enemyState === ENEMY_STATE.SHOCK) {
+      this.enemyStateTime--;
+      if (this.enemyStateTime < 0) {
+        if (!this.cursorAnim && this.enemyState === ENEMY_STATE.SHOCK) {
+          this.enemyForceAttack = true;
+          this.enemyState = ENEMY_STATE.WAIT;
+          if (this.battleState < 2) this.setBattleState(2);
+        } else if (this.enemyState === ENEMY_STATE.ATTACK) {
+          this.enemyState = ENEMY_STATE.MOVE_AWAY;
+          this.enemyAnimUpdate();
+        } else if (this.battleState < 2) {
+          this.setBattleState(2);
+          this.enemyForceAttack = true;
+          this.enemyState = ENEMY_STATE.WAIT;
+        } else {
+          this.enemyState = ENEMY_STATE.MOVE_AWAY;
+          this.enemyAnimUpdate();
+        }
+      }
+    }
+
+    this.overObject = null;
+    let hoverHandled = false;
+    let movedAway = false;
+    const fightIndex = () =>
+      this.attackAnimState === 0
+        ? ANIMATION_HERO_ATTACK_1
+        : this.attackAnimState === 1
+          ? ANIMATION_ENEMY_ATTACK_1
+          : ANIMATION_ENEMY_ATTACK_2;
+
+    for (const object of this.objects ?? []) {
+      if (this.attackAnim) {
+        object.fightAnimation(this.fightDraws, fightIndex(), now);
+      } else {
+        this.attackAnimState = 0;
+        object.animationTime = 0;
+      }
+
+      if (
+        this.cursorAnim &&
+        object.script?.hasEvent(EVENT.GETHEROATTACKANIM1) &&
+        this.battleState > 0 &&
+        this.enemyState === ENEMY_STATE.MOVE_AWAY
+      )
+        movedAway = true;
+
+      if (object.visible && object.script) {
+        const attackWindow =
+          (this.enemyState === ENEMY_STATE.ATTACK && this.enemyStateTime > 0) ||
+          (this.enemyState === ENEMY_STATE.WAIT && !this.cursorAnim);
+        if (
+          this.battleState !== 1 &&
+          !this.attackAnim &&
+          object.script.hasEvent(EVENT.ENEMYATTACK) &&
+          (this.randomInt(ATTACK_RANDOM_SPAN) === 0 || this.enemyForceAttack) &&
+          attackWindow
+        ) {
+          this.enemyForceAttack = false;
+          this.attackAnimState = 1;
+          object.animationTime = 0;
+          object.fightAnimation(this.fightDraws, ANIMATION_ENEMY_ATTACK_1, now);
+          object.executeEvent(EVENT.ENEMYATTACK, null);
+        }
+
+        if (!hoverHandled) hoverHandled = this.battleHover(object);
+
+        if (this.shot && object.script.hasEvent(EVENT.ATTACK1) && this.hoverObject) this.shootHovered(now);
+      } else if (this.hoverObject === object) {
+        object.executeEvent(EVENT.HOOVEROUT, null);
+        this.hoverObject = null;
+      }
+    }
+
+    if (movedAway) {
+      this.enemyState = ENEMY_STATE.WAIT;
+      this.enemyAnimUpdate();
+    }
+
+    if (this.shot) {
+      this.shot = false;
+      this.ammoSet(this.ammo - 1, true, true);
+      this.recoilVertical += RECOIL_VERTICAL;
+      this.recoilHorizontal = this.randomInt(2) === 0 ? -RECOIL_HORIZONTAL : RECOIL_HORIZONTAL;
+    }
+
+    this.battleState = toInt(this.getRaw('sys_battleState'));
+    if (this.battleState > 1 && this.hoverObject) {
+      if (this.battleTimer > 0) {
+        if (this.battleTimer - now <= 0) {
+          this.battleTimer = 0;
+          if (!this.attackAnim) this.attackAnimState = 2;
+        }
+      } else {
+        this.battleTimer = toInt(this.hoverObject.executeEvent(EVENT.GETTIME, 0)) + now;
+      }
+      this.battleState = toInt(this.getRaw('sys_battleState'));
+    }
+  }
+
+  setBattleState(state) {
+    this.setRaw('sys_battleState', String(state), 'I');
+    this.battleState = state;
+  }
+
+  // The hover part of Ext.battleUpdate. Returns whether the hover changed.
+  battleHover(object) {
+    if (this.battleState <= 0) {
+      if (object.isOver(this.cursorX, this.cursorY)) {
+        this.overObject = object;
+        if (this.hoverObject !== object && !this.isWaiting()) {
+          if (this.hoverObject) {
+            this.hoverObject.executeEvent(EVENT.HOOVEROUT, null);
+            this.hoverObject = null;
+          } else if (object.script.hasEvent(EVENT.HOOVERIN)) {
+            object.executeEvent(EVENT.HOOVERIN, null);
+            this.hoverObject = object;
+          }
+          return true;
+        }
+        return Boolean(this.hoverObject);
+      }
+      if (this.hoverObject === object) {
+        object.executeEvent(EVENT.HOOVEROUT, null);
+        this.hoverObject = null;
+        return true;
+      }
+      return false;
+    }
+
+    // While aiming, a target is a small box around the enemy's anchor point.
+    const near = (halfWidth, halfHeight) =>
+      object.x - AIM_RADIUS > this.cursorX - halfWidth &&
+      object.x + AIM_RADIUS < this.cursorX + halfWidth &&
+      object.y - AIM_RADIUS > this.cursorY - halfHeight &&
+      object.y + AIM_RADIUS < this.cursorY + halfHeight;
+    if (this.cursorAnim && object.script.hasEvent(EVENT.ENEMYATTACK)) {
+      const info = this.imageInfo(this.cursorAnim.frames[this.cursorAnim.frame]);
+      if (info && near(info.width >> 1, info.height >> 1)) {
+        if (this.enemyState === ENEMY_STATE.WAIT) {
+          this.enemyState = ENEMY_STATE.ATTACK;
+          this.enemyStateTime = ENEMY_ATTACK_TIME;
+        }
+      } else if (
+        (this.enemyState === ENEMY_STATE.ATTACK || this.enemyState === ENEMY_STATE.SHOCK) &&
+        this.battleState === 2
+      ) {
+        this.enemyState = ENEMY_STATE.WAIT;
+      }
+    }
+
+    if (!object.script.hasEvent(EVENT.ATTACK1)) return false;
+    const onTarget =
+      this.attackAnimState !== 2 &&
+      Math.abs(object.x - this.cursorX) < AIM_RADIUS &&
+      Math.abs(object.y - this.cursorY) < AIM_RADIUS;
+    if (onTarget) {
+      this.overObject = object;
+      if (this.hoverObject !== object && !this.isWaiting()) {
+        if (this.hoverObject) {
+          this.hoverObject.executeEvent(EVENT.HOOVEROUT, null);
+          this.hoverObject = null;
+          this.battleTimer = 0;
+        } else if (object.script.hasEvent(EVENT.HOOVERIN)) {
+          object.executeEvent(EVENT.HOOVERIN, null);
+          this.hoverObject = object;
+        }
+        return true;
+      }
+      return Boolean(this.hoverObject);
+    }
+    if (this.hoverObject === object) {
+      object.executeEvent(EVENT.HOOVEROUT, null);
+      this.hoverObject = null;
+      this.battleTimer = 0;
+      return true;
+    }
+    return false;
+  }
+
+  shootHovered(now) {
+    const target = this.hoverObject;
+    target.executeEvent(EVENT.ATTACK1, 0);
+    if (toBoolean(this.getRaw('deathAnim'))) {
+      this.enemyState = ENEMY_STATE.DIE;
+      this.enemyAnimUpdate();
+      return;
+    }
+    this.attackAnimState = 0;
+    target.animationTime = 0;
+    target.fightAnimation(this.fightDraws, ANIMATION_HERO_ATTACK_1, now);
+    this.enemyState = ENEMY_STATE.SHOCK;
+    this.enemyStateTime = ENEMY_SHOCK_TIME;
+    const enemyDead = toBoolean(this.getRaw(this.getRaw('enemy_dead')));
+    if (this.battleState < 2 && !enemyDead) this.setRaw('sys_battleState', '2', 'I');
+  }
+
+  // Ammo and the HUD: ports of Ext.HUD_ammoSet and Ext.HUD_update.
+  ammoSet(value, animate, persist) {
+    const ammo = Math.max(0, value);
+    if (this.ammo === ammo) return;
+    this.ammo = ammo;
+    if (!animate) this.hudAmmoOffset = ammo * this.hudDigitHeight();
+    if (persist) this.setRaw('sys_ammo', String(ammo), 'I');
+    this.hudAmmoUpdateNeeded = true;
+  }
+
+  hudDigitHeight() {
+    return Math.floor((this.imageInfo('HUD_numbers')?.height ?? 0) / HUD_DIGITS);
+  }
+
+  syncGunState() {
+    const hasGun = this.inventorySize('invGun') > 0;
+    if (this.gunState && !hasGun) {
+      this.ammoInGun = this.ammo;
+      this.ammoSet(0, true, true);
+      this.gunState = false;
+    } else if (!this.gunState && hasGun) {
+      this.ammoSet(this.ammoInGun, true, true);
+      this.gunState = true;
+    }
+  }
+
+  hudUpdate() {
+    if (!this.hudReady) {
+      this.hudReady = true;
+      this.ammoSet(toInt(this.getRaw('sys_ammo')), false, false);
+    }
+    const target = this.ammo * this.hudDigitHeight();
+    if (this.hudAmmoOffset !== target) {
+      this.hudAmmoOffset += this.hudAmmoOffset < target ? 1 : -1;
+      this.hudAmmoUpdateNeeded = true;
+      return;
+    }
+    this.syncGunState();
+    if (this.ammo === 0 && this.inventorySize('invGun') > 0) {
+      const clips = this.inventorySize('invBulletClips');
+      if (clips > 0) {
+        const loaded = Math.min(clips, AMMO_MAX);
+        this.ammoSet(loaded, true, true);
+        if (clips - loaded <= 0) this.vars.delete('inv-invBulletClips');
+        else this.setInventory('invBulletClips', clips - loaded);
+        this.reloading = true;
+      } else if (!this.noMoreBullets) {
+        this.noMoreBullets = true;
+        this.say(this.engineText(TEXT.OUT_OF_AMMO), null);
+      }
+    } else {
+      this.hudAmmoUpdateNeeded = false;
+      this.reloading = false;
+    }
+  }
+
+  // Ext.appPaint shows the HUD while aiming, in the tutorial, after equipping
+  // something and in the inventory.
+  hudVisible() {
+    return (
+      this.battleState > 0 ||
+      this.battleState === -1 ||
+      this.infoBarTicks > 0 ||
+      this.menus.at(-1)?.id === MENU.INVENTORY
+    );
+  }
+
+  hudItems() {
+    if (!this.hudVisible()) return [];
+    const bullet = this.imageInfo('HUD_bullet');
+    const numbers = this.imageInfo('HUD_numbers');
+    const life = this.imageInfo('HUD_life');
+    if (!bullet || !numbers || !life) return [];
+    const items = [{ kind: 'image', id: 'HUD_bullet', x: HUD_MARGIN, y: HUD_MARGIN + 4, transform: 0, raw: true }];
+    const digitHeight = this.hudDigitHeight();
+    const x = HUD_MARGIN + bullet.width + 3;
+    const y = HUD_MARGIN + 4 + ((bullet.height - digitHeight) >> 1);
+    items.push({
+      kind: 'image',
+      id: this.reloading ? 'HUD_numbersRed' : 'HUD_numbers',
+      x,
+      y: y + digitHeight + this.hudAmmoOffset - numbers.height,
+      transform: 0,
+      raw: true,
+      clip: { x, y, width: numbers.width, height: digitHeight },
+    });
+    const lifeWidth = this.life * HUD_LIFE_WIDTH;
+    const right = this.roomWidth - HUD_MARGIN;
+    items.push({
+      kind: 'image',
+      id: 'HUD_life',
+      x: right - life.width,
+      y: HUD_MARGIN,
+      transform: 0,
+      raw: true,
+      clip: { x: right - lifeWidth, y: HUD_MARGIN, width: lifeWidth, height: life.height },
+    });
+    return items;
+  }
+
+  // The compass from Ext.appPaint, for rooms whose scripts set a direction.
+  compassItems() {
+    const direction = toInt(this.getRaw('s_compassDirection'));
+    if (direction === 0 || this.battleMode || this.infoBarTicks > 0 || this.menus.at(-1)?.id === MENU.INVENTORY)
+      return [];
+    const x = this.roomWidth - 35;
+    const y = 39;
+    const pointer = {
+      1: ['HUD_pointerUp', 0],
+      2: ['HUD_pointerRight', 0],
+      3: ['HUD_pointerUp', 5],
+      4: ['HUD_pointerRight', 1],
+    }[direction];
+    const items = [{ kind: 'image', id: 'HUD_compass', x, y, transform: 0 }];
+    if (pointer) items.push({ kind: 'image', id: pointer[0], x, y, transform: pointer[1] });
+    items.push({ kind: 'compass-letters', x, y });
+    return items;
+  }
+
+  // The flashlight: ports of ExtBase.paintAnimCursorMask's drawing and its frame counter.
+  advanceCursorAnim() {
+    const animation = this.cursorAnim;
+    if (animation.counter === animation.interval) {
+      animation.counter = 0;
+      animation.frame = (animation.frame + 1) % animation.frames.length;
+    } else {
+      animation.counter++;
+    }
+  }
+
+  cursorMaskItems() {
+    if (!this.cursorAnim) return [];
+    const id = this.cursorAnim.frames[this.cursorAnim.frame];
+    const info = this.imageInfo(id);
+    if (!info) return [];
+    const left = this.cursorX - (info.width >> 1);
+    const right = this.cursorX + (info.width >> 1);
+    const top = this.cursorY - (info.height >> 1);
+    const bottom = this.cursorY + (info.height >> 1);
+    const { roomWidth: width, roomHeight: height, backgroundColor: color } = this;
+    return [
+      { kind: 'image', id, x: this.cursorX, y: this.cursorY, transform: 0 },
+      { kind: 'rect', x: right, y: 0, width, height, color },
+      { kind: 'rect', x: 0, y: 0, width: left, height, color },
+      { kind: 'rect', x: 0, y: bottom, width, height, color },
+      { kind: 'rect', x: 0, y: 0, width, height: top, color },
+    ];
+  }
+
+  // Being hit: a port of ExtBase's case 45 and M.drawDissolve. Blood spreads in
+  // phases, then the screen flashes a colour, then the blood shows again.
+  startDissolve(args) {
+    this.dissolve = {
+      color: toInt(args[1]),
+      imageTime: toInt(args[2]),
+      colorTime: toInt(args[3]),
+      loops: args.length > 4 ? toInt(args[4]) : 0,
+      start: this.now(),
+      phases: [this.bloodSplats()],
+      phase: 0,
+      blur: 1,
+      shift: 0,
+      sprays: [
+        {
+          x: (this.roomWidth >> 2) + this.randomInt(this.roomWidth >> 2),
+          y: (this.roomWidth >> 1) + this.randomInt(this.roomWidth >> 2),
+        },
+        {
+          x: (this.roomWidth >> 1) + this.randomInt(this.roomWidth >> 2),
+          y: (this.roomWidth >> 2) + this.randomInt(this.roomWidth >> 2),
+        },
+      ],
+    };
+  }
+
+  bloodSplats() {
+    return Array.from({ length: BLOOD_SPLATS }, () => ({
+      x: (this.roomWidth >> 2) + this.randomInt(this.roomWidth >> 1),
+      y: (this.roomHeight >> 2) + this.randomInt(this.roomHeight >> 1),
+    }));
+  }
+
+  updateDissolve() {
+    const effect = this.dissolve;
+    const elapsed = this.now() - effect.start;
+    const { imageTime, colorTime } = effect;
+    if (elapsed >= imageTime && elapsed < imageTime + colorTime) return;
+    if (elapsed > imageTime * 2 + colorTime) {
+      if (effect.loops === 0) {
+        this.dissolve = null;
+      } else {
+        effect.loops--;
+        effect.start = this.now();
+      }
+      return;
+    }
+    if (effect.phase === 2) {
+      if (this.randomInt(5) === 0) effect.blur = Math.min(MAX_BLOOD_BLUR, effect.blur + 1);
+      if (effect.blur === MAX_BLOOD_BLUR) effect.shift += this.randomInt(7);
+    }
+    if (effect.phase + 1 < BLOOD_PHASES) {
+      effect.phase++;
+      effect.phases[effect.phase] = this.bloodSplats();
+    }
+  }
+
+  dissolveItems() {
+    const effect = this.dissolve;
+    if (!effect) return [];
+    const elapsed = this.now() - effect.start;
+    if (elapsed >= effect.imageTime && elapsed < effect.imageTime + effect.colorTime) {
+      return [{ kind: 'rect', x: 0, y: 0, width: this.roomWidth, height: this.roomHeight, color: effect.color }];
+    }
+    const items = [];
+    for (let blur = 0; blur < effect.blur; blur++) {
+      for (let phase = 0; phase < effect.phase; phase++) {
+        for (const { x, y } of effect.phases[phase])
+          items.push({
+            kind: 'image',
+            id: 'new_monster_hurt1',
+            x,
+            y: y + (blur << 1) + effect.shift,
+            transform: 0,
+            raw: true,
+          });
+      }
+    }
+    if (effect.phase > 0) {
+      for (const { x, y } of effect.sprays)
+        items.push({ kind: 'image', id: 'new_monster_hurt2', x, y, transform: 0, raw: true });
+    }
+    return items;
   }
 
   // Everything to draw this frame, in order. Static objects go first, then
@@ -1087,31 +1740,37 @@ export class Game {
     const list = [];
     if (!this.objects) return list;
     for (const object of this.objects) object.paint(list);
-    this.objects.forEach((object, index) => {
-      // Hard-coded in ExtBase.roomPaint: the painting in the first room keeps running.
-      if (index === 6 && this.currentRoom.toLowerCase() === '0') object.runAnimLoops = 1;
-      object.paintAnimation(list, this.tickTime);
-    });
+    if (this.attackAnim) {
+      list.push(...this.fightDraws);
+    } else {
+      this.objects.forEach((object, index) => {
+        // Hard-coded in ExtBase.roomPaint: the painting in the first room keeps running.
+        if (index === 6 && this.currentRoom.toLowerCase() === '0') object.runAnimLoops = 1;
+        object.paintAnimation(list, this.tickTime);
+      });
+    }
+    list.push(...this.cursorMaskItems(), ...this.hudItems(), ...this.dissolveItems(), ...this.compassItems());
     return list;
   }
 
   // Port of the cursor choice in Ext.appPaint.
   cursorView() {
     if (this.hideCursor) return null;
+    const at = (id, hint = null) => ({ id, hint, x: this.cursorX + this.aimShakeX, y: this.cursorY + this.aimShakeY });
     const object = this.overObject;
-    if (!object) return { id: this.specialCursor.idle ?? 'cursorIdle', hint: null };
-    if (this.specialCursor.hover) return { id: this.specialCursor.hover, hint: null };
+    if (!object) return at(this.specialCursor.idle ?? 'cursorIdle');
+    if (this.specialCursor.hover) return at(this.specialCursor.hover);
     switch (object.executeEvent(EVENT.GETMOVEDIR, null)) {
       case 'back':
-        return { id: 'cursorBack', hint: this.engineText(TEXT.HINT_BACK) };
+        return at('cursorBack', this.engineText(TEXT.HINT_BACK));
       case 'left':
-        return { id: 'cursorForwardLeft', hint: this.engineText(TEXT.HINT_LEFT) };
+        return at('cursorForwardLeft', this.engineText(TEXT.HINT_LEFT));
       case 'right':
-        return { id: 'cursorForwardRight', hint: this.engineText(TEXT.HINT_RIGHT) };
+        return at('cursorForwardRight', this.engineText(TEXT.HINT_RIGHT));
       case 'forward':
-        return { id: 'cursorForward', hint: this.engineText(TEXT.HINT_FORWARD) };
+        return at('cursorForward', this.engineText(TEXT.HINT_FORWARD));
       default:
-        return { id: 'cursorPoint', hint: null };
+        return at('cursorPoint');
     }
   }
 }

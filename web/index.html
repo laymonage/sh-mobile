@@ -58,16 +58,30 @@
     #message.error { color: var(--error); }
     #game {
       display: none;
-      width: min(calc(100vw - 32px), calc(100vh - 96px));
+      width: min(calc(100vw - 32px), calc(100vh - 176px));
       aspect-ratio: 1;
       background: #000;
       cursor: none;
       touch-action: none;
     }
+    #actions { display: none; gap: 8px; }
+    button {
+      min-height: 44px;
+      padding: 8px 14px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
     body.playing #drop { display: none; }
     body.playing #game { display: block; }
     body.playing #help { display: block; }
+    body.playing #actions { display: flex; }
   </style>
 </head>
 <body>
@@ -78,7 +92,11 @@
   </div>
   <p id="message" role="status"></p>
   <canvas id="game" width="768" height="768" aria-label="Game screen"></canvas>
-  <p id="help">Click to look around and to continue text. Esc skips the opening.</p>
+  <div id="actions">
+    <button type="button" data-key="1">Gun (1)</button>
+    <button type="button" data-key="3">First aid (3)</button>
+  </div>
+  <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening.</p>
   <script type="module" src="main.mjs"></script>
 </body>
 </html>

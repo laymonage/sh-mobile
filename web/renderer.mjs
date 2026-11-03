@@ -24,7 +24,9 @@ export class Renderer {
     this.images = new Map();
   }
 
-  async loadImages({ dataDir, entries }) {
+  async loadImages({ dataDir, entries, files }) {
+    const letters = files.get(`gfx/HUD_NESW_${this.game.language}.png`);
+    if (letters) this.compassLetters = await createImageBitmap(new Blob([letters], { type: 'image/png' }));
     const prefix = `${dataDir}/gfx/transform0/`;
     await Promise.all(
       [...entries]
@@ -52,7 +54,22 @@ export class Renderer {
 
   drawItem(item) {
     const c = this.context;
-    if (item.kind === 'rect') {
+    if (item.kind === 'compass-letters') {
+      if (this.compassLetters)
+        c.drawImage(
+          this.compassLetters,
+          item.x - (this.compassLetters.width >> 1),
+          item.y - (this.compassLetters.height >> 1),
+        );
+    } else if (item.clip) {
+      c.save();
+      c.beginPath();
+      c.rect(item.clip.x, item.clip.y, item.clip.width, item.clip.height);
+      c.clip();
+      const image = this.images.get(String(item.id));
+      if (image) c.drawImage(image.bitmap, item.x, item.y);
+      c.restore();
+    } else if (item.kind === 'rect') {
       c.fillStyle = css(item.color);
       c.fillRect(item.x, item.y, item.width, item.height);
     } else if (item.kind === 'text') {
@@ -93,7 +110,7 @@ export class Renderer {
   drawCursor(view) {
     if (!view) return;
     const { game } = this;
-    this.drawImage(view.id, game.cursorX, game.cursorY);
+    this.drawImage(view.id, view.x, view.y);
     if (view.hint) {
       const c = this.context;
       c.font = FONT;
