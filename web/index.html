@@ -14,6 +14,16 @@
       --accent: #d9c98f;
       --warning: #e0a458;
       --error: #e57373;
+      --paper: #eae2b2;
+      --rust: #9c5a2e;
+      --blood: #a3231b;
+      --rivet: #8f8270;
+      --plate-top: #2e2823;
+      --plate-bottom: #14110f;
+      --plate-edge: #5f4331;
+      --plate-dim: #85796a;
+      --plate-height: 27px;
+      --plate-gap: 4px;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
@@ -23,7 +33,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: safe center;
       gap: 12px;
       background: var(--background);
       color: var(--text);
@@ -53,6 +63,8 @@
     #choose:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }
     #file { position: absolute; opacity: 0; width: 1px; height: 1px; }
     #message { margin: 0; max-width: 480px; text-align: center; }
+    /* During play, a message floats over the page instead of pushing the game down. */
+    body.playing #message { position: fixed; top: 8px; left: 50%; z-index: 1; width: max-content; max-width: calc(100vw - 32px); padding: 4px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; transform: translateX(-50%); }
     #message:empty { display: none; }
     #message.warning { color: var(--warning); }
     #message.error { color: var(--error); }
@@ -64,34 +76,77 @@
       cursor: none;
       touch-action: none;
     }
-    /* The page puts the game's own rusted steel art behind this, once a JAR is loaded. */
+    /* The page puts the game's own rusted steel art behind this, once a JAR is loaded.
+       Everything in it keeps its place, so that nothing moves as buttons come and go. */
     #panel {
       display: none;
       align-items: center;
-      justify-content: center;
       width: min(calc(100vw - 32px), calc((100vh - 100px) / 1.27));
-      min-height: calc(min(calc(100vw - 32px), calc((100vh - 100px) / 1.27)) * 0.267);
+      aspect-ratio: 240 / 64;
+      container: panel / inline-size;
       margin-top: -12px;
-      padding: 12px;
+      padding: 14px 10px 8px;
       background-color: #000;
       background-size: 100% 100%;
       image-rendering: pixelated;
     }
     body.playing #panel { display: flex; }
-    #actions { display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+    #actions {
+      display: none;
+      flex: 1;
+      min-width: 0;
+      grid-template-columns: 17% minmax(0, 1fr) 17%;
+      gap: var(--plate-gap);
+    }
+    #controls { display: grid; grid-auto-rows: var(--plate-height); gap: var(--plate-gap); min-width: 0; }
+    .plate-row { display: flex; gap: var(--plate-gap); min-width: 0; }
+    .plate-row > * { flex: 1 1 0; min-width: 0; }
+    #soundfont-control { flex-grow: 1.5; display: flex; gap: 2px; }
+    #soundfont { flex: 1; min-width: 0; }
+    #soundfont-remove { flex: 0 0 var(--plate-height); padding: 0; }
+    #soft-left[hidden], #soft-right[hidden] { display: block; visibility: hidden; }
+    #panel #soft-left, #panel #soft-right { padding: 0 3px; }
+    /* Bolted steel plates, one rivet in each corner, with text in the notepad's color. */
     #panel button, #volume-control {
-      min-height: 36px;
-      padding: 4px 10px;
-      color: #fff;
-      background: rgba(0, 0, 0, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.35);
-      border-radius: 4px;
-      font-size: 0.875rem;
+      min-height: 0;
+      padding: 0 6px;
+      color: var(--paper);
+      background:
+        radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) 1px 1px / 5px 5px no-repeat,
+        radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) calc(100% - 1px) 1px / 5px 5px no-repeat,
+        radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) 1px calc(100% - 1px) / 5px 5px no-repeat,
+        radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) calc(100% - 1px) calc(100% - 1px) / 5px 5px no-repeat,
+        linear-gradient(var(--plate-top), var(--plate-bottom));
+      border: 1px solid var(--plate-edge);
+      border-radius: 1px;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), inset 0 -1px rgba(0, 0, 0, 0.6), 0 1px 3px #000;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1;
+      text-shadow: 0 1px 1px #000;
       image-rendering: auto;
     }
-    #volume-control { display: flex; align-items: center; gap: 8px; }
-    #volume { width: 72px; accent-color: var(--accent); }
-    #panel button:hover:not(:disabled) { border-color: var(--accent); }
+    #panel button { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #panel button:hover:not(:disabled) { color: #fff; border-color: var(--blood); box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), inset 0 0 8px rgba(163, 35, 27, 0.55), 0 1px 3px #000; }
+    #panel button:active:not(:disabled) { background-color: #000; box-shadow: inset 0 2px 4px #000; transform: translateY(1px); }
+    #panel button:focus-visible, #volume:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
+    #panel button:disabled { color: var(--plate-dim); opacity: 1; text-shadow: none; }
+    #volume-control { display: flex; align-items: center; gap: 6px; flex-grow: 1.2; }
+    #volume { flex: 1; min-width: 0; height: 100%; margin: 0; background: transparent; cursor: pointer; appearance: none; }
+    #volume::-webkit-slider-runnable-track { height: 4px; background: #000; border: 1px solid var(--plate-edge); border-radius: 1px; }
+    #volume::-moz-range-track { height: 2px; background: #000; border: 1px solid var(--plate-edge); border-radius: 1px; }
+    #volume::-webkit-slider-thumb { width: 8px; height: 14px; margin-top: -6px; background: linear-gradient(var(--paper), var(--rust)); border: 1px solid #000; border-radius: 1px; appearance: none; }
+    #volume::-moz-range-thumb { width: 6px; height: 12px; background: linear-gradient(var(--paper), var(--rust)); border: 1px solid #000; border-radius: 1px; }
+    @media (pointer: coarse) { :root { --plate-height: 36px; } }
+    /* A short window keeps the game whole, and the README has the same help. */
+    @media (max-height: 640px) { body.playing #help { display: none; } }
+    /* Too narrow for tall soft keys at the sides, so they get a row of their own. */
+    @container panel (max-width: 440px) {
+      #actions { grid-template-columns: 1fr 1fr; grid-template-rows: var(--plate-height) auto; }
+      #soft-left { grid-area: 1 / 1; }
+      #soft-right { grid-area: 1 / 2; }
+      #controls { grid-area: 2 / 1 / 3 / -1; }
+    }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button:disabled:hover { border-color: var(--border); }
     button {
@@ -110,8 +165,8 @@
     body.playing #drop { display: none; }
     body.playing #game { display: block; }
     body.playing #help { display: block; }
-    body.playing #actions { display: flex; }
-    body.in-menu .in-game, body.in-menu #help { display: none; }
+    body.playing #actions { display: grid; }
+    body.in-menu .in-game, body.in-menu #help { visibility: hidden; }
   </style>
 </head>
 <body>
@@ -125,16 +180,26 @@
   <div id="panel">
     <div id="actions">
       <button type="button" id="soft-left" hidden></button>
-      <button type="button" class="in-game" data-key="1">Gun (1)</button>
-      <button type="button" class="in-game" data-key="3">First aid (3)</button>
-      <button type="button" class="in-game" data-key="inventory">Inventory (I)</button>
-      <button type="button" class="in-game" id="save">Save</button>
-      <button type="button" class="in-game" id="load">Load</button>
-      <button type="button" id="sound" aria-pressed="true">Sound: on</button>
-      <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
-      <button type="button" id="soundfont">Choose soundfont</button>
-      <button type="button" id="soundfont-remove" hidden>Remove soundfont</button>
-      <input id="soundfont-file" type="file" accept=".sf2" hidden>
+      <div id="controls">
+        <div class="plate-row in-game">
+          <button type="button" data-key="1">Gun (1)</button>
+          <button type="button" data-key="3">First aid (3)</button>
+          <button type="button" data-key="inventory">Inventory (I)</button>
+        </div>
+        <div class="plate-row in-game">
+          <button type="button" id="save">Save</button>
+          <button type="button" id="load">Load</button>
+        </div>
+        <div class="plate-row">
+          <button type="button" id="sound" aria-pressed="true">Sound: on</button>
+          <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
+          <div id="soundfont-control">
+            <button type="button" id="soundfont" title="Choose a soundfont">Soundfont</button>
+            <button type="button" id="soundfont-remove" aria-label="Remove soundfont" title="Remove soundfont" hidden>×</button>
+          </div>
+          <input id="soundfont-file" type="file" accept=".sf2" hidden>
+        </div>
+      </div>
       <button type="button" id="soft-right" hidden></button>
     </div>
   </div>

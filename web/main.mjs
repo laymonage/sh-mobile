@@ -86,7 +86,7 @@ function setUpSaving(game) {
   };
   loadButton.addEventListener('click', () => {
     if (confirmTimer === null) {
-      loadButton.textContent = 'Discard progress and load?';
+      loadButton.textContent = 'Discard and load?';
       confirmTimer = setTimeout(resetLoadButton, LOAD_CONFIRM_MS);
       return;
     }
@@ -127,7 +127,8 @@ async function setUpSoundFont(audio) {
   const removeButton = document.getElementById('soundfont-remove');
   const fileInput = document.getElementById('soundfont-file');
   const show = (name) => {
-    chooseButton.textContent = name ? `Soundfont: ${name}` : 'Choose soundfont';
+    chooseButton.textContent = name ?? 'Soundfont';
+    chooseButton.title = name ? `Soundfont: ${name}` : 'Choose a soundfont';
     removeButton.hidden = !name;
   };
   const use = async (name, bytes) => {
