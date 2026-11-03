@@ -223,6 +223,16 @@ The port differs from the original or leaves things out in these ways:
 - Timing assumes a 60 ms tick, taken from `M.tickBasedTimeUpdate`. The original's real frame rate depended on the phone, and it hasn't been measured, so how often monsters attack may differ.
 - The `bossDead` and `superBossDead` flags, which lock input and hide text in room `2d`, aren't ported, so the final boss may misbehave.
 
+### Saving
+
+A save holds every script variable and the action keys, as in `ExtBase.saveGameInRMS`, and no running script. Loading runs the setup room again, whose script then returns to the saved room. So a room's state comes back through its entry scripts, not from a snapshot.
+
+99 of the 112 rooms are save points. As in the original, saving is also refused during text, while a script is paused and in a battle. Five scripts save by themselves at story moments.
+
+The port differs in three ways: saves go to the browser's local storage, the confirmation is a brief on-screen notice rather than a popup that needs a key press, and a simple Continue or New game choice stands in for the main menu.
+
+Save and load were tested in the browser by saving in one room, reloading the page and continuing. Saves from late in the game haven't been tried, and neither have the story moments that save by themselves, beyond a test of the first one.
+
 ## What hasn't been checked
 
 - No game has been played through, so it's unconfirmed that any can be completed in the port or the original.

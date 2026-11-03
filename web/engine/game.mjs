@@ -104,8 +104,13 @@ const BLOOD_SPLATS = 5;
 const BLOOD_PHASES = 3;
 const MAX_BLOOD_BLUR = 4;
 
+const SAVE_VERSION = 1;
+const NOTICE_MS = 2000;
+
 // Engine text indexes in localization/*.properties.
 const TEXT = {
+  SAVED: 80,
+  SAVE_FAILED: 118,
   OUT_OF_AMMO: 172,
   RECEIVED: 47,
   LOOK_AT: 48,
@@ -122,7 +127,7 @@ const TEXT = {
 };
 
 // Commands this prototype runs past: audio, saving, vibration and visual effects.
-const NO_OP = new Set([23, 47, 48, 49, 56]);
+const NO_OP = new Set([23, 47, 49, 56]);
 
 class RoomObject {
   constructor(source, game) {
@@ -388,11 +393,15 @@ class RoomObject {
 
 // The game's state and rules, with no dependency on a canvas, so a test can play it.
 export class Game {
-  constructor(data, { language = 'en', roomSize = 256, now = () => Date.now(), random = Math.random } = {}) {
+  constructor(
+    data,
+    { language = 'en', roomSize = 256, now = () => Date.now(), random = Math.random, storage = null } = {},
+  ) {
     this.data = data;
     this.dataDir = data.dataDir;
     this.now = now;
     this.random = random;
+    this.storage = storage;
     this.language = language;
     this.gameTexts = parseLan(data.entries.get(`${data.dataDir}/lan/${language}.lan`));
     this.engineTexts = new TextDecoder('utf-8')
@@ -425,6 +434,9 @@ export class Game {
     this.tickInterval = 0;
     this.tickTime = 0;
     this.endGameRequested = false;
+    this.ended = false;
+    this.saveAllowedInRoom = false;
+    this.notice = null;
 
     this.pausedThread = null;
     this.waitStop = 0;
@@ -686,6 +698,9 @@ export class Game {
       case 45:
         this.startDissolve(args);
         return null;
+      case 48:
+        this.saveGame(count === 1 ? toBoolean(args[0]) : true);
+        return null;
       case 50:
         if (thread.roomObject && thread.roomObject.animationTime <= 0) {
           thread.roomObject.runAnimLoops = count > 0 ? integerArgument(args[0]) : 1;
@@ -944,10 +959,118 @@ export class Game {
 
   // Rooms.
   startNewGame() {
+    this.resetRun();
     this.setupDone = false;
-    this.menus = [];
-    this.resetBattle();
     this.roomInit('setup', false);
+  }
+
+  resetRun() {
+    this.vars.clear();
+    this.actionKeys.clear();
+    this.menus = [];
+    this.choiceMenu = null;
+    this.pausedThread = null;
+    this.waitStop = 0;
+    this.objects = null;
+    this.ended = false;
+    this.pendingClick = false;
+    this.pendingKeys = [];
+    this.resetBattle();
+  }
+
+  // Saving. A save is the variables and action keys, as in ExtBase.saveGameInRMS,
+  // so it holds no running script. The key keeps saves from mixing between builds
+  // whose scripts or text differ, because variables can hold game text.
+  get saveKey() {
+    if (!this.cachedSaveKey) {
+      let hash = 0x811c9dc5;
+      const names = [...this.data.entries.keys()].filter((name) => /\/(scr|rom|lan)\//.test(name)).sort();
+      for (const name of names) {
+        for (const byte of this.data.entries.get(name)) hash = Math.imul(hash ^ byte, 0x01000193);
+      }
+      this.cachedSaveKey = `silent-hill-mobile:${this.dataDir}:${this.language}:${(hash >>> 0).toString(16)}`;
+    }
+    return this.cachedSaveKey;
+  }
+
+  readSave() {
+    try {
+      const save = JSON.parse(this.storage.getItem(this.saveKey));
+      return save?.version === SAVE_VERSION && Array.isArray(save.vars) && Array.isArray(save.actionKeys) ? save : null;
+    } catch {
+      return null;
+    }
+  }
+
+  hasSave() {
+    if (this.cachedHasSave === undefined) this.cachedHasSave = this.readSave() !== null;
+    return this.cachedHasSave;
+  }
+
+  // The rule from Ext.createEscapeMenu: the room must be a save point, with no
+  // script mid-way and no battle running.
+  canSave() {
+    return (
+      Boolean(this.objects) &&
+      !this.ended &&
+      this.saveAllowedInRoom &&
+      !this.menus.length &&
+      !this.pausedThread &&
+      !this.battleMode &&
+      this.pendingRoom === null &&
+      this.currentRoom.length > 0
+    );
+  }
+
+  // Port of M.saveGame and ExtBase.saveGameInRMS. Someone without the gun has their
+  // ammo held aside, so it's put back in the variables for the length of the save.
+  saveGame(announce = true) {
+    this.syncGunState();
+    if (!this.gunState) this.ammoSet(this.ammoInGun, false, true);
+    let saved = false;
+    try {
+      const vars = [...this.vars].map(([name, { value, hint }]) => [name, value, hint]);
+      this.storage.setItem(
+        this.saveKey,
+        JSON.stringify({
+          version: SAVE_VERSION,
+          room: this.currentRoom,
+          savedAt: this.now(),
+          vars,
+          actionKeys: [...this.actionKeys],
+        }),
+      );
+      saved = true;
+      this.cachedHasSave = true;
+    } catch {
+      saved = false;
+    }
+    if (!this.gunState) this.ammoSet(0, false, true);
+    if (announce) this.showNotice(this.engineText(saved ? TEXT.SAVED : TEXT.SAVE_FAILED));
+    return saved;
+  }
+
+  // Port of ExtBase.loadGameFromRMS and M.startSavedGame: the setup room runs again,
+  // and its script then returns to the saved room.
+  loadGame() {
+    const save = this.readSave();
+    if (!save) return false;
+    this.resetRun();
+    for (const [name, value, hint] of save.vars) this.setRaw(name, value, hint);
+    for (const [key, scriptId] of save.actionKeys) this.actionKeys.set(key, scriptId);
+    this.gunState = this.inventorySize('invGun') > 0;
+    if (!this.gunState) {
+      this.ammoInGun = toInt(this.getRaw('sys_ammo'));
+      this.ammo = 1;
+      this.ammoSet(0, true, true);
+    }
+    this.setupDone = true;
+    this.roomInit('setup', false);
+    return true;
+  }
+
+  showNotice(text) {
+    this.notice = { text, until: this.now() + NOTICE_MS };
   }
 
   roomAddToHistory(room) {
@@ -1006,6 +1129,7 @@ export class Game {
     if (!bytes) throw new Error(`Missing room: ${room}`);
     const parsed = parseRoom(bytes, { wideZones: usesWideZones(this.dataDir) });
     this.currentRoomId = room;
+    this.saveAllowedInRoom = parsed.strings.includes('savePoint');
     this.objects = parsed.objects.map((source) => new RoomObject(source, this));
     this.roomEntered = false;
     this.roomUpdateNeeded = true;
@@ -1219,7 +1343,9 @@ export class Game {
   // One 60 ms engine tick. M.tickBasedTimeUpdate advances the animation clock by
   // the same amount.
   tick() {
+    if (this.ended) return;
     this.tickTime += TICK_MS;
+    if (this.notice && this.now() >= this.notice.until) this.notice = null;
     const fading = this.menus.at(-1);
     if (fading?.id === MENU.TEXT_FADE) this.updateTextFade(fading);
     this.handleInput();
@@ -1231,10 +1357,11 @@ export class Game {
       this.tickObject.executeEvent(EVENT.TICK, null);
     }
     this.paintPhase();
+    // M.endGame returns to the main menu, which the page draws.
     if (this.endGameRequested) {
       this.endGameRequested = false;
-      this.vars.clear();
-      this.startNewGame();
+      this.resetRun();
+      this.ended = true;
     }
   }
 
@@ -1755,7 +1882,7 @@ export class Game {
 
   // Port of the cursor choice in Ext.appPaint.
   cursorView() {
-    if (this.hideCursor) return null;
+    if (this.hideCursor || !this.objects) return null;
     const at = (id, hint = null) => ({ id, hint, x: this.cursorX + this.aimShakeX, y: this.cursorY + this.aimShakeY });
     const object = this.overObject;
     if (!object) return at(this.specialCursor.idle ?? 'cursorIdle');

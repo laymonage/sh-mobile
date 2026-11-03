@@ -50,6 +50,7 @@ export class Renderer {
     const menu = game.menus.at(-1);
     if (menu) this.drawMenu(menu);
     else this.drawCursor(game.cursorView());
+    if (game.notice) this.drawNotice(game.notice.text);
   }
 
   drawItem(item) {
@@ -120,6 +121,11 @@ export class Renderer {
       const y = game.cursorY + 14 > game.roomHeight - LINE_HEIGHT ? game.cursorY - 26 : game.cursorY + 14;
       this.outlinedText(view.hint, x, y, 'left');
     }
+  }
+
+  drawNotice(text) {
+    this.context.font = BOLD_FONT;
+    this.outlinedText(text, this.game.roomWidth / 2, 24, 'center');
   }
 
   outlinedText(text, x, y, align) {

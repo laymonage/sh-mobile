@@ -64,7 +64,12 @@
       cursor: none;
       touch-action: none;
     }
-    #actions { display: none; gap: 8px; }
+    #actions { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    #start { display: none; gap: 8px; }
+    body.choosing #start { display: flex; }
+    body.choosing #actions, body.choosing #help { display: none; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:disabled:hover { border-color: var(--border); }
     button {
       min-height: 44px;
       padding: 8px 14px;
@@ -80,8 +85,8 @@
     #help { display: none; margin: 0; color: var(--muted); font-size: 0.875rem; text-align: center; }
     body.playing #drop { display: none; }
     body.playing #game { display: block; }
-    body.playing #help { display: block; }
-    body.playing #actions { display: flex; }
+    body.playing:not(.choosing) #help { display: block; }
+    body.playing:not(.choosing) #actions { display: flex; }
   </style>
 </head>
 <body>
@@ -95,6 +100,12 @@
   <div id="actions">
     <button type="button" data-key="1">Gun (1)</button>
     <button type="button" data-key="3">First aid (3)</button>
+    <button type="button" id="save">Save</button>
+    <button type="button" id="load">Load</button>
+  </div>
+  <div id="start">
+    <button type="button" id="continue">Continue</button>
+    <button type="button" id="new-game">New game</button>
   </div>
   <p id="help">Click to look around and to continue text. With the gun out, aim at a monster's center and click to shoot. Esc skips the opening.</p>
   <script type="module" src="main.mjs"></script>

@@ -375,7 +375,7 @@ test('an enemy attack costs health and shows blood', () => {
   assert.equal(game.dissolve, null);
 });
 
-test('dying shows a message and starts a new game', () => {
+test('dying shows a message and ends the run', () => {
   const game = battleGame();
   game.pressKey('1');
   game.advance();
@@ -394,7 +394,190 @@ test('dying shows a message and starts a new game', () => {
   game.advance(300);
   game.advance();
   game.advance();
+  assert.equal(game.ended, true);
+  game.startNewGame();
+  game.advance();
+  game.advance();
+  assert.equal(game.ended, false);
   assert.equal(game.currentRoomId, 'control');
+  assert.equal(game.getRaw('sys_health'), '5');
+});
+
+function memoryStorage() {
+  const items = new Map();
+  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, value), items };
+}
+
+// A new game on `storage`, skipped to the first room.
+function savableGame(storage, options = {}) {
+  let clock = 1000;
+  const game = new Game(data, { now: () => clock, random: () => 0.5, storage, ...options });
+  game.advance = (ms = 60) => {
+    clock += ms;
+    game.tick();
+  };
+  game.startNewGame();
+  game.advance();
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  game.advance();
+  game.advance(200);
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, '0');
+  return game;
+}
+
+function settle(game) {
+  for (let i = 0; i < 5; i++) game.advance();
+}
+
+test('there is no cursor before a game starts or after it ends', () => {
+  const game = new Game(data, { storage: memoryStorage() });
+  assert.equal(game.cursorView(), null);
+  game.startNewGame();
+  game.tick();
+  game.endGameRequested = true;
+  game.tick();
+  assert.equal(game.cursorView(), null);
+});
+
+test('a save restores the room, variables, inventory and action keys', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  assert.equal(game.hasSave(), false);
+  game.roomInit('2', false);
+  settle(game);
+  game.setVariable('test_flag', 7);
+  game.setInventory('2g', 3);
+  assert.equal(game.canSave(), true);
+  assert.equal(game.saveGame(), true);
+  assert.equal(game.notice.text, game.engineText(80));
+  assert.equal(game.hasSave(), true);
+
+  const restored = new Game(data, { now: () => 5000, random: () => 0.5, storage });
+  assert.equal(restored.saveKey, game.saveKey);
+  assert.equal(restored.hasSave(), true);
+  assert.equal(restored.loadGame(), true);
+  for (let i = 0; i < 5; i++) restored.tick();
+  assert.equal(restored.currentRoomId, '2');
+  assert.equal(restored.getRaw('test_flag'), '7');
+  assert.equal(restored.inventorySize('2g'), 3);
+  assert.equal(restored.inventorySize('invGun'), 1);
+  assert.equal(restored.actionKeys.get('actionkey_num1'), '2h');
+  assert.equal(restored.ammo, 10);
+  assert.deepEqual(restored.menus, []);
+  assert.ok(restored.objects.length > 0);
+});
+
+test('loading returns to the saved state after progress and after death', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  game.saveGame(false);
+  assert.equal(game.notice, null);
+  game.roomInit('2', false);
+  settle(game);
+  game.setVariable('later_flag', 1);
+  assert.equal(game.loadGame(), true);
+  settle(game);
+  assert.equal(game.currentRoomId, '0');
+  assert.equal(game.getRaw('later_flag'), null);
+
+  game.endGameRequested = true;
+  game.advance();
+  assert.equal(game.ended, true);
+  assert.equal(game.loadGame(), true);
+  settle(game);
+  assert.equal(game.ended, false);
+  assert.equal(game.currentRoomId, '0');
+});
+
+test('saving is refused during text, scripts and battles', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  assert.equal(game.canSave(), true);
+  game.say('Hello', null);
+  assert.equal(game.canSave(), false);
+  game.menus = [];
+  game.pressKey('1');
+  game.advance();
+  game.advance();
+  assert.equal(game.battleMode, true);
+  assert.equal(game.canSave(), false);
+});
+
+test('rooms that are not save points refuse saving', () => {
+  const game = savableGame(memoryStorage());
+  game.roomInit('intro', false);
+  settle(game);
+  game.menus = [];
+  game.pausedThread = null;
+  game.waitStop = 0;
+  assert.equal(game.saveAllowedInRoom, false);
+  assert.equal(game.canSave(), false);
+});
+
+test('ammo held aside without the gun survives a save', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  game.vars.delete('inv-invGun');
+  game.advance();
+  assert.equal(game.gunState, false);
+  assert.equal(game.ammo, 0);
+  assert.equal(game.ammoInGun, 10);
+  game.saveGame(false);
+  const saved = JSON.parse([...storage.items.values()][0]);
+  assert.deepEqual(saved.vars.find(([name]) => name === 'sys_ammo').slice(0, 2), ['sys_ammo', '10']);
+  assert.equal(game.getRaw('sys_ammo'), '0');
+
+  game.loadGame();
+  settle(game);
+  assert.equal(game.ammo, 0);
+  assert.equal(game.ammoInGun, 10);
+  game.setInventory('invGun', 1);
+  settle(game);
+  assert.equal(game.ammo, 10);
+});
+
+test('the story saves by itself at its save command', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  game.roomInit('2e', false);
+  game.advance();
+  game.advance();
+  assert.equal(game.hasSave(), true);
+  assert.equal(game.notice.text, game.engineText(80));
+  assert.equal(game.getRaw('o9'), '1');
+});
+
+test('a broken or missing store fails safely', () => {
+  const broken = {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('full');
+    },
+  };
+  const game = savableGame(broken);
+  assert.equal(game.hasSave(), false);
+  assert.equal(game.saveGame(), false);
+  assert.equal(game.notice.text, game.engineText(118));
+  assert.equal(game.loadGame(), false);
+
+  const none = savableGame(null);
+  assert.equal(none.hasSave(), false);
+  assert.equal(none.saveGame(), false);
+
+  const corrupt = memoryStorage();
+  const reader = savableGame(corrupt);
+  corrupt.setItem(reader.saveKey, 'not json');
+  reader.cachedHasSave = undefined;
+  assert.equal(reader.hasSave(), false);
+  assert.equal(reader.loadGame(), false);
 });
 
 test('the gun can be put away, and runs out of ammo with a message', () => {

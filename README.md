@@ -26,8 +26,11 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | 1, or the Gun button | Draws or puts away the gun |
 | 3, or the First aid button | Uses a first-aid kit |
 | Esc | Skips the opening |
+| Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 
-The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight and the HUD work. Sound, saving, the map, the main menu and room transition effects aren't there yet, and nobody has played it to the end.
+The opening, rooms, hotspots, the verb wheel, text, choices, inventory, room changes, battles, the flashlight, the HUD and saving work. Sound, the map, the original's main menu and room transition effects aren't there yet, and nobody has played it to the end.
+
+There's one save for each version of the game's data. It's kept in this browser's local storage, so clearing site data deletes it.
 
 ## Requirements
 
