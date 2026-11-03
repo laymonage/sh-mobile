@@ -25,7 +25,7 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
 | Right-click | Does what the right soft key button shows, such as Back or Menu |
 | WASD or arrow keys | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor |
-| Up and Down arrows, Enter | Move through and choose from the main and pause menus. Up and Down, or the mouse wheel, also scroll Help and About |
+| Up and Down arrows, Enter | Move through and choose from the main and pause menus. Up and Down, or the mouse wheel, also scroll long text, Help and About, and Enter continues text |
 | Left and Right arrows | Change a setting in the main menu |
 | 1, or the Gun button | Draws or puts away the gun |
 | 3, or the First aid button | Uses a first-aid kit |

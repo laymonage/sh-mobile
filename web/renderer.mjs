@@ -286,8 +286,8 @@ export class Renderer {
   }
 
   // The layout follows ExtBase.menuPaintIngame: the speaker's name, a ruled line, and
-  // the text, all in the speaker's color. The original scrolled long text with the
-  // keypad; here a click turns the page.
+  // the text, all in the speaker's color. Long text scrolls by line, as in the original,
+  // and a click also moves on by a whole box before it closes the text.
   drawSay(menu) {
     const c = this.context;
     const { game } = this;
@@ -297,11 +297,10 @@ export class Renderer {
     const textWidth = game.roomWidth - this.borderLeft - this.borderRight - margin * 3 - (arrow?.info.width ?? 0);
     c.font = FONT;
     const lines = this.wrap(menu.text, textWidth);
-    menu.pageCount = Math.max(1, Math.ceil(lines.length / SAY_LINES));
-    const pageNumber = menu.page ?? 0;
-    const shown = lines.slice(pageNumber * SAY_LINES, (pageNumber + 1) * SAY_LINES);
+    menu.pageLines = SAY_LINES;
+    menu.maxScroll = Math.max(0, lines.length - SAY_LINES);
+    const shown = lines.slice(menu.scroll, menu.scroll + SAY_LINES);
     const headerHeight = menu.speaker ? LINE_HEIGHT + margin + this.delimiterHeight + margin : 0;
-    // Pages of one message stay the same size, so the text doesn't jump.
     const page = this.bottomPage(headerHeight + Math.min(lines.length, SAY_LINES) * step - spacing);
     this.notepad(page.x, page.y, page.width, page.height);
 
@@ -316,11 +315,13 @@ export class Renderer {
       this.delimiter(page.x, y, page.width);
       y += this.delimiterHeight + margin;
     }
+    const up = this.images.get('arrow_up');
+    if (up && menu.scroll > 0) c.drawImage(up.bitmap, page.x + page.width - margin - up.info.width, y);
     for (const line of shown) {
       c.fillText(line, textX, y);
       y += step;
     }
-    if (arrow && pageNumber + 1 < menu.pageCount && Math.floor(performance.now() / ARROW_BLINK_MS) % 2 === 0) {
+    if (arrow && menu.scroll < menu.maxScroll && Math.floor(performance.now() / ARROW_BLINK_MS) % 2 === 0) {
       c.drawImage(
         arrow.bitmap,
         page.x + page.width - margin - arrow.info.width,

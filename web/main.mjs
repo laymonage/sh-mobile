@@ -229,7 +229,11 @@ function run(game, renderer) {
     }
     const menuId = game.menus.at(-1)?.id;
     if (
-      (game.mainMenu || game.popups.length || menuId === MENU.INVENTORY || menuId === MENU.PAUSE) &&
+      (game.mainMenu ||
+        game.popups.length ||
+        menuId === MENU.INVENTORY ||
+        menuId === MENU.PAUSE ||
+        menuId === MENU.SAY) &&
       MENU_KEYS.has(event.key)
     ) {
       game.pressKey(event.key);
@@ -240,7 +244,7 @@ function run(game, renderer) {
   canvas.addEventListener(
     'wheel',
     (event) => {
-      if (game.mainMenu?.current?.kind !== 'text') return;
+      if (game.mainMenu?.current?.kind !== 'text' && game.menus.at(-1)?.id !== MENU.SAY) return;
       game.pressKey(event.deltaY > 0 ? 'ArrowDown' : 'ArrowUp');
       event.preventDefault();
     },

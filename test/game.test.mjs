@@ -65,14 +65,52 @@ test('text pauses the script until it is clicked', () => {
   assert.equal(game.menus.at(-1).text, text('j5'));
 });
 
-test('long text pages before the script resumes', () => {
+test('long text moves on by a box per click, and only then does the script resume', () => {
   const game = newGame();
   game.advance();
-  game.menus.at(-1).pageCount = 2;
+  const menu = game.menus.at(-1);
+  Object.assign(menu, { maxScroll: 6, pageLines: 4 });
+  for (const scroll of [4, 6]) {
+    game.click();
+    game.advance();
+    assert.equal(menu.scroll, scroll);
+    assert.equal(game.getRaw('ql'), null);
+  }
   game.click();
   game.advance();
-  assert.equal(game.menus.at(-1).page, 1);
-  assert.equal(game.getRaw('ql'), null);
+  assert.equal(game.getRaw('ql'), '1');
+});
+
+test('long text scrolls by line within its limits, and Enter continues it', () => {
+  const game = newGame();
+  game.advance();
+  const menu = game.menus.at(-1);
+  Object.assign(menu, { maxScroll: 2, pageLines: 4 });
+  game.pressKey('ArrowUp');
+  game.advance();
+  assert.equal(menu.scroll, 0);
+  game.pressKey('ArrowDown');
+  game.pressKey('ArrowDown');
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(menu.scroll, 2);
+  game.pressKey('ArrowUp');
+  game.advance();
+  assert.equal(menu.scroll, 1);
+  assert.equal(game.menus.at(-1), menu);
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(menu.scroll, 2);
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.getRaw('ql'), '1');
+});
+
+test('the toboggan note leaves off the line break at its end', () => {
+  const game = newGame();
+  assert.ok(game.gameText('56').endsWith('the fee.\n'));
+  game.say(game.gameText('56'), null);
+  assert.ok(game.menus.at(-1).text.endsWith('the fee.'));
 });
 
 test('the opening plays through to the first room by clicking alone', () => {

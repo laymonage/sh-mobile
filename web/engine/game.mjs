@@ -949,7 +949,15 @@ export class Game {
 
   // Menus.
   say(text, speaker) {
-    this.menus.push({ id: MENU.SAY, text, speaker: speaker ?? null, page: 0, pageCount: 1 });
+    // The toboggan note ends with a line break, which would scroll to a blank line.
+    this.menus.push({
+      id: MENU.SAY,
+      text: text.trimEnd(),
+      speaker: speaker ?? null,
+      scroll: 0,
+      maxScroll: 0,
+      pageLines: 1,
+    });
   }
 
   addChoice(args) {
@@ -1450,7 +1458,8 @@ export class Game {
       return;
     }
     if (menu) {
-      if (clicked) this.handleMenuClick(menu);
+      if (menu.id === MENU.SAY) this.scrollSay(menu, keys);
+      if (clicked || (menu.id === MENU.SAY && keys.includes('Enter'))) this.handleMenuClick(menu);
       return;
     }
     if (clicked) this.handleRoomClick();
@@ -1719,11 +1728,18 @@ export class Game {
       this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
   }
 
+  scrollSay(menu, keys) {
+    for (const key of keys) {
+      if (key === 'ArrowUp') menu.scroll = Math.max(menu.scroll - 1, 0);
+      if (key === 'ArrowDown') menu.scroll = Math.min(menu.scroll + 1, menu.maxScroll);
+    }
+  }
+
   handleMenuClick(menu) {
     switch (menu.id) {
       case MENU.SAY:
-        if (menu.page + 1 < menu.pageCount) {
-          menu.page++;
+        if (menu.scroll < menu.maxScroll) {
+          menu.scroll = Math.min(menu.scroll + menu.pageLines, menu.maxScroll);
           return;
         }
         this.menus.pop();

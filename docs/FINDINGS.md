@@ -239,7 +239,7 @@ Save and load were tested in the browser by saving in one room, reloading the pa
 
 The original's screen is 240x320: a 256-pixel-tall room, panning sideways with the cursor, above `gfx/bigScreenHUD_hor.png`, 64 pixels of rusted steel with blood and cobwebs. The port shows the whole square room instead, without panning, and puts that art behind the page's buttons.
 
-Text boxes use the original's notepad art, tiled as in `ExtBase.menuPaintIngameImageBorders`. Text takes its speaker's color: Ben `#1C0E70`, Moon `#A30C0C` and Karen `#A20B8A`. The box positions follow the room's bottom rather than the phone's screen, and they hold four lines rather than scrolling, so they're larger than the original's. The fonts are the browser's, not the phone's.
+Text boxes use the original's notepad art, tiled as in `ExtBase.menuPaintIngameImageBorders`. Text takes its speaker's color: Ben `#1C0E70`, Moon `#A30C0C` and Karen `#A20B8A`. The box positions follow the room's bottom rather than the phone's screen, and they hold four lines, so they're larger than the original's. Long text scrolls by line with the arrow keys or mouse wheel, as in the original. A click also moves on by four lines and only closes the text at its end, while the original's OK closes it straight away. The fonts are the browser's, not the phone's.
 
 The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width, centered on the cursor, showing one item's name and picture, with arrows to the others and its actions below. The script's named first item always comes first. After that, the original's order came from a Java hash table, and the port's is the order items were picked up.
 
