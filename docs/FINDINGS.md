@@ -243,6 +243,8 @@ The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width
 
 WASD and the arrow keys take the room's exits, which the original doesn't do: its keys only moved the cursor. They run the same script as clicking the exit. With every room loaded from a new game's state, 92 of the 110 that load have directional exits, and none has more than two directions. Rooms `a` and `10` have two forward exits side by side, a doorway and a staircase, and the key takes the one nearer the cursor. Exits that depend on story progress may differ. Many rooms are left through doors and other objects that use the verb wheel, so the keys don't replace the mouse.
 
+The map's floor list marks the current floor with `gfx/map_cursor.png`, using the `var_floor` variable that stairs set, as in `ExtBase.menuPaintIngame`. That code runs for every choice menu, but the map's script is the only one that offers choices. The original's map key also starts with the current floor highlighted, which the port doesn't do, because its highlight follows the mouse.
+
 The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. 
 ### Menus
 

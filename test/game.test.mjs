@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseLan } from '../web/engine/format.mjs';
+import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
 import { inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
@@ -1508,4 +1508,42 @@ test('rooms have at most two directions, and only two have two exits in one dire
   assert.equal(loaded, 110);
   assert.equal(withExits, 92);
   assert.deepEqual(repeated.sort(), ['10', 'a']);
+});
+
+test('the floor list marks the current floor, which stairs change', () => {
+  const game = savableGame(memoryStorage());
+  game.setInventory('invMap', 1);
+  game.setVariable('m6', 0);
+  game.showMap();
+  assert.deepEqual(
+    game.menus.at(-1).choices.map((choice) => choice.text),
+    ['Floor 2', 'Floor 1', 'Basement'],
+  );
+  assert.equal(game.currentFloorRow(), 1);
+  for (const [x, row] of [
+    [100, 2],
+    [160, 0],
+  ]) {
+    standIn(game, 'a');
+    game.moveCursor(x, 20);
+    game.pressKey('move-forward');
+    game.advance();
+    assert.equal(game.currentFloorRow(), row);
+  }
+});
+
+test('the map is the only script that offers choices', () => {
+  const offering = [...data.entries]
+    .filter(([name]) => name.startsWith('sh/scr/'))
+    .filter(([, bytes]) => {
+      let found = false;
+      walkCode(parseScript(bytes), (op) => {
+        if (op === 24) found = true;
+      });
+      return found;
+    });
+  assert.deepEqual(
+    offering.map(([name]) => name),
+    ['sh/scr/invMap.bin'],
+  );
 });

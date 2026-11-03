@@ -11,6 +11,7 @@ const ARROW_BLINK_MS = 600;
 const ITEM_SIZE = 32;
 const IMAGE_SECTION = 35;
 const ARROW_REACH = 6;
+const FLOOR_MARKER_GAP = 10;
 
 // From ExtBase.menuPaintEngine and Ext's constants.
 const ENGINE_PAPER = 0xeae2b2;
@@ -398,6 +399,14 @@ export class Renderer {
       }
       c.fillStyle = color;
       this.rowText(row, rect.x + margin, rect.y, rect.height);
+      const marker = this.art.get('gfx/map_cursor.png');
+      if (marker && index === game.currentFloorRow()) {
+        c.drawImage(
+          marker,
+          Math.round(rect.x + margin + c.measureText(row).width + FLOOR_MARKER_GAP),
+          rect.y + ((rect.height - marker.height) >> 1),
+        );
+      }
     });
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }

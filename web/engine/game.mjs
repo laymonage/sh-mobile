@@ -102,6 +102,9 @@ const SPEAKER_COLORS = [
   [156, 0xa20b8a],
 ];
 
+// The map's floors, in the order its script lists them.
+const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
+
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
 const NOTICE_MS = 2000;
@@ -955,6 +958,12 @@ export class Game {
     }
     if (title) this.choiceMenu.title = title;
     this.choiceMenu.choices.push({ id: id ?? this.choiceMenu.choices.length + 1, text });
+  }
+
+  // Which row of a choice menu gets the person marker, from ExtBase.menuPaintIngame.
+  // The map is the only thing in the game that offers choices.
+  currentFloorRow() {
+    return FLOOR_ROWS.indexOf(this.getRaw('var_floor'));
   }
 
   // Port of Ext.executeCommand_inventoryAdd, with its special case for ammo clips.
