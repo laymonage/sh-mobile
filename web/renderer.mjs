@@ -92,7 +92,7 @@ export class Renderer {
     const menu = game.menus.at(-1);
     if (menu) this.drawMenu(menu);
     else this.drawCursor(game.cursorView());
-    if (game.notice) this.drawPopup(game.notice.text);
+    if (game.popups.length) this.drawPopup(game.popups[0]);
   }
 
   drawItem(item) {
@@ -551,9 +551,6 @@ export class Renderer {
     switch (menu.id) {
       case MENU.SAY:
         this.drawSay(menu);
-        break;
-      case MENU.POPUP:
-        this.drawPopup(menu.text);
         break;
       case MENU.RECEIVED:
         this.drawReceived(menu);

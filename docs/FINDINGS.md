@@ -229,7 +229,9 @@ A save holds every script variable and the action keys, as in `ExtBase.saveGameI
 
 99 of the 112 rooms are save points. As in the original, saving is also refused during text, while a script is paused and in a battle. Five scripts save by themselves at story moments.
 
-The port differs in three ways: saves go to the browser's local storage, the confirmation looks like the original's popup but goes away by itself after 2 seconds rather than waiting for a key press, and a save from before a language change keeps any game text held in its variables in the old language, as the original's would.
+The confirmation is the original's popup, which holds up all input until it's answered. The original answers it with its left soft key, labeled OK, and the port also accepts a click or Enter.
+
+The port differs in two ways: saves go to the browser's local storage, and a save from before a language change keeps any game text held in its variables in the old language, as the original's would.
 
 Save and load were tested in the browser by saving in one room, reloading the page and continuing. Saves from late in the game haven't been tried, and neither have the story moments that save by themselves, beyond a test of the first one.
 

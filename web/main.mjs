@@ -228,7 +228,10 @@ function run(game, renderer) {
       event.preventDefault();
     }
     const menuId = game.menus.at(-1)?.id;
-    if ((game.mainMenu || menuId === MENU.INVENTORY || menuId === MENU.PAUSE) && MENU_KEYS.has(event.key)) {
+    if (
+      (game.mainMenu || game.popups.length || menuId === MENU.INVENTORY || menuId === MENU.PAUSE) &&
+      MENU_KEYS.has(event.key)
+    ) {
       game.pressKey(event.key);
       event.preventDefault();
     }

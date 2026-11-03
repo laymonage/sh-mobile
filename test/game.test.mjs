@@ -772,7 +772,7 @@ test('a save restores the room, variables, inventory and action keys', () => {
   game.setInventory('2g', 3);
   assert.equal(game.canSave(), true);
   assert.equal(game.saveGame(), true);
-  assert.equal(game.notice.text, game.engineText(80));
+  assert.deepEqual(game.popups, [game.engineText(80)]);
   assert.equal(game.hasSave(), true);
 
   const restored = new Game(data, { now: () => 5000, random: () => 0.5, storage });
@@ -794,7 +794,7 @@ test('loading returns to the saved state after progress and after death', () => 
   const storage = memoryStorage();
   const game = savableGame(storage);
   game.saveGame(false);
-  assert.equal(game.notice, null);
+  assert.deepEqual(game.popups, []);
   game.roomInit('2', false);
   settle(game);
   game.setVariable('later_flag', 1);
@@ -866,7 +866,7 @@ test('the story saves by itself at its save command', () => {
   game.advance();
   game.advance();
   assert.equal(game.hasSave(), true);
-  assert.equal(game.notice.text, game.engineText(80));
+  assert.deepEqual(game.popups, [game.engineText(80)]);
   assert.equal(game.getRaw('o9'), '1');
 });
 
@@ -882,7 +882,7 @@ test('a broken or missing store fails safely', () => {
   const game = savableGame(broken);
   assert.equal(game.hasSave(), false);
   assert.equal(game.saveGame(), false);
-  assert.equal(game.notice.text, game.engineText(118));
+  assert.deepEqual(game.popups, [game.engineText(118)]);
   assert.equal(game.loadGame(), false);
 
   const none = savableGame(null);
@@ -1326,7 +1326,9 @@ test('the pause menu continues, saves, and changes sound', () => {
   pauseChoice(game, 'Save');
   assert.equal(game.menus.length, 0);
   assert.equal(game.hasSave(), true);
-  assert.equal(game.notice.text, game.engineText(80));
+  assert.deepEqual(game.popups, [game.engineText(80)]);
+  game.click();
+  game.advance();
   open();
   pauseChoice(game, 'Settings');
   pauseChoice(game, 'Sound: On');
@@ -1546,4 +1548,91 @@ test('the map is the only script that offers choices', () => {
     offering.map(([name]) => name),
     ['sh/scr/invMap.bin'],
   );
+});
+
+test('a save popup holds up all input until it is answered', () => {
+  const game = savableGame(memoryStorage());
+  game.setInventory('2g', 1);
+  game.moveCursor(100, 100);
+  game.advance();
+  const cursor = game.cursorView();
+  assert.ok(cursor);
+  assert.equal(game.saveGame(), true);
+
+  assert.equal(game.cursorView(), null);
+  assert.equal(game.canSave(), false);
+  assert.deepEqual([game.softKeys().left.label, game.softKeys().right], ['OK', undefined]);
+  const time = game.tickTime;
+  for (const key of ['Escape', 'pause', 'inventory', 'map', 'move-back', 'ArrowUp', '1']) {
+    game.pressKey(key);
+    game.advance();
+    assert.deepEqual(
+      [game.menus.length, game.popups.length, game.pendingRoom, game.currentRoomId],
+      [0, 1, null, '0'],
+      key,
+    );
+  }
+  assert.notEqual(game.getRaw('sys_battleState'), '2');
+  assert.equal(game.tickTime, time);
+
+  game.pressSoftKey('left');
+  game.advance();
+  assert.deepEqual(game.popups, []);
+  assert.ok(game.cursorView());
+  assert.equal(game.canSave(), true);
+  game.advance();
+  assert.equal(game.tickTime, time + 60);
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.PAUSE);
+});
+
+test('a click or Enter answers a popup, and that click does nothing else', () => {
+  const game = savableGame(memoryStorage());
+  game.roomInit('a', false);
+  settle(game);
+  game.moveCursor(100, 150);
+  game.advance();
+  game.popupCreate('Hello');
+  game.click();
+  game.advance();
+  assert.deepEqual([game.popups, game.currentRoomId, game.pendingRoom], [[], 'a', null]);
+  game.popupCreate('Hello');
+  game.pressKey('Enter');
+  game.advance();
+  assert.deepEqual(game.popups, []);
+});
+
+test('popups queue, up to four, and the next waits half a second', () => {
+  const game = savableGame(memoryStorage());
+  for (const text of ['1', '2', '3', '4', '5']) game.popupCreate(text);
+  assert.deepEqual(game.popups, ['1', '2', '3', '4']);
+  game.click();
+  game.advance();
+  assert.deepEqual(game.popups, ['2', '3', '4']);
+  game.click();
+  game.advance();
+  assert.deepEqual(game.popups, ['2', '3', '4']);
+  game.advance(500);
+  game.click();
+  game.advance();
+  assert.deepEqual(game.popups, ['3', '4']);
+});
+
+test('scripts show their popup messages the same way, and keep running', () => {
+  const game = savableGame(memoryStorage());
+  game.setSystemVar(['s_popupMes', 'Hello']);
+  assert.deepEqual(game.popups, ['Hello']);
+  assert.equal(game.menus.length, 0);
+  game.setVariable('flag', 1);
+  assert.equal(game.getRaw('flag'), '1');
+});
+
+test('a popup does not outlive the game it came from', () => {
+  const game = savableGame(memoryStorage());
+  game.popupCreate('Hello');
+  game.endGameRequested = true;
+  game.advance();
+  assert.deepEqual(game.popups, []);
+  assert.equal(game.mainMenu.current.kind, 'main');
 });

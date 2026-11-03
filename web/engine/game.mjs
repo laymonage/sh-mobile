@@ -59,8 +59,8 @@ export const EVENT = {
   GETTIME: 33,
 };
 
-// Menu IDs from Ext and ExtBase. Popups are this port's own simpler form.
-export const MENU = { CHOICE: 2, INVENTORY: 3, SAY: 6, PAUSE: 17, RECEIVED: 7, TEXT_FADE: 28, VERBS: 50, POPUP: 52 };
+// Menu IDs from Ext and ExtBase.
+export const MENU = { CHOICE: 2, INVENTORY: 3, SAY: 6, PAUSE: 17, RECEIVED: 7, TEXT_FADE: 28, VERBS: 50 };
 
 export const VERB = { LOOK: 0, HAND: 1, MOUTH: 2, INVENTORY: 3 };
 const VERB_EVENTS = {
@@ -107,7 +107,8 @@ const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
 
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
-const NOTICE_MS = 2000;
+const POPUP_LIMIT = 4;
+const POPUP_NEXT_MS = 500;
 
 // Engine text indexes in localization/*.properties.
 const CHOICE_BACK = -3;
@@ -473,7 +474,8 @@ export class Game {
     this.endGameRequested = false;
     this.ended = false;
     this.saveAllowedInRoom = false;
-    this.notice = null;
+    this.popups = [];
+    this.popupReadyAt = 0;
 
     this.pausedThread = null;
     this.waitStop = 0;
@@ -937,7 +939,7 @@ export class Game {
         this.setVariable(name, value);
         return;
       case 's_popupMes':
-        this.menus.push({ id: MENU.POPUP, text: value });
+        this.popupCreate(value);
         return;
       default:
         this.setVariable(name, value);
@@ -1168,7 +1170,7 @@ export class Game {
     this.pendingRoom = null;
     this.tickObject = null;
     this.hideCursor = false;
-    this.notice = null;
+    this.popups = [];
     this.resetBattle();
     this.stopSound();
   }
@@ -1226,6 +1228,7 @@ export class Game {
       Boolean(this.objects) &&
       !this.ended &&
       this.saveAllowedInRoom &&
+      !this.popups.length &&
       !this.menus.length &&
       !this.pausedThread &&
       !this.battleMode &&
@@ -1258,7 +1261,7 @@ export class Game {
       saved = false;
     }
     if (!this.gunState) this.ammoSet(0, false, true);
-    if (announce) this.showNotice(this.engineText(saved ? TEXT.SAVED : TEXT.SAVE_FAILED));
+    if (announce) this.popupCreate(this.engineText(saved ? TEXT.SAVED : TEXT.SAVE_FAILED));
     return saved;
   }
 
@@ -1282,8 +1285,18 @@ export class Game {
     return true;
   }
 
-  showNotice(text) {
-    this.notice = { text, until: this.now() + NOTICE_MS };
+  // Port of ExtBase.popupCreate. A popup holds up all input until it's answered, and
+  // later ones wait their turn, while the room's scripts carry on underneath.
+  popupCreate(text) {
+    if (this.popups.length < POPUP_LIMIT) this.popups.push(text);
+  }
+
+  // Port of ExtBase.popupKeyHandling. The original answers these with only its left
+  // soft key, labeled OK, which a click also stands for here.
+  handlePopupInput(clicked, keys) {
+    if ((!clicked && !keys.includes('Enter')) || this.now() < this.popupReadyAt) return;
+    this.popups.shift();
+    if (this.popups.length) this.popupReadyAt = this.now() + POPUP_NEXT_MS;
   }
 
   roomAddToHistory(room) {
@@ -1306,6 +1319,7 @@ export class Game {
     if (this.roomHistorySize() === 0 && room === 'back') room = null;
     const history = args.length > 2 ? toBoolean(args[2]) : false;
     this.menus = [];
+    if (room === 'moon_intro' || room === 'karen_intro') this.popups = [];
     if (room) this.roomInit(room, history);
     thread.status = STATUS.STOPPED;
   }
@@ -1413,12 +1427,16 @@ export class Game {
   // Port of the original's ExtBase.appKeyHandling, once per tick.
   handleInput() {
     const menu = this.menus.at(-1);
-    if (!menu) this.playEnemyCue();
-    if (!menu && !this.isAiming()) this.updateHover();
     const clicked = this.pendingClick;
     const keys = this.pendingKeys;
     this.pendingClick = false;
     this.pendingKeys = [];
+    if (this.popups.length) {
+      this.handlePopupInput(clicked, keys);
+      return;
+    }
+    if (!menu) this.playEnemyCue();
+    if (!menu && !this.isAiming()) this.updateHover();
     if (this.battleMode && !menu && this.battleInput(clicked, keys)) return;
     if (this.isWaiting()) return;
 
@@ -1467,6 +1485,7 @@ export class Game {
     if (this.mainMenu) return this.mainMenu.softKeys();
     if (!this.objects || this.ended) return {};
     const key = (text, action) => ({ label: this.engineText(text), action });
+    if (this.popups.length) return { left: key(TEXT.OK, 'click') };
     const menu = this.menus.at(-1);
     if (menu) {
       if (menu.id === MENU.SAY || menu.id === MENU.TEXT_FADE) {
@@ -1474,7 +1493,7 @@ export class Game {
         return menu.id === MENU.SAY ? { left: key(TEXT.OK, 'click') } : {};
       }
       if (menu.id === MENU.PAUSE) return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'Escape') };
-      if (menu.id === MENU.RECEIVED || menu.id === MENU.POPUP) return { left: key(TEXT.OK, 'click') };
+      if (menu.id === MENU.RECEIVED) return { left: key(TEXT.OK, 'click') };
       return { left: key(TEXT.SELECT, 'click'), right: key(TEXT.BACK, 'escape') };
     }
     const room = this.currentRoom.toLowerCase();
@@ -1725,9 +1744,6 @@ export class Game {
         if (menu.selected === null) this.menus.pop();
         else this.chooseVerb(menu.selected);
         return;
-      case MENU.POPUP:
-        this.menus.pop();
-        return;
       default:
     }
   }
@@ -1774,8 +1790,8 @@ export class Game {
       return;
     }
     if (this.ended) return;
-    this.tickTime += TICK_MS;
-    if (this.notice && this.now() >= this.notice.until) this.notice = null;
+    // The original's animation clock only advances in the key handling a popup skips.
+    if (!this.popups.length) this.tickTime += TICK_MS;
     const fading = this.menus.at(-1);
     if (fading?.id === MENU.TEXT_FADE) this.updateTextFade(fading);
     this.handleInput();
@@ -2315,7 +2331,7 @@ export class Game {
 
   // Port of the cursor choice in Ext.appPaint.
   cursorView() {
-    if (this.hideCursor || !this.objects) return null;
+    if (this.hideCursor || !this.objects || this.popups.length) return null;
     const at = (id, hint = null) => ({ id, hint, x: this.cursorX + this.aimShakeX, y: this.cursorY + this.aimShakeY });
     const object = this.overObject;
     if (!object) return at(this.specialCursor.idle ?? 'cursorIdle');
