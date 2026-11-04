@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
-import { inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
+import { ARCHIVE_JAR, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
-import { allInputs, buildsOf, readInput, recommended } from '../src/inputs.mjs';
+import { allInputs, buildsOf, input, readInput, recommended } from '../src/inputs.mjs';
 
 const data = loadGameData(await readJar(readInput(recommended.sh1.gameData)));
 const english = parseLan(data.entries.get('sh/lan/en.lan'));
@@ -42,6 +42,12 @@ function hover(game, x, y) {
   game.moveCursor(x, y);
   game.advance();
 }
+
+test('the Internet Archive download is pinned to a build the port accepts', async () => {
+  const build = input('sh1-2014-base');
+  assert.equal(ARCHIVE_JAR.integrity, `sha256-${Buffer.from(build.sha256, 'hex').toString('base64')}`);
+  assert.equal((await inspectJar(readInput(build.id))).status, 'ok');
+});
 
 test('the browser reader unpacks a JAR the same as the Node one', () => {
   assert.equal(data.dataDir, 'sh');

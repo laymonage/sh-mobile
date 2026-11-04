@@ -1,5 +1,5 @@
 import { Game, MENU } from './engine/game.mjs';
-import { inspectJar } from './engine/jar.mjs';
+import { ARCHIVE_JAR, inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
 import { deleteStoredSoundFont, loadStoredSoundFont, storeSoundFont } from './soundfont-store.mjs';
@@ -22,6 +22,7 @@ const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'E
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
+const archiveButton = document.getElementById('archive');
 const message = document.getElementById('message');
 const canvas = document.getElementById('game');
 const saveButton = document.getElementById('save');
@@ -283,6 +284,23 @@ async function startFromFile(file) {
   if (file) await start(new Uint8Array(await file.arrayBuffer()));
 }
 
+async function startFromArchive() {
+  archiveButton.disabled = true;
+  showMessage('Downloading from the Internet Archive...');
+  let bytes;
+  try {
+    const response = await fetch(ARCHIVE_JAR.url, { integrity: ARCHIVE_JAR.integrity });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } catch {
+    showMessage("Couldn't download the game from the Internet Archive. Try again, or choose a JAR.", 'error');
+    archiveButton.disabled = false;
+    return;
+  }
+  await start(bytes);
+}
+
+archiveButton.addEventListener('click', startFromArchive);
 fileInput.addEventListener('change', () => startFromFile(fileInput.files[0]));
 drop.addEventListener('dragover', (event) => {
   event.preventDefault();

@@ -7,6 +7,13 @@ async function inflate(bytes) {
 }
 
 // Unpacks a whole JAR into memory. A JAR is a ZIP file.
+// A copy of the 2014 build on the Internet Archive, for players who don't have a JAR.
+// The hash means that only this exact file is accepted.
+export const ARCHIVE_JAR = {
+  url: 'https://archive.org/download/j2me-game-glu-silenthill/glu-silenthill.zip/app.jar',
+  integrity: 'sha256-P9YSB/lTDWbDEAcY3411XLHZ1Z2zevIQh8aMUQ+ooa0=',
+};
+
 export async function readJar(bytes) {
   const files = new Map();
   for (const [name, entry] of parseZipDirectory(bytes)) {
