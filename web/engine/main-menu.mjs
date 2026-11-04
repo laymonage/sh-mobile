@@ -1,3 +1,5 @@
+import { controlsText, gameplayText } from './help-text.mjs';
+
 // The original's screens outside the game: ExtBase.logoStart and logoHandling,
 // splashStart and splashHandling, createMainMenu, and engineMenuKeyHandling.
 // The layout lives in the renderer, which reports back through `rows` and `arrows`.
@@ -32,32 +34,6 @@ const TEXT = {
 };
 const LANGUAGE_NAMES = { en: 1, fr: 2, de: 3, it: 4, es: 5, pt: 6 };
 const ABOUT_SECTIONS = [160, 161, 162, 163, 164, 165, 166, 167, 168, 169];
-const CONTROLS_SECTIONS = [63, 64, 65, 137, 66, 138, 67, 170, 171];
-
-// In the order ExtBase replaces them, because some of the replacements hold more of these.
-const CONTROL_NAMES = [
-  ['UP', 70],
-  ['DOWN', 71],
-  ['LEFT', 72],
-  ['RIGHT', 73],
-  ['NUM2', 141],
-  ['NUM8', 145],
-  ['NUM4', 142],
-  ['NUM6', 144],
-  ['FIRE', 139],
-  ['NUM5', 143],
-  ['SOFTKEY_B', 69],
-  ['NUM1', 140],
-  ['SOFTKEY_A', 68],
-];
-
-export const GAMEPLAY_TEXT = 61;
-
-export function controlsText(game) {
-  let text = CONTROLS_SECTIONS.map((index) => game.engineText(index)).join('\n\n');
-  for (const [name, index] of CONTROL_NAMES) text = text.replaceAll(`<JAVA_APP_INK_${name}>`, game.engineText(index));
-  return text;
-}
 
 export function languageName(game, language) {
   return LANGUAGE_NAMES[language] === undefined ? language : game.engineText(LANGUAGE_NAMES[language]);
@@ -371,7 +347,7 @@ export class MainMenu {
         }
         return;
       case 'help':
-        this.menus.push(this.textPage(id === 'gameplay' ? game.engineText(GAMEPLAY_TEXT) : controlsText(game)));
+        this.menus.push(this.textPage(id === 'gameplay' ? gameplayText(game) : controlsText(game)));
         return;
       default:
     }

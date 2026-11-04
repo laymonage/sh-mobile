@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
+import { controlsText, gameplayText } from '../web/engine/help-text.mjs';
 import { ARCHIVE_JAR, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
 import { allInputs, buildsOf, input, readInput, recommended } from '../src/inputs.mjs';
@@ -9,6 +10,8 @@ import { allInputs, buildsOf, input, readInput, recommended } from '../src/input
 const data = loadGameData(await readJar(readInput(recommended.sh1.gameData)));
 const english = parseLan(data.entries.get('sh/lan/en.lan'));
 const text = (key) => english[Number.parseInt(key, 36)];
+
+const TUTORIAL_FIRST_LINE = 'Click, or use the buttons under the screen, to interact with menus or message window.';
 
 function newGame() {
   let clock = 1000;
@@ -49,6 +52,30 @@ test('the Internet Archive download is pinned to a build the port accepts', asyn
   assert.equal((await inspectJar(readInput(build.id))).status, 'ok');
 });
 
+test("help describes the mouse and keyboard in every language, in the JAR's own headings", () => {
+  for (const language of ['en', 'fr', 'de', 'it', 'es', 'pt']) {
+    const game = new Game(data, { language });
+    const controls = controlsText(game);
+    assert.doesNotMatch(controls, /JAVA_APP|Num\u00a0|\*|#/, language);
+    assert.ok(controls.startsWith(game.engineText(63).split('\n')[0]), language);
+    assert.doesNotMatch(
+      gameplayText(game).split('\n\n')[0],
+      /softkey|Auswahltasten|touches de sélection|tasti funzione|teclas de/i,
+      language,
+    );
+    assert.equal(gameplayText(game).split('\n\n')[1], game.engineText(61).split('\n\n')[1], language);
+    assert.equal(game.gameTexts[Number.parseInt('j4', 36)], gameplayText(game).split('\n\n')[0], language);
+  }
+});
+
+test('a fan translation keeps its own help text rather than mixing in another language', async () => {
+  const game = new Game(loadGameData(await readJar(readInput('sh1-2007-a'))), { language: 'en' });
+  assert.match(game.engineText(61), /Нажмите/);
+  assert.equal(gameplayText(game), game.engineText(61));
+  assert.match(controlsText(game), /Num\u00a02/);
+  assert.doesNotMatch(controlsText(game), /<JAVA/);
+});
+
 test('the browser reader unpacks a JAR the same as the Node one', () => {
   assert.equal(data.dataDir, 'sh');
   assert.equal(data.entries.size, 924);
@@ -62,7 +89,7 @@ test('a new game runs setup and then opens the tutorial text', () => {
   assert.equal(game.getRaw('sys_health'), '5');
   assert.equal(game.inventorySize('invGun'), 1);
   assert.equal(game.menus.at(-1).id, MENU.SAY);
-  assert.equal(game.menus.at(-1).text, text('j4'));
+  assert.equal(game.menus.at(-1).text, TUTORIAL_FIRST_LINE);
   assert.equal(game.hideCursor, true);
 });
 
@@ -1287,25 +1314,31 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   assert.equal(game.mainMenu.current.kind, 'main');
 });
 
-test('Help and About show the original text, with its placeholders filled in', () => {
+test('Help describes the web controls with the original headings, and About shows the original text', () => {
   const game = startupGame();
   toMainMenu(game);
   choose(game, 'Help');
   assert.deepEqual(menuTexts(game), ['Gameplay', 'Controls']);
   choose(game, 'Gameplay');
   const gameplay = game.mainMenu.current;
-  assert.match(gameplay.text, /^Use the softkeys to interact with menu or message window\.\n\nThe eye/);
+  assert.match(
+    gameplay.text,
+    /^Click, or use the buttons under the screen, to interact with menus or message window\.\n\nThe eye/,
+  );
+  assert.match(gameplay.text, /equip and unequip pressing key\s1\./);
   assert.equal(game.softKeys().right.label, 'Back');
   game.pressKey('Escape');
   game.advance();
   choose(game, 'Controls');
   const controls = game.mainMenu.current.text;
   assert.doesNotMatch(controls, /<JAVA|\\n/);
-  assert.match(
-    controls,
-    /^Move cursor \(or crosshair\):\nUp \(Num\u00a02\) \/ Down \(Num\u00a08\) \/ Left \(Num\u00a04\) \/ Right \(Num\u00a06\)/,
-  );
-  assert.match(controls, /Equip \/ Unequip weapon:\nNum\u00a01/);
+  assert.match(controls, /^Move cursor \(or crosshair\):\nMouse\n/);
+  assert.match(controls, /Close context menu:\nRight click \/ Esc\n/);
+  assert.match(controls, /Walk:\nW \/ A \/ S \/ D \/ Arrow keys/);
+  assert.match(controls, /Equip \/ Unequip weapon:\n1\n/);
+  assert.match(controls, /Open Map:\nM \(only after you acquire the map\)/);
+  assert.match(controls, /Open Inventory:\nI \(only if no other menus are open\)/);
+  assert.match(controls, /Use first aid kit by pressing key\s3\.$/);
   game.pressKey('Escape');
   game.advance();
   game.pressKey('Escape');
@@ -1441,7 +1474,7 @@ test('leaving for the main menu asks first, and a new game afterwards starts cle
   game.advance();
   game.advance();
   assert.equal(game.currentRoomId, 'control');
-  assert.equal(game.menus.at(-1).text, text('j4'));
+  assert.equal(game.menus.at(-1).text, TUTORIAL_FIRST_LINE);
 });
 
 test('a battle stops while paused, and offers no save', () => {

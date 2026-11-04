@@ -13,7 +13,8 @@ import {
   usesWideZones,
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
-import { controlsText, GAMEPLAY_TEXT, MainMenu, parseIni, soundLabel } from './main-menu.mjs';
+import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
+import { MainMenu, parseIni, soundLabel } from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -637,7 +638,9 @@ export class Game {
 
   loadLanguage(language) {
     this.language = language;
-    this.gameTexts = parseLan(this.data.entries.get(`${this.dataDir}/lan/${language}.lan`)).map(displayText);
+    this.gameTexts = adaptTutorialText(
+      parseLan(this.data.entries.get(`${this.dataDir}/lan/${language}.lan`)).map(displayText),
+    );
     this.engineTexts = this.readEngineTexts(language);
   }
 
@@ -1620,7 +1623,7 @@ export class Game {
         ]);
         break;
       case 'gameplay':
-        this.say(this.engineText(GAMEPLAY_TEXT), null);
+        this.say(gameplayText(this), null);
         this.menus.at(-1).fromPause = true;
         break;
       case 'controls':
