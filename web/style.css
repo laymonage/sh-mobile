@@ -103,12 +103,22 @@ h1 {
   width: 1px;
   height: 1px;
 }
-#sources {
+#sources,
+#archive-sources {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 8px;
+}
+#drop #archive-intro {
+  margin-top: 16px;
+}
+#archive-sources {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 #message {
   margin: 0;

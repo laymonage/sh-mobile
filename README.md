@@ -18,7 +18,7 @@ See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
 npm run play
 ```
 
-Then open <http://localhost:8123/> and drop in a JAR, or download one from the Internet Archive: **Silent Hill** gets a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill), and **Mobile 2** gets a copy of `sh2-2015-a1` from [archive.org](https://archive.org/details/j2me-game-glu-silenthillmobile2). The port only accepts those exact files, by their hashes, and keeps each in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build, and <http://localhost:8123/?jar=sh2-2015-base> loads Silent Hill Mobile 2's touch build.
+Then open <http://localhost:8123/> and drop in a JAR, or download one from the Internet Archive by selecting a game: **Silent Hill: Mobile** gets a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill), and **Silent Hill: Mobile 2** gets a copy of `sh2-2015-a1` from [archive.org](https://archive.org/details/j2me-game-glu-silenthillmobile2). The port only accepts those exact files, by their hashes, and keeps each in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build, and <http://localhost:8123/?jar=sh2-2015-base> loads Silent Hill Mobile 2's touch build.
 
 The page sets a Content Security Policy in a `<meta>` tag, so it applies wherever the page is hosted. Directives that a tag can't set, such as `frame-ancestors`, need a response header from the host.
 

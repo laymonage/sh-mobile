@@ -13,9 +13,12 @@
     <p>Drop your own Silent Hill J2ME JAR here. It's read in this browser and isn't uploaded anywhere.</p>
     <div id="sources">
       <label id="choose">Choose a JAR<input id="file" type="file" accept=".jar"></label>
-      <button type="button" data-archive="sh1">Silent Hill from the Internet Archive</button>
-      <button type="button" data-archive="sh2">Mobile 2 from the Internet Archive</button>
     </div>
+    <p id="archive-intro">Alternatively, load the game files from the Internet Archive by selecting a game below:</p>
+    <fieldset id="archive-sources" aria-labelledby="archive-intro">
+      <button type="button" data-archive="sh1">Silent Hill: Mobile</button>
+      <button type="button" data-archive="sh2">Silent Hill: Mobile 2</button>
+    </fieldset>
   </div>
   <p id="message" role="status"></p>
   <canvas id="game" width="768" height="768" aria-label="Game screen"></canvas>
