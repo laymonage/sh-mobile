@@ -2182,6 +2182,54 @@ test('a tap shorter than a tick still moves the crosshair by a pixel', () => {
   assert.equal(game.pointerX, 101);
 });
 
+test('recoil stays when aiming with keys, until the player steers back', () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  game.ammoSet(5, false, true);
+  game.moveCursor(100, 100);
+  game.pressKey('Enter');
+  for (let i = 0; i < 12; i++) game.advance();
+  assert.equal(game.aimingWithKeys, true);
+  assert.equal(game.pointerY, 75);
+  assert.equal(Math.abs(game.pointerX - 100), 9);
+  assert.deepEqual([game.cursorX, game.cursorY], [game.pointerX, game.pointerY]);
+
+  // The kick can't push the cursor off the room.
+  game.moveCursor(0, 5);
+  game.pressKey('Enter');
+  for (let i = 0; i < 12; i++) game.advance();
+  assert.ok(game.pointerX >= 0);
+  assert.equal(game.pointerY, 0);
+});
+
+test('recoil settles back with the mouse, and moving the mouse takes over from the keys', () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  game.ammoSet(5, false, true);
+  game.moveCursor(100, 100);
+  game.holdDirection('up', true);
+  game.holdDirection('up', false);
+  game.advance();
+  assert.equal(game.aimingWithKeys, true);
+
+  game.aimWithMouse();
+  game.moveCursor(100, 100);
+  game.click();
+  game.advance();
+  assert.equal(game.aimingWithKeys, false);
+  for (let i = 0; i < 20; i++) game.advance();
+  assert.deepEqual([game.pointerX, game.pointerY], [100, 100]);
+  assert.deepEqual([game.cursorX, game.cursorY], [100, 100]);
+});
+
 test("held keys don't move the cursor when not aiming", () => {
   const game = savableGame(memoryStorage());
   game.moveCursor(100, 100);

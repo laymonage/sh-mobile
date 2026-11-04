@@ -518,6 +518,7 @@ export class Game {
     this.transitionColor = -1;
     this.transitionRequested = false;
     this.transitionCounter = null;
+    this.aimingWithKeys = false;
     this.heldDirections = new Set();
     this.tappedDirections = new Set();
     this.cursorSpeedX = 0;
@@ -1553,12 +1554,18 @@ export class Game {
     this.cursorY = Math.max(0, Math.min(this.roomHeight - 1, Math.round(this.pointerY + this.recoilOffsetY)));
   }
 
-  // On the original's keypad, recoil moved the cursor and the player steered it
-  // back. A mouse doesn't move by itself, so here the kick settles back by itself.
+  // Port of the recoil in Ext.battleKeyHandling. As on the original's keypad, it moves
+  // a cursor that's steered with keys, and the player has to steer it back. A mouse
+  // doesn't move by itself, so with one, the kick settles back by itself.
   applyRecoil() {
     if (this.recoilVertical !== 0) {
-      this.recoilOffsetX += this.recoilHorizontal;
-      this.recoilOffsetY -= this.recoilVertical;
+      if (this.aimingWithKeys) {
+        this.pointerX = Math.max(0, Math.min(this.roomWidth - 1, this.pointerX + this.recoilHorizontal));
+        this.pointerY = Math.max(0, Math.min(this.roomHeight - 1, this.pointerY - this.recoilVertical));
+      } else {
+        this.recoilOffsetX += this.recoilHorizontal;
+        this.recoilOffsetY -= this.recoilVertical;
+      }
       this.recoilVertical >>= 1;
       if (this.recoilVertical <= 1) this.recoilVertical = 0;
     } else {
@@ -1851,6 +1858,8 @@ export class Game {
       this.openPauseMenu();
       return true;
     }
+    if (clicked) this.aimingWithKeys = false;
+    else if (keys.includes('Enter')) this.aimingWithKeys = true;
     if ((clicked || keys.includes('Enter')) && this.ammo > 0 && !this.reloading) this.shot = true;
     this.applyRecoil();
     if (!this.attackAnim) this.runActionKeys(keys);
@@ -1954,6 +1963,11 @@ export class Game {
   }
 
   // A tap shorter than a tick still counts, for small corrections to the aim.
+  // The mouse takes over aiming as soon as it moves.
+  aimWithMouse() {
+    this.aimingWithKeys = false;
+  }
+
   holdDirection(direction, held) {
     if (held) {
       this.heldDirections.add(direction);
@@ -1978,6 +1992,7 @@ export class Game {
       return;
     }
     const pressed = (direction) => this.heldDirections.has(direction) || this.tappedDirections.has(direction);
+    if (['left', 'right', 'up', 'down'].some(pressed)) this.aimingWithKeys = true;
     const change = (speed, minus, plus) => {
       const step = pressed(plus) ? 1 : pressed(minus) ? -1 : -speed;
       return Math.abs(speed + step) <= CURSOR_TOP_SPEED ? speed + step : speed;

@@ -231,7 +231,7 @@ The tests cover drawing the gun, hits and misses, killing a monster, taking dama
 
 The port differs from the original or leaves things out in these ways:
 
-- Recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does.
+- With a mouse, recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does. With the keys, it stays until the player steers back, as in the original: about 25 pixels up and 9 to the side per shot, where a shot has to land within 8 pixels. Moving the mouse goes back to the mouse's rule.
 - Timing assumes a 60 ms tick, taken from `M.tickBasedTimeUpdate`. The original's real frame rate depended on the phone, and it hasn't been measured, so how often monsters attack may differ.
 
 ### Saving

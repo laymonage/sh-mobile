@@ -203,7 +203,10 @@ function run(game, renderer) {
       ((event.clientY - box.top) / box.height) * game.roomHeight,
     ];
   };
-  canvas.addEventListener('pointermove', (event) => game.moveCursor(...toRoom(event)));
+  canvas.addEventListener('pointermove', (event) => {
+    game.aimWithMouse();
+    game.moveCursor(...toRoom(event));
+  });
   canvas.addEventListener('pointerdown', (event) => {
     game.moveCursor(...toRoom(event));
     renderer.updateHoveredRow();
