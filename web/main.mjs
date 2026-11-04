@@ -195,6 +195,47 @@ async function setUpSoundFont(audio) {
   await audio.setSoundFont(null);
 }
 
+// Captures the mouse while the player aims, if the setting is on. A browser only allows
+// this soon after a click or key press, and lets the player end it with Esc. Then it
+// stays free until they click the room.
+function setUpMouseLock(game) {
+  let declined = false;
+  let requesting = false;
+  const request = () => {
+    requesting = true;
+    Promise.resolve(canvas.requestPointerLock())
+      .catch(() => {
+        declined = true;
+      })
+      .finally(() => {
+        requesting = false;
+      });
+  };
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === canvas;
+    if (game.pointerLocked && !locked && game.wantsMouseLock) declined = true;
+    game.pointerLocked = locked;
+  });
+  document.addEventListener('pointerlockerror', () => {
+    declined = true;
+    requesting = false;
+  });
+  return {
+    clicked() {
+      declined = false;
+      if (game.wantsMouseLock && !game.pointerLocked && !requesting) request();
+    },
+    sync() {
+      if (!game.wantsMouseLock) {
+        declined = false;
+        if (game.pointerLocked) document.exitPointerLock();
+      } else if (!game.pointerLocked && !declined && !requesting && (navigator.userActivation?.isActive ?? true)) {
+        request();
+      }
+    },
+  };
+}
+
 function run(game, renderer) {
   const toRoom = (event) => {
     const box = canvas.getBoundingClientRect();
@@ -203,13 +244,25 @@ function run(game, renderer) {
       ((event.clientY - box.top) / box.height) * game.roomHeight,
     ];
   };
+  const syncMouseLock = setUpMouseLock(game);
   canvas.addEventListener('pointermove', (event) => {
+    if (game.pointerLocked) {
+      const box = canvas.getBoundingClientRect();
+      game.movePointerBy(
+        (event.movementX / box.width) * game.roomWidth,
+        (event.movementY / box.height) * game.roomHeight,
+      );
+      return;
+    }
     game.aimWithMouse();
     game.moveCursor(...toRoom(event));
   });
   canvas.addEventListener('pointerdown', (event) => {
-    game.moveCursor(...toRoom(event));
-    renderer.updateHoveredRow();
+    syncMouseLock.clicked();
+    if (!game.pointerLocked) {
+      game.moveCursor(...toRoom(event));
+      renderer.updateHoveredRow();
+    }
     // On a Mac, Control-click is also a right-click.
     if (event.button === 2 || event.ctrlKey) game.pressSoftKey('right');
     else game.click();
@@ -230,6 +283,8 @@ function run(game, renderer) {
     });
   }
   window.addEventListener('keydown', (event) => {
+    // Esc belongs to the browser while the mouse is captured: it lets the mouse go.
+    if (event.key === 'Escape' && game.pointerLocked) return;
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
     if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
@@ -282,6 +337,7 @@ function run(game, renderer) {
     }
     if (pending > TICK_MS) pending = 0;
     renderer.draw();
+    syncMouseLock.sync();
     document.body.classList.toggle('in-menu', Boolean(game.mainMenu));
     document.documentElement.lang = game.language;
     if (game.audio) showSoundState(game.audio);

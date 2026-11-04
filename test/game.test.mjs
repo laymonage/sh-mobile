@@ -1227,6 +1227,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
     'Sound: On',
     'Transitions: On',
     'Pixel font: Off',
+    'Mouse lock: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1238,6 +1239,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
     'Sound: Off',
     'Transitions: On',
     'Pixel font: Off',
+    'Mouse lock: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1321,6 +1323,7 @@ test('the first menu also changes transitions and language, in place, and stays 
     'Sound: On',
     'Transitions: Off',
     'Pixel font: Off',
+    'Mouse lock: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1330,7 +1333,7 @@ test('the first menu also changes transitions and language, in place, and stays 
   assert.equal(game.language, 'fr');
   assert.equal(game.mainMenu.current.kind, 'sound');
   assert.equal(game.mainMenu.menus.length, 1);
-  assert.equal(game.mainMenu.current.selected, 3);
+  assert.equal(game.mainMenu.current.selected, 4);
   assert.equal(menuTexts(game).at(-1), game.engineText(59));
   game.pressKey('ArrowLeft');
   game.advance();
@@ -1344,7 +1347,7 @@ test('a build with one language has no language row on the first menu', () => {
   const game = startupGame();
   game.languages = ['en'];
   const rows = game.mainMenu.soundMenu().choices.map(({ id }) => id);
-  assert.deepEqual(rows, ['sound', 'transitions', 'pixelFont', 'continue']);
+  assert.deepEqual(rows, ['sound', 'transitions', 'pixelFont', 'mouseLock', 'continue']);
 });
 
 test('Settings changes sound and language, in place, and arrow keys move the highlight', () => {
@@ -1360,8 +1363,14 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   }
   game.pressKey('Enter');
   game.advance();
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Pixel font: Off', 'Language: English']);
-  assert.deepEqual(game.mainMenu.current.choices[3].values, [
+  assert.deepEqual(menuTexts(game), [
+    'Sound: On',
+    'Transitions: On',
+    'Pixel font: Off',
+    'Mouse lock: Off',
+    'Language: English',
+  ]);
+  assert.deepEqual(game.mainMenu.current.choices[4].values, [
     'Language: English',
     'Langue : Français',
     'Sprache: Deutsch',
@@ -1376,9 +1385,10 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
     `${game.engineText(19)} ${game.engineText(21)}`,
     `Transitions\u00a0: ${game.engineText(21)}`,
     `Police pixel\u00a0: ${game.engineText(22)}`,
+    `Capture souris\u00a0: ${game.engineText(22)}`,
     `${game.engineText(0)} Français`,
   ]);
-  assert.equal(game.mainMenu.current.selected, 3);
+  assert.equal(game.mainMenu.current.selected, 4);
   game.pressKey('ArrowLeft');
   game.advance();
   assert.equal(game.language, 'en');
@@ -1517,7 +1527,7 @@ test('the pause menu continues, saves, and changes sound', () => {
   assert.equal(audio.enabled, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: Off', 'Transitions: On', 'Pixel font: Off'],
+    ['Sound: Off', 'Transitions: On', 'Pixel font: Off', 'Mouse lock: Off'],
   );
 });
 
@@ -1911,7 +1921,7 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   pauseChoice(game, 'Transitions: On');
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: Off', 'Pixel font: Off'],
+    ['Sound: On', 'Transitions: Off', 'Pixel font: Off', 'Mouse lock: Off'],
   );
   assert.equal(game.menus.at(-1).choices[1].values.length, 2);
   game.pressKey('Escape');
@@ -1950,7 +1960,7 @@ test('the pixel font is off unless turned on, and the choice is remembered', () 
   assert.equal(game.pixelFont, true);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: On', 'Pixel font: On'],
+    ['Sound: On', 'Transitions: On', 'Pixel font: On', 'Mouse lock: Off'],
   );
   assert.equal(game.menus.at(-1).choices[2].values.length, 2);
   assert.equal(new Game(data, { storage }).pixelFont, true);
@@ -1978,7 +1988,7 @@ test('the pixel font has a well-formed glyph for every character in all six lang
       ...game.engineTexts,
       controlsText(game),
       gameplayText(game),
-      'Pixel font: Transitions : Übergänge: Transiciones: Transições: Police pixel : Fuente píxel: Fonte píxel:',
+      'Pixel font: Transitions : Übergänge: Transiciones: Transições: Police pixel : Fuente píxel: Fonte píxel: Mouse lock: Capture souris : Maus sperren: Blocco mouse: Bloqueo ratón: Bloqueio rato:',
     ];
     for (const text of texts)
       for (const character of String(text))
@@ -2228,6 +2238,72 @@ test('recoil settles back with the mouse, and moving the mouse takes over from t
   for (let i = 0; i < 20; i++) game.advance();
   assert.deepEqual([game.pointerX, game.pointerY], [100, 100]);
   assert.deepEqual([game.cursorX, game.cursorY], [100, 100]);
+});
+
+test('the mouse lock setting is off unless turned on, and is only wanted while aiming with nothing open', () => {
+  assert.equal(new Game(data).mouseLock, false);
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Settings');
+  pauseChoice(game, 'Mouse lock: Off');
+  assert.equal(game.mouseLock, true);
+  assert.deepEqual(game.menus.at(-1).choices.at(-1).values.length, 2);
+  assert.equal(new Game(data, { storage }).mouseLock, true);
+  assert.equal(game.wantsMouseLock, false);
+
+  game.menus = [];
+  game.pausedThread = null;
+  assert.equal(game.wantsMouseLock, false);
+  game.battleMode = true;
+  game.setRaw('sys_battleState', '2', 'I');
+  assert.equal(game.wantsMouseLock, true);
+  game.say('A line', 'Ben');
+  assert.equal(game.wantsMouseLock, false);
+  game.menus = [];
+  game.toggleMouseLock();
+  assert.equal(game.wantsMouseLock, false);
+});
+
+test('a captured mouse moves the crosshair by its movement, and recoil lasts', () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  game.ammoSet(5, false, true);
+  game.pointerLocked = true;
+  game.moveCursor(100, 100);
+  game.movePointerBy(10.5, -4);
+  assert.deepEqual([game.pointerX, game.pointerY], [110.5, 96]);
+  game.movePointerBy(-500, -500);
+  assert.deepEqual([game.pointerX, game.pointerY], [0, 0]);
+  game.movePointerBy(500, 500);
+  assert.deepEqual([game.pointerX, game.pointerY], [255, 255]);
+
+  game.moveCursor(100, 100);
+  game.click();
+  for (let i = 0; i < 12; i++) game.advance();
+  assert.equal(game.pointerY, 75);
+  assert.equal(Math.abs(game.pointerX - 100), 9);
+});
+
+test("Esc pauses a fight even during a monster's attack animation, and cuts it off", () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  game.attackAnim = true;
+  assert.equal(game.canPause(), true);
+  assert.equal(game.softKeys().right.action, 'pause');
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.PAUSE);
+  assert.equal(game.attackAnim, false);
 });
 
 test("held keys don't move the cursor when not aiming", () => {

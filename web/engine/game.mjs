@@ -14,7 +14,7 @@ import {
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
-import { MainMenu, parseIni, pixelFontChoice, soundChoice, transitionsChoice } from './main-menu.mjs';
+import { MainMenu, mouseLockChoice, parseIni, pixelFontChoice, soundChoice, transitionsChoice } from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -137,6 +137,7 @@ const NO_PAUSE_ROOMS = new Set(['karen_end', 'game_end', '2e']);
 const LOADED_GAME_TIME = 1000000;
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const PIXEL_FONT_PREFERENCE = 'silent-hill-mobile:pixel-font';
+const MOUSE_LOCK_PREFERENCE = 'silent-hill-mobile:mouse-lock';
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
@@ -533,6 +534,8 @@ export class Game {
     this.soundPaused = false;
     this.paintingTime = null;
     this.pixelFont = this.storedPixelFont();
+    this.mouseLock = this.readPreference(MOUSE_LOCK_PREFERENCE) === 'on';
+    this.pointerLocked = false;
 
     this.menus = [];
     this.pointerX = roomSize >> 1;
@@ -623,45 +626,65 @@ export class Game {
     if (this.soundOn) this.playSound('sh_shot', 1);
   }
 
-  // The port's own setting: whether room changes play the original's transition.
-  storedRoomTransitions() {
+  readPreference(key) {
     try {
-      return this.storage?.getItem(TRANSITIONS_PREFERENCE) !== 'off';
+      return this.storage?.getItem(key) ?? null;
     } catch {
-      return true;
+      return null;
     }
+  }
+
+  writePreference(key, on) {
+    try {
+      this.storage?.setItem(key, on ? 'on' : 'off');
+    } catch {
+      // It still applies until the page is closed.
+    }
+  }
+
+  // The port's own settings. Room changes play the original's transition unless this
+  // is turned off.
+  storedRoomTransitions() {
+    return this.readPreference(TRANSITIONS_PREFERENCE) !== 'off';
   }
 
   toggleRoomTransitions() {
     this.roomTransitions = !this.roomTransitions;
-    try {
-      this.storage?.setItem(TRANSITIONS_PREFERENCE, this.roomTransitions ? 'on' : 'off');
-    } catch {
-      // It still applies until the page is closed.
-    }
+    this.writePreference(TRANSITIONS_PREFERENCE, this.roomTransitions);
   }
 
-  // The port's own setting: whether text looks like an old phone's, which is off in
-  // a new browser. The renderer draws it.
+  // Whether text looks like an old phone's, which the renderer draws.
   storedPixelFont() {
-    try {
-      return this.storage?.getItem(PIXEL_FONT_PREFERENCE) === 'on';
-    } catch {
-      return false;
-    }
+    return this.readPreference(PIXEL_FONT_PREFERENCE) === 'on';
   }
 
   togglePixelFont() {
     this.pixelFont = !this.pixelFont;
-    try {
-      this.storage?.setItem(PIXEL_FONT_PREFERENCE, this.pixelFont ? 'on' : 'off');
-    } catch {
-      // It still applies until the page is closed.
-    }
+    this.writePreference(PIXEL_FONT_PREFERENCE, this.pixelFont);
+  }
+
+  // Whether the page captures the mouse while aiming, so that recoil lasts.
+  toggleMouseLock() {
+    this.mouseLock = !this.mouseLock;
+    this.writePreference(MOUSE_LOCK_PREFERENCE, this.mouseLock);
+  }
+
+  get wantsMouseLock() {
+    return (
+      this.mouseLock && !this.mainMenu && !this.ended && !this.menus.length && !this.popups.length && this.isAiming()
+    );
+  }
+
+  // With the mouse captured, it reports how far it moved rather than where it is.
+  movePointerBy(dx, dy) {
+    this.moveCursor(
+      Math.max(0, Math.min(this.roomWidth - 1, this.pointerX + dx)),
+      Math.max(0, Math.min(this.roomHeight - 1, this.pointerY + dy)),
+    );
   }
 
   pauseSettings() {
-    return [soundChoice(this), transitionsChoice(this), pixelFontChoice(this)];
+    return [soundChoice(this), transitionsChoice(this), pixelFontChoice(this), mouseLockChoice(this)];
   }
 
   // The logo and everything after it, for a page that has just loaded the game.
@@ -1555,11 +1578,11 @@ export class Game {
   }
 
   // Port of the recoil in Ext.battleKeyHandling. As on the original's keypad, it moves
-  // a cursor that's steered with keys, and the player has to steer it back. A mouse
-  // doesn't move by itself, so with one, the kick settles back by itself.
+  // a cursor that's steered with keys or a captured mouse, and the player has to steer
+  // it back. A free mouse's position is its own, so with one, the kick settles back.
   applyRecoil() {
     if (this.recoilVertical !== 0) {
-      if (this.aimingWithKeys) {
+      if (this.aimingWithKeys || this.pointerLocked) {
         this.pointerX = Math.max(0, Math.min(this.roomWidth - 1, this.pointerX + this.recoilHorizontal));
         this.pointerY = Math.max(0, Math.min(this.roomHeight - 1, this.pointerY - this.recoilVertical));
       } else {
@@ -1711,7 +1734,6 @@ export class Game {
       !this.hideCursor &&
       !this.pausedThread &&
       !this.menus.length &&
-      !this.attackAnim &&
       !this.currentRoom.toLowerCase().includes('intro')
     );
   }
@@ -1720,6 +1742,8 @@ export class Game {
   // fails to load.
   openPauseMenu() {
     if (!this.canPause()) return;
+    // Ext.createEscapeMenu cuts off a monster's attack animation.
+    this.attackAnim = false;
     const choices = [{ id: 'continue', text: this.engineText(TEXT.CONTINUE) }];
     if (this.canSave()) choices.push({ id: 'save', text: this.engineText(TEXT.SAVE) });
     choices.push(
@@ -1766,6 +1790,10 @@ export class Game {
         break;
       case 'pixelFont':
         this.togglePixelFont();
+        menu.choices = this.pauseSettings();
+        break;
+      case 'mouseLock':
+        this.toggleMouseLock();
         menu.choices = this.pauseSettings();
         break;
       case 'help':

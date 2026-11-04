@@ -70,6 +70,19 @@ function pixelFontLabel(game, on = game.pixelFont) {
   return `${PIXEL_FONT_LABELS[game.language] ?? PIXEL_FONT_LABELS.en} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
 }
 
+const MOUSE_LOCK_LABELS = {
+  en: 'Mouse lock:',
+  fr: 'Capture souris\u00a0:',
+  de: 'Maus sperren:',
+  it: 'Blocco mouse:',
+  es: 'Bloqueo ratón:',
+  pt: 'Bloqueio rato:',
+};
+
+function mouseLockLabel(game, on = game.mouseLock) {
+  return `${MOUSE_LOCK_LABELS[game.language] ?? MOUSE_LOCK_LABELS.en} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
+}
+
 // A setting's row. The menu is as wide as the row's longest value, so that it keeps
 // its size as the value changes.
 export function soundChoice(game) {
@@ -97,6 +110,15 @@ export function pixelFontChoice(game) {
     text: pixelFontLabel(game),
     softKey: TEXT.CHANGE,
     values: [pixelFontLabel(game, true), pixelFontLabel(game, false)],
+  };
+}
+
+export function mouseLockChoice(game) {
+  return {
+    id: 'mouseLock',
+    text: mouseLockLabel(game),
+    softKey: TEXT.CHANGE,
+    values: [mouseLockLabel(game, true), mouseLockLabel(game, false)],
   };
 }
 
@@ -239,7 +261,7 @@ export class MainMenu {
 
   settingChoices() {
     const { game } = this;
-    const choices = [soundChoice(game), transitionsChoice(game), pixelFontChoice(game)];
+    const choices = [soundChoice(game), transitionsChoice(game), pixelFontChoice(game), mouseLockChoice(game)];
     if (game.languages.length > 1) choices.push(languageChoice(game));
     return choices;
   }
@@ -347,6 +369,8 @@ export class MainMenu {
       game.toggleRoomTransitions();
     } else if (id === 'pixelFont') {
       game.togglePixelFont();
+    } else if (id === 'mouseLock') {
+      game.toggleMouseLock();
     } else {
       const { languages } = game;
       const position = languages.indexOf(game.language);
