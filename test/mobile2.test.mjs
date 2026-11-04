@@ -6,6 +6,7 @@ import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs
 import { inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { createGame, Mobile2Game } from '../web/engine/mobile2.mjs';
 import { parsePaletteIndex, recolorPng } from '../web/engine/palettes.mjs';
+import { engineMenuTop } from '../web/renderer.mjs';
 
 const data = loadGameData(await readJar(readInput(recommended.sh2.gameData)));
 const keypadData = loadGameData(await readJar(readInput(recommended.sh2.keypadReference)));
@@ -251,6 +252,20 @@ test('a fan translation keeps its own text', async () => {
   assert.equal(game.help, null);
   assert.match(game.gameTexts[1], /[А-я]/);
   assert.match(game.gameplayHelp(), /[А-я]/);
+});
+
+test('a menu’s border clears the logo, and short menus stay centered', () => {
+  const top = (roomHeight, height, logoHeight) =>
+    engineMenuTop({ roomHeight, height, logoHeight, borderTop: 7, borderBottom: 6 });
+  // The six rows of the settings shown before Mobile 2's title screen, under its logo.
+  const settings = top(270, 102, 80);
+  assert.ok(settings - 7 >= 2 + 80, `The border starts at ${settings - 7}`);
+  assert.ok(settings + 102 + 6 <= 270);
+  // A short one, and every menu in the first game, whose logo is short, stay centered.
+  assert.equal(top(270, 70, 80), 100);
+  assert.equal(top(256, 102, 39), 77);
+  // One too tall for what's left stays on screen, over the logo.
+  assert.equal(top(143, 120, 28), 17);
 });
 
 test('each game draws its splash art where its original does', () => {

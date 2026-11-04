@@ -40,6 +40,15 @@ const RIGHTS_FROM_BOTTOM = 28;
 
 const css = (color) => `#${(color & 0xffffff).toString(16).padStart(6, '0')}`;
 
+// Where a menu's paper starts. It's centered, or under the logo if that's lower, which
+// Mobile 2's tall logo on its short screen here needs. The notepad's border sits outside
+// the paper, so it has to clear the logo too. A menu too tall to fit under it stays on screen.
+export function engineMenuTop({ roomHeight, height, logoHeight, borderTop, borderBottom }) {
+  const belowLogo = LOGO_TOP + logoHeight + borderTop;
+  const lowest = roomHeight - height - borderBottom;
+  return Math.max((roomHeight - height) >> 1, Math.min(belowLogo, lowest));
+}
+
 export class Renderer {
   constructor(canvas, game) {
     this.canvas = canvas;
@@ -832,10 +841,13 @@ export class Renderer {
     const width = Math.ceil(widest) + ENGINE_PADDING * 2;
     const height = rowsHeight + ENGINE_PADDING * 2 + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
     const x = (game.roomWidth - width) >> 1;
-    // Under the logo where there's room, because Mobile 2's is tall and its screen here short.
-    const logoBottom = LOGO_TOP + (this.art.get('gfx/menu_logo.png')?.height ?? 0);
-    const lowest = game.roomHeight - height - this.borderBottom;
-    const y = Math.max((game.roomHeight - height) >> 1, Math.min(logoBottom, lowest));
+    const y = engineMenuTop({
+      roomHeight: game.roomHeight,
+      height,
+      logoHeight: this.art.get('gfx/menu_logo.png')?.height ?? 0,
+      borderTop: this.borderTop,
+      borderBottom: this.borderBottom,
+    });
     this.notepad(x, y, width, height, ENGINE_PAPER);
 
     c.textAlign = 'left';
