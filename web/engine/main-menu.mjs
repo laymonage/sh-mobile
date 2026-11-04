@@ -57,6 +57,19 @@ function transitionsLabel(game, on = game.roomTransitions) {
   return `${TRANSITIONS_LABELS[game.language] ?? TRANSITIONS_LABELS.en} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
 }
 
+const PIXEL_FONT_LABELS = {
+  en: 'Pixel font:',
+  fr: 'Police pixel\u00a0:',
+  de: 'Pixelschrift:',
+  it: 'Font pixel:',
+  es: 'Fuente píxel:',
+  pt: 'Fonte píxel:',
+};
+
+function pixelFontLabel(game, on = game.pixelFont) {
+  return `${PIXEL_FONT_LABELS[game.language] ?? PIXEL_FONT_LABELS.en} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
+}
+
 // A setting's row. The menu is as wide as the row's longest value, so that it keeps
 // its size as the value changes.
 export function soundChoice(game) {
@@ -78,6 +91,15 @@ export function transitionsChoice(game) {
 }
 
 // Choosing a language translates the row's label too, so each value is in its own language.
+export function pixelFontChoice(game) {
+  return {
+    id: 'pixelFont',
+    text: pixelFontLabel(game),
+    softKey: TEXT.CHANGE,
+    values: [pixelFontLabel(game, true), pixelFontLabel(game, false)],
+  };
+}
+
 function languageChoice(game) {
   const label = (language) => {
     const texts = game.readEngineTexts(language);
@@ -217,7 +239,7 @@ export class MainMenu {
 
   settingChoices() {
     const { game } = this;
-    const choices = [soundChoice(game), transitionsChoice(game)];
+    const choices = [soundChoice(game), transitionsChoice(game), pixelFontChoice(game)];
     if (game.languages.length > 1) choices.push(languageChoice(game));
     return choices;
   }
@@ -323,6 +345,8 @@ export class MainMenu {
       game.toggleSound();
     } else if (id === 'transitions') {
       game.toggleRoomTransitions();
+    } else if (id === 'pixelFont') {
+      game.togglePixelFont();
     } else {
       const { languages } = game;
       const position = languages.indexOf(game.language);

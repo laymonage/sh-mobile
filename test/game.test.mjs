@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
 import { controlsText, gameplayText } from '../web/engine/help-text.mjs';
+import { pixelFontGlyph } from '../web/pixel-font.mjs';
 import { ARCHIVE_JAR, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
 import { allInputs, buildsOf, input, readInput, recommended } from '../src/inputs.mjs';
@@ -1221,12 +1222,24 @@ test('the sound question plays the shot when sound goes on, and the splash plays
   storage.setItem('silent-hill-mobile:language', 'en');
   const game = startupGame({ audio, storage });
   for (let i = 0; i < 6; i++) game.advance(1000);
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Language: English', 'Continue']);
+  assert.deepEqual(menuTexts(game), [
+    'Sound: On',
+    'Transitions: On',
+    'Pixel font: Off',
+    'Language: English',
+    'Continue',
+  ]);
   assert.deepEqual(game.mainMenu.current.choices[0].values, ['Sound: On', 'Sound: Off']);
   assert.equal(game.softKeys().left.label, 'Change');
   choose(game, 'Sound: On');
   assert.equal(audio.enabled, false);
-  assert.deepEqual(menuTexts(game), ['Sound: Off', 'Transitions: On', 'Language: English', 'Continue']);
+  assert.deepEqual(menuTexts(game), [
+    'Sound: Off',
+    'Transitions: On',
+    'Pixel font: Off',
+    'Language: English',
+    'Continue',
+  ]);
   choose(game, 'Sound: Off');
   assert.equal(audio.enabled, true);
   assert.deepEqual(audio.calls.at(-1), ['play', 'sh_shot', 1]);
@@ -1303,14 +1316,20 @@ test('the first menu also changes transitions and language, in place, and stays 
   assert.equal(game.mainMenu.current.kind, 'sound');
   choose(game, 'Transitions: On');
   assert.equal(game.roomTransitions, false);
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: Off', 'Language: English', 'Continue']);
+  assert.deepEqual(menuTexts(game), [
+    'Sound: On',
+    'Transitions: Off',
+    'Pixel font: Off',
+    'Language: English',
+    'Continue',
+  ]);
   assert.equal(game.mainMenu.current.selected, 1);
 
   choose(game, 'Language: English');
   assert.equal(game.language, 'fr');
   assert.equal(game.mainMenu.current.kind, 'sound');
   assert.equal(game.mainMenu.menus.length, 1);
-  assert.equal(game.mainMenu.current.selected, 2);
+  assert.equal(game.mainMenu.current.selected, 3);
   assert.equal(menuTexts(game).at(-1), game.engineText(59));
   game.pressKey('ArrowLeft');
   game.advance();
@@ -1324,7 +1343,7 @@ test('a build with one language has no language row on the first menu', () => {
   const game = startupGame();
   game.languages = ['en'];
   const rows = game.mainMenu.soundMenu().choices.map(({ id }) => id);
-  assert.deepEqual(rows, ['sound', 'transitions', 'continue']);
+  assert.deepEqual(rows, ['sound', 'transitions', 'pixelFont', 'continue']);
 });
 
 test('Settings changes sound and language, in place, and arrow keys move the highlight', () => {
@@ -1340,8 +1359,8 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   }
   game.pressKey('Enter');
   game.advance();
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Language: English']);
-  assert.deepEqual(game.mainMenu.current.choices[2].values, [
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Pixel font: Off', 'Language: English']);
+  assert.deepEqual(game.mainMenu.current.choices[3].values, [
     'Language: English',
     'Langue : Français',
     'Sprache: Deutsch',
@@ -1350,17 +1369,15 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
     'Idioma: Português',
   ]);
 
-  game.pressKey('ArrowDown');
-  game.pressKey('ArrowDown');
-  game.advance();
   choose(game, 'Language: English');
   assert.equal(game.language, 'fr');
   assert.deepEqual(menuTexts(game), [
     `${game.engineText(19)} ${game.engineText(21)}`,
     `Transitions\u00a0: ${game.engineText(21)}`,
+    `Police pixel\u00a0: ${game.engineText(22)}`,
     `${game.engineText(0)} Français`,
   ]);
-  assert.equal(game.mainMenu.current.selected, 2);
+  assert.equal(game.mainMenu.current.selected, 3);
   game.pressKey('ArrowLeft');
   game.advance();
   assert.equal(game.language, 'en');
@@ -1494,7 +1511,7 @@ test('the pause menu continues, saves, and changes sound', () => {
   assert.equal(audio.enabled, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: Off', 'Transitions: On'],
+    ['Sound: Off', 'Transitions: On', 'Pixel font: Off'],
   );
 });
 
@@ -1888,7 +1905,7 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   pauseChoice(game, 'Transitions: On');
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: Off'],
+    ['Sound: On', 'Transitions: Off', 'Pixel font: Off'],
   );
   assert.equal(game.menus.at(-1).choices[1].values.length, 2);
   game.pressKey('Escape');
@@ -1913,6 +1930,72 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   assert.equal(later.roomTransitions, false);
   later.toggleRoomTransitions();
   assert.equal(new Game(data, { storage }).roomTransitions, true);
+});
+
+test('the pixel font is off unless turned on, and the choice is remembered', () => {
+  assert.equal(new Game(data).pixelFont, false);
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  assert.equal(game.pixelFont, false);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Settings');
+  pauseChoice(game, 'Pixel font: Off');
+  assert.equal(game.pixelFont, true);
+  assert.deepEqual(
+    game.menus.at(-1).choices.map(({ text }) => text),
+    ['Sound: On', 'Transitions: On', 'Pixel font: On'],
+  );
+  assert.equal(game.menus.at(-1).choices[2].values.length, 2);
+  assert.equal(new Game(data, { storage }).pixelFont, true);
+
+  const broken = {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('blocked');
+    },
+  };
+  const blocked = new Game(data, { storage: broken });
+  assert.equal(blocked.pixelFont, false);
+  blocked.togglePixelFont();
+  assert.equal(blocked.pixelFont, true);
+});
+
+test('the pixel font has a well-formed glyph for every character in all six languages', () => {
+  const missing = new Set();
+  for (const language of ['en', 'fr', 'de', 'it', 'es', 'pt']) {
+    const game = new Game(data, { language });
+    const texts = [
+      ...game.gameTexts,
+      ...game.engineTexts,
+      controlsText(game),
+      gameplayText(game),
+      'Pixel font: Transitions : Übergänge: Transiciones: Transições: Police pixel : Fuente píxel: Fonte píxel:',
+    ];
+    for (const text of texts)
+      for (const character of String(text))
+        if (character !== '\n' && !pixelFontGlyph(character)) missing.add(character);
+  }
+  assert.deepEqual([...missing].sort(), []);
+  for (const character of 'aZ09.,éÉçñüß¿«»') {
+    const { rows, width } = pixelFontGlyph(character);
+    assert.ok(rows.length > 0, character);
+    for (const row of rows) assert.equal(row.length, width, character);
+  }
+  assert.equal(pixelFontGlyph('Я'), null);
+});
+
+test("the pixel font has the phone font's proportions and spacing", () => {
+  assert.equal(pixelFontGlyph('T').rows.length, 9);
+  assert.equal(pixelFontGlyph('o').rows.length, 7);
+  assert.equal(pixelFontGlyph('g').rows.length, 9);
+  assert.equal(pixelFontGlyph('g').descent, 2);
+  const gap = (one, two) => pixelFontGlyph(one).right + pixelFontGlyph(two).left;
+  assert.equal(gap('h', 'a'), 2);
+  assert.equal(gap('m', 'y'), 1);
+  assert.equal(gap('T', 'h'), 1);
 });
 
 test('room transitions are on unless turned off, even without storage', () => {

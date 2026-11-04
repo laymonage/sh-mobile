@@ -14,7 +14,7 @@ import {
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
-import { MainMenu, parseIni, soundChoice, transitionsChoice } from './main-menu.mjs';
+import { MainMenu, parseIni, pixelFontChoice, soundChoice, transitionsChoice } from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -116,6 +116,7 @@ const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
+const PIXEL_FONT_PREFERENCE = 'silent-hill-mobile:pixel-font';
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
@@ -498,6 +499,7 @@ export class Game {
     this.transitionRequested = false;
     this.transitionCounter = null;
     this.roomTransitions = this.storedRoomTransitions();
+    this.pixelFont = this.storedPixelFont();
 
     this.menus = [];
     this.pointerX = roomSize >> 1;
@@ -584,8 +586,27 @@ export class Game {
     }
   }
 
+  // The port's own setting: whether text looks like an old phone's, which is off in
+  // a new browser. The renderer draws it.
+  storedPixelFont() {
+    try {
+      return this.storage?.getItem(PIXEL_FONT_PREFERENCE) === 'on';
+    } catch {
+      return false;
+    }
+  }
+
+  togglePixelFont() {
+    this.pixelFont = !this.pixelFont;
+    try {
+      this.storage?.setItem(PIXEL_FONT_PREFERENCE, this.pixelFont ? 'on' : 'off');
+    } catch {
+      // It still applies until the page is closed.
+    }
+  }
+
   pauseSettings() {
-    return [soundChoice(this), transitionsChoice(this)];
+    return [soundChoice(this), transitionsChoice(this), pixelFontChoice(this)];
   }
 
   // The logo and everything after it, for a page that has just loaded the game.
@@ -1643,6 +1664,10 @@ export class Game {
         break;
       case 'transitions':
         this.toggleRoomTransitions();
+        menu.choices = this.pauseSettings();
+        break;
+      case 'pixelFont':
+        this.togglePixelFont();
         menu.choices = this.pauseSettings();
         break;
       case 'help':

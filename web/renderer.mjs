@@ -1,5 +1,6 @@
 import { pngInfo, TRANSFORMS } from './engine/format.mjs';
 import { MENU, VERB, VERB_WHEEL_RADIUS, verbWheelCenter } from './engine/game.mjs';
+import { PIXEL_FONT_CAP_HEIGHT, pixelFontGlyph } from './pixel-font.mjs';
 
 const SCALE = 3;
 const FONT_SIZE = 10;
@@ -12,6 +13,15 @@ const ITEM_SIZE = 32;
 const IMAGE_SECTION = 35;
 const ARROW_REACH = 6;
 const FLOOR_MARKER_GAP = 10;
+// Text the bitmap font has no letters for, such as Chinese in a fan translation, is
+// drawn in this, and any pixel of it that's solid enough stays.
+const PIXEL_FONT = '12px Arial, Helvetica, sans-serif';
+const PIXEL_FONT_ASCENT = 10;
+const PIXEL_GLYPH_THRESHOLD = 90;
+const PIXEL_GLYPH_CACHE_SIZE = 2000;
+const PIXEL_GLYPH_HEIGHT = 24;
+const PIXEL_GLYPH_DESCENT = 7;
+const PIXEL_GLYPH_MARGIN = 2;
 
 // From ExtBase.menuPaintEngine and Ext's constants.
 const ENGINE_PAPER = 0xeae2b2;
@@ -40,6 +50,101 @@ export class Renderer {
     this.scale = (SCALE * 256) / game.roomWidth;
     this.images = new Map();
     this.art = new Map();
+    this.pixelGlyphs = new Map();
+  }
+
+  // With the Pixel font setting, text is drawn at the room's own resolution from the
+  // bitmap font in pixel-font.mjs, and then scaled up with the art.
+  get font() {
+    return this.game.pixelFont ? PIXEL_FONT : FONT;
+  }
+
+  get boldFont() {
+    return this.game.pixelFont ? `600 ${PIXEL_FONT}` : BOLD_FONT;
+  }
+
+  capHeight() {
+    return this.game.pixelFont ? PIXEL_FONT_CAP_HEIGHT : this.context.measureText('H').actualBoundingBoxAscent;
+  }
+
+  fillText(text, x, y) {
+    const c = this.context;
+    if (!this.game.pixelFont) {
+      c.fillText(text, x, y);
+      return;
+    }
+    const width = this.textWidth(text);
+    let left = Math.round(c.textAlign === 'center' ? x - width / 2 : c.textAlign === 'right' ? x - width : x);
+    const baseline = Math.round(
+      c.textBaseline === 'top'
+        ? y + PIXEL_FONT_ASCENT
+        : c.textBaseline === 'middle'
+          ? y + PIXEL_FONT_CAP_HEIGHT / 2
+          : y,
+    );
+    for (const character of text) {
+      const glyph = this.pixelGlyph(character);
+      if (glyph.canvas) c.drawImage(glyph.canvas, left + glyph.left, baseline - glyph.baseline);
+      left += glyph.advance;
+    }
+  }
+
+  textWidth(text) {
+    if (!this.game.pixelFont) return this.context.measureText(text).width;
+    let width = 0;
+    for (const character of text) width += this.pixelGlyph(character).advance;
+    return width;
+  }
+
+  pixelGlyph(character) {
+    const c = this.context;
+    const key = `${c.font}|${c.fillStyle}|${character}`;
+    let glyph = this.pixelGlyphs.get(key);
+    if (!glyph) {
+      if (this.pixelGlyphs.size >= PIXEL_GLYPH_CACHE_SIZE) this.pixelGlyphs.clear();
+      glyph = this.bitmapGlyph(character) ?? this.thresholdGlyph(character);
+      this.pixelGlyphs.set(key, glyph);
+    }
+    return glyph;
+  }
+
+  bitmapGlyph(character) {
+    const c = this.context;
+    const found = pixelFontGlyph(character);
+    if (!found) return null;
+    const bold = c.font.startsWith('600') ? 1 : 0;
+    const advance = found.left + found.width + bold + found.right;
+    if (!found.rows.length) return { canvas: null, left: 0, baseline: 0, advance };
+
+    const canvas = document.createElement('canvas');
+    canvas.width = found.width + bold;
+    canvas.height = found.rows.length;
+    const pixels = canvas.getContext('2d');
+    pixels.fillStyle = c.fillStyle;
+    found.rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) if (row[x] === '#') pixels.fillRect(x, y, 1 + bold, 1);
+    });
+    return { canvas, left: found.left, baseline: found.rows.length - found.descent, advance };
+  }
+
+  thresholdGlyph(character) {
+    const c = this.context;
+    const width = c.measureText(character).width;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(width) + PIXEL_GLYPH_MARGIN * 2;
+    canvas.height = PIXEL_GLYPH_HEIGHT;
+    const baseline = PIXEL_GLYPH_HEIGHT - PIXEL_GLYPH_DESCENT;
+    const pixels = canvas.getContext('2d', { willReadFrequently: true });
+    pixels.font = c.font;
+    pixels.fillText(character, PIXEL_GLYPH_MARGIN, baseline);
+    const image = pixels.getImageData(0, 0, canvas.width, canvas.height);
+    for (let alpha = 3; alpha < image.data.length; alpha += 4)
+      image.data[alpha] = image.data[alpha] >= PIXEL_GLYPH_THRESHOLD ? 255 : 0;
+    pixels.putImageData(image, 0, 0);
+    pixels.globalCompositeOperation = 'source-in';
+    pixels.fillStyle = c.fillStyle;
+    pixels.fillRect(0, 0, canvas.width, canvas.height);
+    return { canvas, left: -PIXEL_GLYPH_MARGIN, baseline, advance: Math.max(1, Math.round(width)) };
   }
 
   async loadImages({ dataDir, entries, files }) {
@@ -118,11 +223,11 @@ export class Renderer {
       c.fillStyle = css(item.color);
       c.fillRect(item.x, item.y, item.width, item.height);
     } else if (item.kind === 'text') {
-      c.font = FONT;
+      c.font = this.font;
       c.fillStyle = css(item.color);
       c.textBaseline = 'middle';
       c.textAlign = ['left', 'center', 'right'][item.alignment] ?? 'left';
-      c.fillText(item.text, item.x + [0, 15, 30][item.alignment], item.y + item.height / 2);
+      this.fillText(item.text, item.x + [0, 15, 30][item.alignment], item.y + item.height / 2);
     } else if (item.raw) {
       const image = this.images.get(String(item.id));
       if (image) c.drawImage(image.bitmap, item.x, item.y);
@@ -168,9 +273,9 @@ export class Renderer {
     this.drawImage(view.id, x, view.y);
     if (view.hint) {
       const c = this.context;
-      c.font = FONT;
+      c.font = this.font;
       c.textBaseline = 'top';
-      const width = c.measureText(view.hint).width;
+      const width = this.textWidth(view.hint);
       const hintX = Math.max(2, Math.min(game.roomWidth - width - 2, x - width / 2));
       const hintY = view.y + 14 > game.roomHeight - LINE_HEIGHT ? view.y - 26 : view.y + 14;
       this.outlinedText(view.hint, hintX, hintY, 'left');
@@ -181,10 +286,10 @@ export class Renderer {
   drawPopup(text) {
     const c = this.context;
     const { game } = this;
-    c.font = FONT;
+    c.font = this.font;
     const lines = this.wrap(text, game.roomWidth - this.borderLeft - this.borderRight - ENGINE_PADDING * 2);
     const step = ENGINE_ROW + ENGINE_ROW_GAP;
-    const width = Math.ceil(Math.max(...lines.map((line) => c.measureText(line).width))) + ENGINE_PADDING * 2;
+    const width = Math.ceil(Math.max(...lines.map((line) => this.textWidth(line)))) + ENGINE_PADDING * 2;
     const height = lines.length * step - ENGINE_ROW_GAP + ENGINE_PADDING * 2;
     const x = (game.roomWidth - width) >> 1;
     const y = (game.roomHeight - height) >> 1;
@@ -207,9 +312,9 @@ export class Renderer {
       [0, 1],
       [0, -1],
     ])
-      c.fillText(text, x + dx, y + dy);
+      this.fillText(text, x + dx, y + dy);
     c.fillStyle = '#fff';
-    c.fillText(text, x, y);
+    this.fillText(text, x, y);
   }
 
   wrap(text, width) {
@@ -219,7 +324,7 @@ export class Renderer {
       let line = '';
       for (const word of paragraph.split(' ')) {
         const candidate = line ? `${line} ${word}` : word;
-        if (line && c.measureText(candidate).width > width) {
+        if (line && this.textWidth(candidate) > width) {
           lines.push(line);
           line = word;
         } else {
@@ -282,8 +387,8 @@ export class Renderer {
   rowText(text, x, rowY, rowHeight) {
     const c = this.context;
     c.textBaseline = 'alphabetic';
-    const capHeight = c.measureText('H').actualBoundingBoxAscent;
-    c.fillText(text, x, rowY + (rowHeight + capHeight) / 2);
+    const capHeight = this.capHeight();
+    this.fillText(text, x, rowY + (rowHeight + capHeight) / 2);
     c.textBaseline = 'top';
   }
 
@@ -310,7 +415,7 @@ export class Renderer {
     const step = LINE_HEIGHT + spacing;
     const arrow = this.images.get('arrow_down');
     const textWidth = game.roomWidth - this.borderLeft - this.borderRight - margin * 3 - (arrow?.info.width ?? 0);
-    c.font = FONT;
+    c.font = this.font;
     const lines = this.wrap(menu.text, textWidth);
     menu.pageLines = SAY_LINES;
     menu.maxScroll = Math.max(0, lines.length - SAY_LINES);
@@ -325,7 +430,7 @@ export class Renderer {
     c.textBaseline = 'top';
     c.fillStyle = css(game.speakerColor(menu.speaker));
     if (menu.speaker) {
-      c.fillText(menu.speaker, textX, y);
+      this.fillText(menu.speaker, textX, y);
       y += LINE_HEIGHT + margin;
       this.delimiter(page.x, y, page.width);
       y += this.delimiterHeight + margin;
@@ -333,7 +438,7 @@ export class Renderer {
     const up = this.images.get('arrow_up');
     if (up && menu.scroll > 0) c.drawImage(up.bitmap, page.x + page.width - margin - up.info.width, y);
     for (const line of shown) {
-      c.fillText(line, textX, y);
+      this.fillText(line, textX, y);
       y += step;
     }
     if (arrow && menu.scroll < menu.maxScroll && Math.floor(performance.now() / ARROW_BLINK_MS) % 2 === 0) {
@@ -351,9 +456,9 @@ export class Renderer {
     const margin = game.menuMargin;
     const image = this.images.get(String(menu.image));
     const imageSpace = image ? 32 + margin : 0;
-    c.font = FONT;
+    c.font = this.font;
     const lines = this.wrap(menu.text, 150);
-    const textWidth = Math.max(...lines.map((line) => c.measureText(line).width));
+    const textWidth = Math.max(...lines.map((line) => this.textWidth(line)));
     const width = Math.round(textWidth + imageSpace + margin * 2);
     const height = Math.max(lines.length * (LINE_HEIGHT + game.menuLineSpacing), imageSpace ? 32 : 0) + margin * 2;
     const x = (game.roomWidth - width) >> 1;
@@ -365,28 +470,28 @@ export class Renderer {
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
     lines.forEach((line, index) =>
-      c.fillText(line, x + margin + imageSpace, y + margin + index * (LINE_HEIGHT + game.menuLineSpacing)),
+      this.fillText(line, x + margin + imageSpace, y + margin + index * (LINE_HEIGHT + game.menuLineSpacing)),
     );
   }
 
   drawTextFade(menu) {
     const c = this.context;
     const { game } = this;
-    c.font = FONT;
+    c.font = this.font;
     const lines = this.wrap(menu.text, (game.roomWidth * 3) >> 2);
     c.textAlign = 'center';
     c.textBaseline = 'top';
     c.fillStyle = css(menu.color);
     const top = (game.roomHeight - lines.length * LINE_HEIGHT) / 2;
-    lines.forEach((line, index) => c.fillText(line, game.roomWidth / 2, top + index * LINE_HEIGHT));
+    lines.forEach((line, index) => this.fillText(line, game.roomWidth / 2, top + index * LINE_HEIGHT));
   }
 
   drawVerbs(menu) {
     const { game } = this;
     const c = this.context;
     const center = verbWheelCenter(menu, game.roomWidth, game.roomHeight);
-    c.font = BOLD_FONT;
-    const nameWidth = c.measureText(menu.name).width;
+    c.font = this.boldFont;
+    const nameWidth = this.textWidth(menu.name);
     const nameX = Math.max(nameWidth / 2 + 2, Math.min(game.roomWidth - nameWidth / 2 - 2, center.x));
     this.outlinedText(menu.name, nameX, center.y - VERB_WHEEL_RADIUS - 14, 'center');
     this.drawCentered('OMS_menu', center.x, center.y);
@@ -415,10 +520,10 @@ export class Renderer {
 
     c.textBaseline = 'top';
     c.textAlign = 'left';
-    c.font = FONT;
+    c.font = this.font;
     if (title) {
       c.fillStyle = color;
-      c.fillText(title, page.x + margin, page.y + margin);
+      this.fillText(title, page.x + margin, page.y + margin);
       this.delimiter(page.x, page.y + margin + LINE_HEIGHT + (margin >> 1), page.width);
     }
     rows.forEach((row, index) => {
@@ -433,7 +538,7 @@ export class Renderer {
       if (marker && index === game.currentFloorRow()) {
         c.drawImage(
           marker,
-          Math.round(rect.x + margin + c.measureText(row).width + FLOOR_MARKER_GAP),
+          Math.round(rect.x + margin + this.textWidth(row) + FLOOR_MARKER_GAP),
           rect.y + ((rect.height - marker.height) >> 1),
         );
       }
@@ -448,7 +553,7 @@ export class Renderer {
     const { menuMargin: margin, menuLineSpacing: spacing } = game;
     const step = LINE_HEIGHT + spacing;
     const width = menu.title ? (game.roomWidth * 3) >> 2 : game.roomWidth >> 1;
-    c.font = FONT;
+    c.font = this.font;
     const titleLines = menu.title ? this.wrap(menu.title, width - margin * 2) : [];
     const titleHeight = titleLines.length ? titleLines.length * step + margin + this.delimiterHeight + margin : 0;
     const height = titleHeight + menu.choices.length * step - spacing + margin * 2;
@@ -459,7 +564,7 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
-    titleLines.forEach((line, index) => c.fillText(line, x + margin, y + margin + index * step));
+    titleLines.forEach((line, index) => this.fillText(line, x + margin, y + margin + index * step));
     if (titleLines.length) this.delimiter(x, y + margin + titleLines.length * step + (margin >> 1), width);
     const rowsTop = y + margin + titleHeight;
     menu.rows = menu.choices.map((_, index) => ({
@@ -490,7 +595,7 @@ export class Renderer {
     const step = LINE_HEIGHT + spacing;
     const delimiter = this.delimiterHeight;
     const width = game.roomWidth >> 1;
-    c.font = FONT;
+    c.font = this.font;
     const titleLines = this.wrap(menu.title, width - margin * 2);
     const textHeight = titleLines.length * step - spacing;
     const choicesHeight = menu.choices.length * step - spacing;
@@ -511,7 +616,7 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
-    titleLines.forEach((line, index) => c.fillText(line, x + margin, y + margin + index * step));
+    titleLines.forEach((line, index) => this.fillText(line, x + margin, y + margin + index * step));
     this.delimiter(x, y + delimiter1, width);
     this.delimiter(x, y + delimiter2, width);
 
@@ -631,12 +736,12 @@ export class Renderer {
   drawEngineMenu(menu) {
     const c = this.context;
     const { game } = this;
-    c.font = FONT;
+    c.font = this.font;
     const maxWidth = (game.roomWidth * 4) / 5 - ENGINE_PADDING * 2;
     const titleLines = menu.title ? this.wrap(menu.title, maxWidth) : [];
     const widest = Math.max(
-      ...[...titleLines, ...menu.choices.flatMap(({ text, values }) => values ?? [text])].map(
-        (text) => c.measureText(text).width,
+      ...[...titleLines, ...menu.choices.flatMap(({ text, values }) => values ?? [text])].map((text) =>
+        this.textWidth(text),
       ),
     );
     const titleHeight = titleLines.length * ENGINE_TEXT_STEP;
@@ -651,7 +756,7 @@ export class Renderer {
     c.textBaseline = 'top';
     c.fillStyle = '#000';
     titleLines.forEach((line, index) =>
-      c.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP),
+      this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP),
     );
     const rowsTop = y + ENGINE_PADDING + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
     menu.rows = menu.choices.map((_, index) => ({
@@ -683,7 +788,7 @@ export class Renderer {
     this.notepad(x, y, width, height, ENGINE_PAPER);
     const up = this.images.get('arrow_up');
     const down = this.images.get('arrow_down');
-    c.font = FONT;
+    c.font = this.font;
     const lines = this.wrap(menu.text, width - ENGINE_PADDING * 3 - (down?.info.width ?? 0));
     menu.pageLines = Math.max(1, Math.floor((height - ENGINE_PADDING * 2) / ENGINE_TEXT_STEP));
     menu.maxScroll = Math.max(0, lines.length - menu.pageLines);
@@ -693,7 +798,7 @@ export class Renderer {
     c.fillStyle = '#000';
     lines
       .slice(menu.scroll, menu.scroll + menu.pageLines)
-      .forEach((line, index) => c.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP));
+      .forEach((line, index) => this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP));
 
     menu.arrows = [];
     const place = (arrow, arrowY, step) => {
