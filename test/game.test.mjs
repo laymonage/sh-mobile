@@ -16,6 +16,11 @@ function newGame() {
   game.advance = (ms = 60) => {
     clock += ms;
     game.tick();
+    // Input waits for a room transition, so these helpers let it finish.
+    while (game.transitionCounter !== null) {
+      clock += 60;
+      game.tick();
+    }
   };
   game.startNewGame();
   game.advance();
@@ -395,6 +400,11 @@ function battleGame() {
   game.advance = (ms = 60) => {
     clock += ms;
     game.tick();
+    // Input waits for a room transition, so these helpers let it finish.
+    while (game.transitionCounter !== null) {
+      clock += 60;
+      game.tick();
+    }
   };
   game.startNewGame();
   game.advance();
@@ -588,6 +598,11 @@ function savableGame(storage, options = {}) {
   game.advance = (ms = 60) => {
     clock += ms;
     game.tick();
+    // Input waits for a room transition, so these helpers let it finish.
+    while (game.transitionCounter !== null) {
+      clock += 60;
+      game.tick();
+    }
   };
   game.startNewGame();
   game.advance();
@@ -1064,6 +1079,11 @@ function startupGame(options = {}) {
   game.advance = (ms = 60) => {
     clock += ms;
     game.tick();
+    // Input waits for a room transition, so these helpers let it finish.
+    while (game.transitionCounter !== null) {
+      clock += 60;
+      game.tick();
+    }
   };
   game.showStartup();
   return game;
@@ -1673,4 +1693,155 @@ test('a popup does not outlive the game it came from', () => {
   game.advance();
   assert.deepEqual(game.popups, []);
   assert.equal(game.mainMenu.current.kind, 'main');
+});
+
+// A game in `room` whose clock and ticks the test moves itself, to see a transition's frames.
+function transitionGame(room) {
+  const game = savableGame(memoryStorage());
+  standIn(game, room);
+  let clock = 2000000;
+  game.now = () => clock;
+  game.step = () => {
+    clock += 60;
+    game.tick();
+  };
+  return game;
+}
+
+const transitionKinds = (game) => game.transitionItems().map((item) => (item.kind === 'rect' ? item.color : item.kind));
+
+test('the setup script turns on room transitions, in black', () => {
+  const game = savableGame(memoryStorage());
+  assert.deepEqual([game.transitionsEnabled, game.transitionColor], [true, 0]);
+});
+
+test('a room change shows the pattern over the old room, black, then the pattern over the new room', () => {
+  const game = transitionGame('a');
+  game.moveCursor(100, 20);
+  game.pressKey('move-forward');
+  game.step();
+  assert.equal(game.currentRoomId, 'c');
+  assert.equal(game.transitionKeepsOldRoom, true);
+
+  const frames = [];
+  for (let i = 0; i < 5; i++) {
+    game.step();
+    assert.equal(game.transitionKeepsOldRoom, false);
+    frames.push(transitionKinds(game));
+  }
+  assert.deepEqual(frames, [[0], [0], [0], ['dissolve-pattern'], ['dissolve-pattern']]);
+  game.step();
+  assert.equal(game.transitionCounter, null);
+  assert.deepEqual(transitionKinds(game), []);
+  assert.ok(!game.drawList().some((item) => item.kind === 'dissolve-pattern'));
+});
+
+test('input waits for a room transition to finish', () => {
+  const game = transitionGame('a');
+  game.moveCursor(100, 20);
+  game.pressKey('move-forward');
+  game.step();
+  for (let i = 0; i < 5; i++) {
+    game.pressKey('Escape');
+    game.step();
+    assert.equal(game.menus.at(-1)?.id === MENU.PAUSE, false);
+  }
+  game.step();
+  game.pressKey('Escape');
+  game.step();
+  assert.equal(game.menus.at(-1).id, MENU.PAUSE);
+});
+
+test('only a room change that asks for it gets a transition', () => {
+  const game = transitionGame('a');
+  game.roomInit('c', false);
+  game.step();
+  assert.equal(game.currentRoomId, 'c');
+  assert.equal(game.transitionCounter, null);
+});
+
+test('hints show until a script turns them off, and stay off after loading', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  standIn(game, 'a');
+  const hint = () => {
+    game.moveCursor(100, 150);
+    game.advance();
+    return game.cursorView();
+  };
+  assert.deepEqual([hint().id, hint().hint], ['cursorForward', game.engineText(150)]);
+  game.setSystemVar(['s_cursorHintDisable', 1]);
+  assert.deepEqual([hint().id, hint().hint], ['cursorForward', null]);
+
+  game.roomInit('0', false);
+  settle(game);
+  assert.equal(game.saveGame(false), true);
+  const loaded = new Game(data, { now: () => 5000, random: () => 0.5, storage });
+  assert.equal(loaded.loadGame(), true);
+  assert.equal(toBoolean(loaded.getRaw('s_cursorHintDisable')), true);
+  game.startNewGame();
+  assert.equal(game.getRaw('s_cursorHintDisable'), null);
+});
+
+test('the final boss locks input once dead, and the ending runs by itself to the main menu', () => {
+  let clock = 1000;
+  const game = new Game(data, { now: () => clock, random: () => 0.5 });
+  const step = (ms = 60) => {
+    clock += ms;
+    game.tick();
+  };
+  game.startNewGame();
+  step();
+  step();
+  game.menus = [];
+  game.pausedThread = null;
+  game.waitStop = 0;
+  game.setInventory('invGun', 1);
+  game.setVariable('m5', 'Karen');
+  game.setVariable('mm', 5);
+  game.roomInit('2d', false);
+  for (let i = 0; i < 6; i++) step();
+  for (let i = 0; i < 40 && game.menus.length; i++) {
+    game.click();
+    step(100);
+  }
+  assert.equal(game.menus.length, 0);
+  assert.deepEqual(Object.keys(game.softKeys()), ['right']);
+  game.pressKey('1');
+  step();
+  step();
+  assert.equal(game.battleMode, true);
+  // Exactly enough for the six shots it takes, so that the last bullet kills it.
+  game.ammoSet(6, false, true);
+
+  const boss = () => game.objects.find((object) => object.script?.hasEvent(EVENT.ATTACK1) && object.visible);
+  for (let shot = 0; shot < 30 && !game.bossDead; shot++) {
+    game.setRaw('sys_health', '5', 'I');
+    game.moveCursor(boss().x, boss().y);
+    for (let i = 0; i < 8; i++) step();
+    game.click();
+    step();
+    step(700);
+  }
+  assert.deepEqual([game.bossDead, game.superBossDead, game.currentRoomId], [true, true, '2d']);
+  assert.deepEqual(game.softKeys(), {});
+
+  assert.equal(game.ammo, 0);
+  game.pressKey('Escape');
+  game.click();
+  // The ammo counter rolls down first, and only then does the game notice it's empty.
+  for (let i = 0; i < 40; i++) step();
+  assert.equal(game.currentRoomId, '2d');
+  assert.equal(game.noMoreBullets, true);
+  assert.equal(game.menus.length, 0);
+
+  const rooms = new Set();
+  for (let i = 0; i < 2000 && !game.mainMenu; i++) {
+    rooms.add(game.currentRoomId);
+    step(200);
+  }
+  assert.deepEqual([...rooms], ['2d', 'karen_end', 'game_end']);
+  assert.equal(game.mainMenu.current.kind, 'main');
+  assert.deepEqual([game.bossDead, game.superBossDead], [false, false]);
+  assert.deepEqual([...game.unsupportedCommands], []);
 });

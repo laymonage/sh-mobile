@@ -95,6 +95,13 @@ const BLOOD_SPLATS = 5;
 const BLOOD_PHASES = 3;
 const MAX_BLOOD_BLUR = 4;
 
+// M.gotoDissolveFXCounter: the frames of a room change, counted down as in Ext.appPaint.
+const TRANSITION_START = 3;
+const TRANSITION_END = -3;
+const TRANSITION_OLD_ROOM = 2;
+const TRANSITION_NEW_ROOM = -2;
+const FINAL_BOSS_ROOM = '2d';
+
 // Dialogue colors, by speaker, from ExtBase.
 const SPEAKER_COLORS = [
   [154, 0x1c0e70],
@@ -484,6 +491,10 @@ export class Game {
     this.itemId = null;
 
     this.resetBattle();
+    this.transitionsEnabled = false;
+    this.transitionColor = -1;
+    this.transitionRequested = false;
+    this.transitionCounter = null;
 
     this.menus = [];
     this.pointerX = roomSize >> 1;
@@ -917,11 +928,14 @@ export class Game {
       case 's_firstInventoryItem':
         this.firstInventoryItem = String(value);
         return;
+      case 's_dissolveFX':
+        this.transitionsEnabled = toBoolean(value);
+        if (args.length > 2) this.transitionColor = toInt(args[2]);
+        return;
       case 's_2':
       case 's_3':
       case 's_4':
       case 's_useAny':
-      case 's_dissolveFX':
       case 's_battleType':
       case 's_useImageBorders':
       case 's_dynamicSayHeight':
@@ -1179,6 +1193,10 @@ export class Game {
     this.tickObject = null;
     this.hideCursor = false;
     this.popups = [];
+    this.transitionRequested = false;
+    this.transitionCounter = null;
+    this.bossDead = false;
+    this.superBossDead = false;
     this.resetBattle();
     this.stopSound();
   }
@@ -1326,6 +1344,7 @@ export class Game {
     let room = args[0];
     if (this.roomHistorySize() === 0 && room === 'back') room = null;
     const history = args.length > 2 ? toBoolean(args[2]) : false;
+    if (this.transitionsEnabled && args.length > 1) this.transitionRequested = toBoolean(args[1]);
     this.menus = [];
     if (room === 'moon_intro' || room === 'karen_intro') this.popups = [];
     if (room) this.roomInit(room, history);
@@ -1336,6 +1355,11 @@ export class Game {
   // original, where a thread did it.
   roomInit(requested, history) {
     let room = requested;
+    this.bossDead = false;
+    if (room === 'setup') {
+      this.transitionsEnabled = false;
+      this.transitionColor = -1;
+    }
     this.tickObject = null;
     this.hideCursor = false;
     this.overObject = null;
@@ -1370,6 +1394,8 @@ export class Game {
     this.roomEntered = false;
     this.roomUpdateNeeded = true;
     this.enemySoundPlayed = false;
+    if (this.transitionRequested && this.transitionCounter === null) this.transitionCounter = TRANSITION_START;
+    this.transitionRequested = false;
   }
 
   // Port of M.roomCheckUpdate.
@@ -1443,6 +1469,9 @@ export class Game {
       this.handlePopupInput(clicked, keys);
       return;
     }
+    // MyCanvas ignores keys during a transition, and ExtBase.appKeyHandling once the
+    // final boss is dead.
+    if ((this.transitionCounter !== null && this.transitionCounter > TRANSITION_END) || this.finalBossDead()) return;
     if (!menu) this.playEnemyCue();
     if (!menu && !this.isAiming()) this.updateHover();
     if (this.battleMode && !menu && this.battleInput(clicked, keys)) return;
@@ -1470,6 +1499,10 @@ export class Game {
     if (keys.includes('map')) this.showMap();
     if (keys.includes('inventory')) this.openInventory();
     this.runActionKeys(keys);
+  }
+
+  finalBossDead() {
+    return this.bossDead && this.currentRoom === FINAL_BOSS_ROOM;
   }
 
   isStoryRoom() {
@@ -1508,6 +1541,7 @@ export class Game {
     const room = this.currentRoom.toLowerCase();
     if (room.includes('intro')) return {};
     if (room.includes('floor') || room === 'children_drawing') return { right: key(TEXT.BACK, 'back') };
+    if (this.superBossDead) return {};
     const pause = this.canPause() ? key(TEXT.MENU, 'pause') : undefined;
     if (room.includes('puzzle')) return { left: key(TEXT.BACK, 'back'), right: pause };
     if (!this.battleMode && this.inventorySize('invMap') > 0) return { left: key(TEXT.MAP, 'map'), right: pause };
@@ -1848,6 +1882,27 @@ export class Game {
     }
     if (this.cursorAnim) this.advanceCursorAnim();
     if (this.dissolve) this.updateDissolve();
+    if (this.transitionCounter !== null) {
+      if (this.transitionCounter <= TRANSITION_END) this.transitionCounter = null;
+      else this.transitionCounter--;
+    }
+  }
+
+  // The first frame of a transition draws over the old room, which is still on screen.
+  get transitionKeepsOldRoom() {
+    return this.transitionCounter === TRANSITION_OLD_ROOM;
+  }
+
+  // Port of the transition in Ext.appPaint: the dissolve pattern, solid color, then the
+  // pattern again over the new room.
+  transitionItems() {
+    const counter = this.transitionCounter;
+    if (counter === null) return [];
+    if (counter > TRANSITION_NEW_ROOM && counter < TRANSITION_OLD_ROOM) {
+      const color = this.transitionColor === -1 ? this.backgroundColor : this.transitionColor;
+      return [{ kind: 'rect', x: 0, y: 0, width: this.roomWidth, height: this.roomHeight, color }];
+    }
+    return [{ kind: 'dissolve-pattern' }];
   }
 
   randomInt(limit) {
@@ -2081,6 +2136,8 @@ export class Game {
     if (toBoolean(this.getRaw('deathAnim'))) {
       this.enemyState = ENEMY_STATE.DIE;
       this.enemyAnimUpdate();
+      this.bossDead = true;
+      if (this.currentRoom === FINAL_BOSS_ROOM) this.superBossDead = true;
       return;
     }
     this.attackAnimState = 0;
@@ -2140,7 +2197,7 @@ export class Game {
         this.reloading = true;
       } else if (!this.noMoreBullets) {
         this.noMoreBullets = true;
-        this.say(this.engineText(TEXT.OUT_OF_AMMO), null);
+        if (!this.finalBossDead()) this.say(this.engineText(TEXT.OUT_OF_AMMO), null);
       }
     } else {
       this.hudAmmoUpdateNeeded = false;
@@ -2341,14 +2398,26 @@ export class Game {
         object.paintAnimation(list, this.tickTime);
       });
     }
-    list.push(...this.cursorMaskItems(), ...this.hudItems(), ...this.dissolveItems(), ...this.compassItems());
+    list.push(
+      ...this.cursorMaskItems(),
+      ...this.hudItems(),
+      ...this.dissolveItems(),
+      ...this.transitionItems(),
+      ...this.compassItems(),
+    );
     return list;
   }
 
   // Port of the cursor choice in Ext.appPaint.
   cursorView() {
     if (this.hideCursor || !this.objects || this.popups.length) return null;
-    const at = (id, hint = null) => ({ id, hint, x: this.cursorX + this.aimShakeX, y: this.cursorY + this.aimShakeY });
+    const hintsOff = toBoolean(this.getRaw('s_cursorHintDisable'));
+    const at = (id, hint = null) => ({
+      id,
+      hint: hintsOff ? null : hint,
+      x: this.cursorX + this.aimShakeX,
+      y: this.cursorY + this.aimShakeY,
+    });
     const object = this.overObject;
     if (!object) return at(this.specialCursor.idle ?? 'cursorIdle');
     if (this.specialCursor.hover) return at(this.specialCursor.hover);

@@ -36,7 +36,7 @@ Then open <http://localhost:8123/> and drop in a JAR, or open <http://localhost:
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
 
-The startup screens, main menu, pause menu, all of the JAR's languages, the opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes, battles, the flashlight, the HUD, saving and sound work. The original's room transition effects aren't there yet, and nobody has played it to the end.
+The startup screens, main menu, pause menu, all of the JAR's languages, the opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes and their transitions, battles, the flashlight, the HUD, saving and sound work. Nobody has played it to the end.
 
 The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 

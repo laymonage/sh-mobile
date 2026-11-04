@@ -84,6 +84,10 @@ export class Renderer {
       this.drawMainMenu(game.mainMenu);
       return;
     }
+    if (game.transitionKeepsOldRoom) {
+      this.drawDissolvePattern();
+      return;
+    }
     c.fillStyle = css(game.backgroundColor);
     c.fillRect(0, 0, game.roomWidth, game.roomHeight);
 
@@ -97,7 +101,9 @@ export class Renderer {
 
   drawItem(item) {
     const { context: c, game } = this;
-    if (item.kind === 'compass-letters') {
+    if (item.kind === 'dissolve-pattern') {
+      this.drawDissolvePattern();
+    } else if (item.kind === 'compass-letters') {
       const letters = this.art.get(`gfx/HUD_NESW_${game.language}.png`);
       if (letters) c.drawImage(letters, item.x - (letters.width >> 1), item.y - (letters.height >> 1));
     } else if (item.clip) {
@@ -122,6 +128,15 @@ export class Renderer {
       if (image) c.drawImage(image.bitmap, item.x, item.y);
     } else {
       this.drawImage(item.id, item.x, item.y, item.transform);
+    }
+  }
+
+  drawDissolvePattern() {
+    const { game } = this;
+    const image = this.images.get('dissolveEffectImg');
+    if (!image) return;
+    for (let x = 0; x < game.roomWidth; x += image.info.width) {
+      for (let y = 0; y < game.roomHeight; y += image.info.height) this.context.drawImage(image.bitmap, x, y);
     }
   }
 

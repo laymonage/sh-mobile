@@ -215,13 +215,12 @@ Only `sh1-2007-a31` has been run in the browser. Being accepted means a build's 
 
 From reading the code: battles are aim-and-shoot. Pressing 1 draws the gun, which starts a battle if the room has a monster, and a shot hits if the crosshair is within 8 pixels of the monster's anchor point. Dark rooms need the flashlight, which hides everything outside a circle around the cursor. With the flashlight on, a monster can only attack while the beam is on it.
 
-The tests cover drawing the gun, hits and misses, killing a monster, taking damage, dying and running out of ammo. One fight was also played in the browser, in room `r`, reached by jumping to it rather than by walking there. The other five battle rooms, `y`, `17`, `1d`, `2a` and `2d`, are only tested for not hitting a command the port doesn't handle.
+The tests cover drawing the gun, hits and misses, killing a monster, taking damage, dying and running out of ammo. One fight was also played in the browser, in room `r`, reached by jumping to it rather than by walking there. The final fight in room `2d` is tested from Karen's arrival, with the room jumped to, through the kill and on to the main menu. The port follows the original there: input locks once the boss is dead, and the ending runs by itself. The other four battle rooms, `y`, `17`, `1d` and `2a`, are only tested for not hitting a command the port doesn't handle.
 
 The port differs from the original or leaves things out in these ways:
 
 - Recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does.
 - Timing assumes a 60 ms tick, taken from `M.tickBasedTimeUpdate`. The original's real frame rate depended on the phone, and it hasn't been measured, so how often monsters attack may differ.
-- The `bossDead` and `superBossDead` flags, which lock input and hide text in room `2d`, aren't ported, so the final boss may misbehave.
 
 ### Saving
 
@@ -246,6 +245,10 @@ The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width
 WASD and the arrow keys take the room's exits, which the original doesn't do: its keys only moved the cursor. They run the same script as clicking the exit. With every room loaded from a new game's state, 92 of the 110 that load have directional exits, and none has more than two directions. Rooms `a` and `10` have two forward exits side by side, a doorway and a staircase, and the key takes the one nearer the cursor. Exits that depend on story progress may differ. Many rooms are left through doors and other objects that use the verb wheel, so the keys don't replace the mouse.
 
 The map's floor list marks the current floor with `gfx/map_cursor.png`, using the `var_floor` variable that stairs set, as in `ExtBase.menuPaintIngame`. That code runs for every choice menu, but the map's script is the only one that offers choices. The original's map key also starts with the current floor highlighted, which the port doesn't do, because its highlight follows the mouse.
+
+Room changes use the transition from `Ext.appPaint`: one frame of `dissolveEffectImg` over the old room, three of solid black, then two of the pattern over the new room. Input waits for it to finish, as in `MyCanvas.keyPressed`. It's counted in the port's 60 ms ticks, so it lasts about 360 ms, and its speed on a real phone hasn't been measured.
+
+Cursor hints such as "Move forward" stop once a script sets `s_cursorHintDisable`, and that carries through saves.
 
 The original's soft keys appear as buttons when they apply. Back uses the room's own back hotspot, and Map looks at the map item, which offers the floors. 
 ### Menus
