@@ -37,6 +37,7 @@ The page sets a Content Security Policy in a `<meta>` tag, so it applies whereve
 | Esc | Skips the opening, goes back from a menu, a puzzle or the map, or opens the pause menu |
 | M | Opens the map, once you have it |
 | I, or the Inventory button | Opens the inventory. Clicks or the keys above move between items and actions |
+| Quit, in the main menu | Goes back to the page's choice of games, after asking |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |

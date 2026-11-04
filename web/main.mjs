@@ -52,6 +52,14 @@ function showMessage(text, kind = '') {
   message.className = kind;
 }
 
+// Starting afresh lets go of the game and its sound. Without the dev server's link to a
+// build, this is the page with the choice of games.
+function returnToStartPage() {
+  const url = new URL(location.href);
+  url.searchParams.delete('jar');
+  location.assign(url);
+}
+
 async function start(bytes) {
   showMessage('Loading...');
   const inspection = await inspectJar(bytes);
@@ -71,6 +79,7 @@ async function start(bytes) {
     storage: browserStorage(),
     audio,
     now: () => clock.now(),
+    onQuit: returnToStartPage,
   });
   const renderer = new Renderer(canvas, game);
   layOutPage(game);

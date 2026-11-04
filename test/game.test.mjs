@@ -1275,7 +1275,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
 test('Play starts a new game when there is no save', () => {
   const game = startupGame();
   toMainMenu(game);
-  assert.deepEqual(menuTexts(game), ['Play', 'Settings', 'Help', 'About']);
+  assert.deepEqual(menuTexts(game), ['Play', 'Settings', 'Help', 'About', 'Quit']);
   choose(game, 'Play');
   assert.equal(game.mainMenu, null);
   game.advance();
@@ -1369,7 +1369,7 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   game.pressKey('ArrowDown');
   game.advance();
   assert.equal(game.mainMenu.current.selected, 1);
-  for (const expected of [0, 3, 2, 1]) {
+  for (const expected of [0, 4, 3, 2, 1]) {
     game.pressKey('ArrowUp');
     game.advance();
     assert.equal(game.mainMenu.current.selected, expected);

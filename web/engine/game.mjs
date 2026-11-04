@@ -448,6 +448,7 @@ export class Game {
       random = Math.random,
       storage = null,
       audio = null,
+      onQuit = null,
     } = {},
   ) {
     this.data = data;
@@ -456,6 +457,7 @@ export class Game {
     this.random = random;
     this.storage = storage;
     this.audio = audio;
+    this.onQuit = onQuit;
     this.text = this.constructor.TEXT;
     this.mainMenu = null;
     this.languages = this.findLanguages();
@@ -687,6 +689,12 @@ export class Game {
 
   pauseSettings() {
     return [soundChoice(this), transitionsChoice(this), pixelFontChoice(this), mouseLockChoice(this)];
+  }
+
+  // The game leaves it to the page to say what quitting means.
+  quit() {
+    this.stopSound();
+    this.onQuit?.();
   }
 
   // The logo and everything after it, for a page that has just loaded the game.

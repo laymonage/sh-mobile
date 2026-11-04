@@ -156,7 +156,7 @@ test('the main menu offers what the original does, with its music and about text
   game.tick();
   assert.deepEqual(
     game.mainMenu.current.choices.map(({ text }) => text),
-    ['Play', 'Settings', 'Help', 'About'],
+    ['Play', 'Settings', 'Help', 'About', 'Quit'],
   );
   game.mainMenu.activate(game.mainMenu.current, 'about');
   const about = game.mainMenu.current.text;
@@ -267,6 +267,43 @@ test('a menu’s border clears the logo, and short menus stay centered', () => {
   assert.equal(top(256, 102, 39), 77);
   // One too tall for what's left stays on screen, over the logo.
   assert.equal(top(143, 120, 28), 17);
+});
+
+for (const [name, build, size] of [
+  ['the first game', firstGameData, {}],
+  ['Mobile 2', data, { roomSize: 310, roomHeight: 270 }],
+]) {
+  test(`${name}'s main menu quits, after asking, with No highlighted`, () => {
+    let quits = 0;
+    const stopped = [];
+    const game = createGame(build, {
+      language: 'en',
+      ...size,
+      onQuit: () => quits++,
+      audio: { enabled: true, play() {}, setEnabled() {}, stop: () => stopped.push(true) },
+    });
+    game.showMainMenu();
+    const menu = game.mainMenu;
+    const choose = (id) => menu.activate(menu.current, id);
+    assert.equal(menu.current.choices.at(-1).text, 'Quit');
+    choose('quit');
+    assert.equal(menu.current.title, 'Are you sure?');
+    assert.equal(menu.current.choices[menu.current.selected].id, 'no');
+    choose('no');
+    assert.equal(menu.current.kind, 'main');
+    assert.equal(quits, 0);
+
+    choose('quit');
+    const before = stopped.length;
+    choose('yes');
+    assert.equal(quits, 1);
+    assert.ok(stopped.length > before);
+  });
+}
+
+test('a menu with the extra row still clears the logo', () => {
+  const top = engineMenuTop({ roomHeight: 270, height: 86, logoHeight: 80, borderTop: 7, borderBottom: 6 });
+  assert.ok(top - 7 >= 82);
 });
 
 test('each game draws its splash art where its original does', () => {

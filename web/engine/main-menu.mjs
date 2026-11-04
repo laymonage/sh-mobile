@@ -209,6 +209,7 @@ export class MainMenu {
         { id: 'settings', text: text(game.text.SETTINGS) },
         { id: 'help', text: text(game.text.HELP) },
         { id: 'about', text: text(game.text.ABOUT) },
+        { id: 'quit', text: text(game.text.QUIT) },
       ],
       { noBack: true },
     );
@@ -226,6 +227,19 @@ export class MainMenu {
     return this.list(
       'warning',
       this.game.engineText(this.game.text.NEW_GAME_WARNING),
+      [
+        { id: 'yes', text: this.game.engineText(this.game.text.YES) },
+        { id: 'no', text: this.game.engineText(this.game.text.NO) },
+      ],
+      { selected: 1 },
+    );
+  }
+
+  // The original asks with a popup. No is highlighted here too, for the same reason.
+  quitWarning() {
+    return this.list(
+      'quit',
+      this.game.engineText(this.game.text.QUIT_WARNING).trim(),
       [
         { id: 'yes', text: this.game.engineText(this.game.text.YES) },
         { id: 'no', text: this.game.engineText(this.game.text.NO) },
@@ -382,6 +396,8 @@ export class MainMenu {
           this.menus.push(this.settingsMenu());
         } else if (id === 'help') {
           this.menus.push(this.helpMenu());
+        } else if (id === 'quit') {
+          this.menus.push(this.quitWarning());
         } else {
           this.menus.push(this.textPage(aboutText(game)));
         }
@@ -397,6 +413,10 @@ export class MainMenu {
         } else {
           this.menus.pop();
         }
+        return;
+      case 'quit':
+        if (id === 'yes') game.quit();
+        else this.menus.pop();
         return;
       case 'help':
         this.menus.push(this.textPage(id === 'gameplay' ? game.gameplayHelp() : game.controlsHelp()));
