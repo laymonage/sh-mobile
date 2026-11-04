@@ -31,7 +31,7 @@ Then open <http://localhost:8123/> and drop in a JAR, or choose **Load from the 
 | 3, or the First aid button | Uses a first-aid kit |
 | Esc | Skips the opening, goes back from a menu, a puzzle or the map, or opens the pause menu |
 | M | Opens the map, once you have it |
-| I, or the Inventory button | Opens the inventory. Arrow keys or clicks move between items and actions |
+| I, or the Inventory button | Opens the inventory. Arrow keys, WASD or clicks move between items and actions |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |

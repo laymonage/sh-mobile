@@ -730,9 +730,9 @@ export class Renderer {
     const moved = game.cursorX !== this.hoverX || game.cursorY !== this.hoverY;
     this.hoverX = game.cursorX;
     this.hoverY = game.cursorY;
-    if ((game.mainMenu || menu.id === MENU.PAUSE) && moved && index !== -1) menu.selected = index;
+    if ((game.mainMenu || menu.id === MENU.PAUSE || menu.id === MENU.INVENTORY) && moved && index !== -1)
+      menu.selected = index;
     if (menu.id === MENU.INVENTORY) {
-      if (index !== -1) menu.selected = index;
       menu.hoveredArrow = menu.arrows.find(inside)?.step ?? null;
       menu.overPage = inside(menu.page);
     }

@@ -19,6 +19,7 @@ const MOVE_KEYS = {
   arrowright: 'right',
 };
 const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
+const INVENTORY_KEYS = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
@@ -231,6 +232,18 @@ function run(game, renderer) {
       event.preventDefault();
     }
     const menuId = game.menus.at(-1)?.id;
+    const inventoryKey = INVENTORY_KEYS[event.key.toLowerCase()];
+    if (
+      inventoryKey &&
+      menuId === MENU.INVENTORY &&
+      !game.popups.length &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      game.pressKey(inventoryKey);
+      event.preventDefault();
+    }
     if (
       (game.mainMenu ||
         game.popups.length ||
