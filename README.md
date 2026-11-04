@@ -20,6 +20,8 @@ npm run play
 
 Then open <http://localhost:8123/> and drop in a JAR, or choose **Load from the Internet Archive** to download a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill). The port only accepts that exact file, by its hash, and keeps it in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build.
 
+The page sets a Content Security Policy in a `<meta>` tag, so it applies wherever the page is hosted. Directives that a tag can't set, such as `frame-ancestors`, need a response header from the host.
+
 | Input | What it does |
 | --- | --- |
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |

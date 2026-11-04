@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
@@ -74,6 +75,33 @@ test('a fan translation keeps its own help text rather than mixing in another la
   assert.equal(gameplayText(game), game.engineText(61));
   assert.match(controlsText(game), /Num\u00a02/);
   assert.doesNotMatch(controlsText(game), /<JAVA/);
+});
+
+test('the page has a strict Content Security Policy, and nothing inline for it to block', () => {
+  const page = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  const policy = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(page)?.[1];
+  assert.ok(policy);
+  assert.ok(
+    page.indexOf('Content-Security-Policy') < page.indexOf('<link'),
+    'The policy comes before what it applies to',
+  );
+  const directives = Object.fromEntries(
+    policy
+      .split(';')
+      .map((part) => part.trim().split(/\s+/))
+      .map(([name, ...values]) => [name, values]),
+  );
+  assert.deepEqual(directives['default-src'], ["'none'"]);
+  assert.deepEqual(directives['script-src'], ["'self'"]);
+  assert.deepEqual(directives['style-src'], ["'self'"]);
+  assert.ok(directives['connect-src'].includes(`https://${new URL(ARCHIVE_JAR.url).host}`));
+  assert.ok(directives['connect-src'].includes('https://*.archive.org'));
+  assert.doesNotMatch(policy, /unsafe/);
+  assert.doesNotMatch(page, /<style|\sstyle=|\son[a-z]+=/i);
+  assert.deepEqual(
+    [...page.matchAll(/<script\b[^>]*>/g)].map(([tag]) => /\ssrc=/.test(tag)),
+    [true],
+  );
 });
 
 test('the browser reader unpacks a JAR the same as the Node one', () => {
