@@ -34,7 +34,6 @@ const WHEEL_OFFSETS = {
 };
 const CHOICE_USE = -2;
 const ITEM_ACTIONS = { use: CHOICE_USE, look: EVENT.LOOKAT, equip: EVENT.EQUIP, unequip: EVENT.UNEQUIP };
-const POINTS_ACROSS = 8;
 
 // The clock and the dice live on the game, so that a copy of a game carries on from
 // exactly where the original was.
@@ -53,11 +52,28 @@ export function newPlaythroughGame(data, { seed = 12345, storage = null } = {}) 
   return game;
 }
 
+// A key press takes this many ticks, which is about as fast as a person can tap.
+const TICKS_PER_KEY = 2;
+const AIM_SLOWDOWN_DISTANCE = 3;
+const HOTSPOT_PRESS_LIMIT = 60;
+const AIM_DIRECTIONS = [
+  ['left', 'right', 'x', 'cursorX'],
+  ['up', 'down', 'y', 'cursorY'],
+];
+const VERB_ARROWS = {
+  [VERB.LOOK]: 'ArrowUp',
+  [VERB.HAND]: 'ArrowRight',
+  [VERB.MOUTH]: 'ArrowDown',
+  [VERB.INVENTORY]: 'ArrowLeft',
+};
+
 // `chooseRow` puts the pointer on a menu row. Rows are laid out by the renderer, so
-// without one, the row is marked directly, as a pointer over it would.
+// without one, the row is marked directly, as a pointer over it would. With `keyboard`,
+// nothing uses the pointer at all.
 export class Player {
-  constructor(game, { step = null, chooseRow = null } = {}) {
+  constructor(game, { step = null, chooseRow = null, keyboard = false } = {}) {
     this.game = game;
+    this.keyboard = keyboard;
     this.tick =
       step ??
       ((ms = TICK_MS) => {
@@ -93,10 +109,10 @@ export class Player {
       const menu = game.menus.at(-1);
       if (game.popups.length) {
         game.clock += POPUP_WAIT_MS;
-        game.click();
+        this.confirm();
         this.tick();
       } else if (menu?.id === MENU.SAY || menu?.id === MENU.RECEIVED) {
-        game.click();
+        this.confirm();
         this.tick();
       } else if (menu?.id === MENU.TEXT_FADE) {
         this.tick(FADE_TICK_MS);
@@ -117,29 +133,36 @@ export class Player {
     return 'stuck';
   }
 
-  // A point on this object that no later object covers, as a click would find it.
   pointOn(object) {
+    return this.game.clickPointOn(object);
+  }
+
+  // Moves on from text, or fires.
+  confirm() {
+    if (this.keyboard) this.game.pressKey('Enter');
+    else this.game.click();
+  }
+
+  pressKey(key) {
+    this.game.pressKey(key);
+    for (let i = 0; i < TICKS_PER_KEY; i++) this.tick();
+  }
+
+  // Taps E until the cursor reaches the object, and then Enter.
+  pressObject(object) {
     const game = this.game;
-    const covering = game.objects
-      .slice(game.objects.indexOf(object) + 1)
-      .filter(({ visible, active }) => visible && active);
-    const { left, right, top, bottom } = object;
-    const xs = [(left + right) >> 1];
-    const ys = [(top + bottom) >> 1];
-    for (let part = 1; part < POINTS_ACROSS; part++) {
-      xs.push(Math.round(left + ((right - left) * part) / POINTS_ACROSS));
-      ys.push(Math.round(top + ((bottom - top) * part) / POINTS_ACROSS));
+    for (let i = 0; game.overObject?.scriptId !== object.scriptId; i++) {
+      if (i >= HOTSPOT_PRESS_LIMIT) throw new Error(`E never reaches ${object.scriptId} in room ${game.currentRoomId}`);
+      this.pressKey('hotspot-next');
     }
-    for (const x of xs) {
-      for (const y of ys) {
-        const onScreen = x >= 0 && y >= 0 && x < game.roomWidth && y < game.roomHeight;
-        if (onScreen && object.isOver(x, y) && !covering.some((other) => other.isOver(x, y))) return [x, y];
-      }
-    }
-    return null;
+    this.pressKey('Enter');
   }
 
   clickObject(object) {
+    if (this.keyboard) {
+      this.pressObject(object);
+      return;
+    }
     const game = this.game;
     const point = this.pointOn(object);
     if (!point) throw new Error(`${object.scriptId} can't be clicked in room ${game.currentRoomId}`);
@@ -154,6 +177,11 @@ export class Player {
 
   clickVerb(verb) {
     const game = this.game;
+    if (this.keyboard) {
+      this.pressKey(VERB_ARROWS[verb]);
+      this.pressKey('Enter');
+      return;
+    }
     const center = verbWheelCenter(game.menus.at(-1), game.roomWidth, game.roomHeight);
     const [dx, dy] = WHEEL_OFFSETS[verb];
     game.moveCursor(center.x + dx, center.y + dy);
@@ -172,6 +200,11 @@ export class Player {
     if (game.itemId !== item) throw new Error(`There's no ${item} in the inventory`);
     const row = page.choices.findIndex(({ id }) => id === ITEM_ACTIONS[action]);
     if (row === -1) throw new Error(`${item} can't ${action} in room ${game.currentRoomId}`);
+    if (this.keyboard) {
+      for (let i = 0; i < row; i++) this.pressKey('ArrowDown');
+      this.pressKey('Enter');
+      return;
+    }
     this.chooseRow(page, row);
     game.click();
     this.tick();
@@ -191,7 +224,7 @@ export class Player {
     if (!object) throw new Error(`There's no ${script} to click in room ${this.game.currentRoomId}`);
     this.clickObject(object);
     for (let i = 0; i < 12 && (this.game.menus.length || this.game.isWaiting()); i++) {
-      if (this.game.menus.at(-1)?.id === MENU.SAY) this.game.click();
+      if (this.game.menus.at(-1)?.id === MENU.SAY) this.confirm();
       this.tick(WAIT_TICK_MS);
     }
   }
@@ -203,7 +236,7 @@ export class Player {
     for (let i = 0; i < FIGHT_LIMIT && !game.mainMenu && game.battleMode; i++) {
       if (game.menus.length || game.popups.length) {
         if (game.menus.at(-1)?.id === MENU.CHOICE) return;
-        game.click();
+        this.confirm();
         this.tick();
         continue;
       }
@@ -218,15 +251,31 @@ export class Player {
         game.pressKey('3');
         this.tick();
       }
-      game.moveCursor(enemy.x, enemy.y);
+      if (this.keyboard) this.holdTowards(enemy);
+      else game.moveCursor(enemy.x, enemy.y);
       this.tick();
       if (game.hoverObject === enemy && !game.attackAnim && game.ammo > 0 && !game.reloading) {
-        game.click();
+        this.confirm();
         this.tick();
         this.tick(WAIT_TICK_MS + 100);
       } else {
         this.tick();
       }
+    }
+  }
+
+  // What a keyboard player presses for the soft key's Back.
+  backKey() {
+    return /floor|children_drawing|puzzle/i.test(this.game.currentRoomId) ? 'Escape' : 'move-back';
+  }
+
+  // Holds the keys that steer the crosshair to the target, as far as it needs them.
+  holdTowards(target) {
+    const game = this.game;
+    for (const [minus, plus, axis, cursor] of AIM_DIRECTIONS) {
+      const distance = target[axis] - game[cursor];
+      game.holdDirection(minus, distance < -AIM_SLOWDOWN_DISTANCE);
+      game.holdDirection(plus, distance > AIM_SLOWDOWN_DISTANCE);
     }
   }
 
@@ -246,9 +295,15 @@ export class Player {
       this.tick();
       this.chooseItemAction(args[0], args[1]);
     } else if (command === 'key') {
-      game.pressKey(args[0]);
+      game.pressKey(this.keyboard && args[0] === 'back' ? this.backKey() : args[0]);
       this.tick();
     } else if (command === 'choose') {
+      if (this.keyboard) {
+        const menu = game.menus.at(-1);
+        for (let i = 0; i < menu.choices.length && menu.selected !== Number(args[0]); i++) this.pressKey('ArrowDown');
+        this.pressKey('Enter');
+        return;
+      }
       this.chooseRow(game.menus.at(-1), Number(args[0]));
       game.click();
       this.tick();
@@ -256,6 +311,10 @@ export class Player {
       for (const script of args) this.clickScript(script);
     } else if (command === 'fight') {
       this.fight();
+      for (const [minus, plus] of AIM_DIRECTIONS) {
+        game.holdDirection(minus, false);
+        game.holdDirection(plus, false);
+      }
     } else {
       throw new Error(`Unknown step: ${step}`);
     }

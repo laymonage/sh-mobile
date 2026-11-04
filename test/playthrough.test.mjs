@@ -25,9 +25,10 @@ function memoryStorage() {
 
 // Plays the whole route from a new game, noting what happens along the way. Nothing
 // here sets the game's state: every step is the pointer, a click or a key.
-function play({ seed, betweenSteps = () => {}, storage = null, build = data } = {}) {
+function play({ seed, betweenSteps = () => {}, storage = null, build = data, keyboard = false } = {}) {
   const game = newPlaythroughGame(build, { seed, storage });
-  const player = new Player(game);
+  const player = new Player(game, { keyboard });
+  if (keyboard) game.click = () => assert.fail("A keyboard player can't click");
   const seen = {
     rooms: new Set(),
     characters: [],
@@ -97,6 +98,15 @@ test('the whole game can be played from a new game to the ending and back to the
     positions,
     [...positions].sort((left, right) => left - right),
   );
+});
+
+test('the whole game can also be played with only the keyboard', () => {
+  const { game, status, seen } = play({ keyboard: true });
+  assert.equal(status, 'end');
+  assert.equal(game.currentRoomId, 'game_end');
+  assert.ok(game.mainMenu);
+  assert.deepEqual(seen.characters, ['Ben', 'Moon', 'Karen']);
+  assert.ok(seen.bossKilled);
 });
 
 test('the playthrough sees every room that a player can reach', () => {

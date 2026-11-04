@@ -10,18 +10,20 @@ import { Renderer } from './renderer.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
-const MOVE_KEYS = {
-  w: 'forward',
-  arrowup: 'forward',
-  s: 'back',
-  arrowdown: 'back',
-  a: 'left',
-  arrowleft: 'left',
-  d: 'right',
-  arrowright: 'right',
+// By the keys' positions, so that they sit the same way on a French or German keyboard.
+const DIRECTIONS = {
+  KeyW: 'up',
+  ArrowUp: 'up',
+  KeyS: 'down',
+  ArrowDown: 'down',
+  KeyA: 'left',
+  ArrowLeft: 'left',
+  KeyD: 'right',
+  ArrowRight: 'right',
 };
-const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
-const WASD_IN_MENUS = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
+const HOTSPOT_KEYS = { KeyE: 'hotspot-next', KeyQ: 'hotspot-previous' };
+const WALKS = { up: 'forward', down: 'back', left: 'left', right: 'right' };
+const MENU_ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
@@ -228,32 +230,31 @@ function run(game, renderer) {
     if (event.key === 'Escape' || /^[0-9]$/.test(event.key)) game.pressKey(event.key);
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
     if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
-    const move = MOVE_KEYS[event.key.toLowerCase()];
-    if (
-      move &&
-      !game.mainMenu &&
-      !game.menus.length &&
-      !event.repeat &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
-    ) {
-      game.pressKey(`move-${move}`);
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+    const direction = DIRECTIONS[event.code];
+    const confirming = event.key === 'Enter' || event.key === ' ';
+    // A page control that has the focus keeps these keys, as Tab's users expect.
+    if ((direction || confirming) && event.target.closest?.('button, a, input, label')) return;
+    const inMenu = game.mainMenu || game.popups.length || game.menus.length;
+    if (direction) {
+      game.holdDirection(direction, true);
+      if (inMenu) game.pressKey(MENU_ARROWS[direction]);
+      else if (!game.isAiming() && !event.repeat) game.pressKey(`move-${WALKS[direction]}`);
       event.preventDefault();
     }
-    // Every menu takes the arrow keys, WASD and Enter.
-    const menuKey = MENU_KEYS.has(event.key) ? event.key : WASD_IN_MENUS[event.key.toLowerCase()];
-    if (
-      menuKey &&
-      (game.mainMenu || game.popups.length || game.menus.length) &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
-    ) {
-      game.pressKey(menuKey);
+    if (confirming) {
+      if (!event.repeat) game.pressKey('Enter');
       event.preventDefault();
     }
+    if (HOTSPOT_KEYS[event.code] && !inMenu) game.pressKey(HOTSPOT_KEYS[event.code]);
   });
+  window.addEventListener('keyup', (event) => {
+    if (DIRECTIONS[event.code]) game.holdDirection(DIRECTIONS[event.code], false);
+  });
+  // A key let go while the page isn't looking would otherwise stay held.
+  window.addEventListener('blur', () => game.releaseDirections());
+  document.addEventListener('visibilitychange', () => game.releaseDirections());
 
   canvas.addEventListener(
     'wheel',

@@ -26,7 +26,9 @@ The page sets a Content Security Policy in a `<meta>` tag, so it applies whereve
 | --- | --- |
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
 | Right-click | Does what the right soft key button shows, such as Back or Menu |
-| WASD or arrow keys, with no menu open | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor |
+| WASD or arrow keys, with no menu open | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor. In a fight, they aim the crosshair instead |
+| Q and E | Move the cursor to the previous or next thing that can be clicked, including puzzle buttons |
+| Enter or Space | Clicks what the cursor is on, and fires while aiming |
 | Arrow keys or WASD, and Enter, in a menu | Move through and choose from every menu, including the map's floors and the verb wheel, whose arms each go with a direction. Up and Down, or the mouse wheel, also scroll long text, Help and About, and Enter continues text |
 | Left and Right arrows, or A and D | Change a setting in the main menu, and move between items in the inventory |
 | 1, or the Gun button | Draws or puts away the gun |

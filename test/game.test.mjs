@@ -1419,7 +1419,10 @@ test('Help describes the web controls with the original headings, and About show
   assert.match(controls, /Open Map:\nM \(only after you acquire the map\)/);
   assert.match(controls, /Open Inventory:\nI \(only if no other menus are open\)/);
   assert.match(controls, /Menu selection:\nMouse \/ Up \/ Down\n/);
-  assert.match(controls, /Select item \/ Fire:\nClick \(or Enter in menus\)/);
+  assert.match(controls, /Select item \/ Fire:\nClick \/ Enter \/ Space/);
+  assert.match(controls, /Next \/ previous object:\nE \/ Q\n/);
+  assert.match(controls, /Aim:\nMouse \/ W \/ A \/ S \/ D \/ Arrow keys\n/);
+  assert.match(controls, /Open context menu:\nClick \/ Enter \(only when the cursor is highlighted\)/);
   assert.match(controls, /Use first aid kit by pressing key\s3\.$/);
   game.pressKey('Escape');
   game.advance();
@@ -2077,6 +2080,129 @@ function wheelGame() {
   assert.equal(game.menus.at(-1).id, MENU.VERBS);
   return game;
 }
+
+test('Q and E put the cursor on each thing that can be clicked, in reading order', () => {
+  const game = savableGame(memoryStorage());
+  const hotspots = game.hotspots();
+  assert.ok(hotspots.length > 3);
+  assert.equal(new Set(hotspots.map(({ scriptId }) => scriptId)).size, hotspots.length);
+  assert.ok(hotspots.every((object) => object.visible && object.active));
+  const seen = [];
+  for (let i = 0; i < hotspots.length; i++) {
+    game.pressKey('hotspot-next');
+    game.advance();
+    game.advance();
+    seen.push(game.overObject);
+  }
+  assert.deepEqual(seen, hotspots);
+  game.pressKey('hotspot-next');
+  game.advance();
+  game.advance();
+  assert.equal(game.overObject, hotspots[0]);
+  game.pressKey('hotspot-previous');
+  game.advance();
+  game.advance();
+  assert.equal(game.overObject, hotspots.at(-1));
+});
+
+test('Q and E start from what the mouse is over, and do nothing in a story room', () => {
+  const game = savableGame(memoryStorage());
+  const hotspots = game.hotspots();
+  const start = hotspots[2];
+  game.moveCursor(...game.clickPointOn(start));
+  game.advance();
+  game.advance();
+  game.pressKey('hotspot-next');
+  game.advance();
+  game.advance();
+  assert.equal(game.overObject, hotspots[3]);
+
+  game.hideCursor = true;
+  const { cursorX, cursorY } = game;
+  game.cycleHotspot(1);
+  assert.deepEqual([game.cursorX, game.cursorY], [cursorX, cursorY]);
+});
+
+test('Enter clicks what the cursor is on', () => {
+  const game = savableGame(memoryStorage());
+  const door = game.objects.find((object) => object.scriptId === '2r');
+  game.moveCursor(...game.clickPointOn(door));
+  game.advance();
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.VERBS);
+});
+
+test("held keys steer the crosshair with the original's speed, and stop when let go", () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  assert.equal(game.isAiming(), true);
+  game.moveCursor(100, 100);
+  game.holdDirection('right', true);
+  const positions = [];
+  for (let i = 0; i < 8; i++) {
+    game.moveAimWithKeys();
+    positions.push(game.pointerX);
+  }
+  assert.deepEqual(positions, [101, 103, 106, 110, 115, 120, 125, 130]);
+  game.holdDirection('right', false);
+  game.moveAimWithKeys();
+  assert.equal(game.pointerX, 130);
+  assert.equal(game.cursorSpeedX, 0);
+
+  game.holdDirection('up', true);
+  game.holdDirection('left', true);
+  game.moveAimWithKeys();
+  assert.deepEqual([game.pointerX, game.pointerY], [129, 99]);
+  game.releaseDirections();
+  game.moveAimWithKeys();
+  game.moveCursor(0, 0);
+  game.holdDirection('left', true);
+  game.moveAimWithKeys();
+  assert.equal(game.pointerX, 0);
+});
+
+test('a tap shorter than a tick still moves the crosshair by a pixel', () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.setRaw('sys_battleState', '2', 'I');
+  game.battleMode = true;
+  game.menus = [];
+  game.pausedThread = null;
+  game.moveCursor(100, 100);
+  game.holdDirection('right', true);
+  game.holdDirection('right', false);
+  game.moveAimWithKeys();
+  assert.equal(game.pointerX, 101);
+  game.moveAimWithKeys();
+  assert.equal(game.pointerX, 101);
+});
+
+test("held keys don't move the cursor when not aiming", () => {
+  const game = savableGame(memoryStorage());
+  game.moveCursor(100, 100);
+  game.holdDirection('right', true);
+  game.advance();
+  assert.equal(game.pointerX, 100);
+  assert.equal(game.cursorSpeedX, 0);
+});
+
+test('Enter fires while aiming', () => {
+  const game = battleGame();
+  standIn(game, 'r');
+  game.menus = [];
+  game.pausedThread = null;
+  game.battleMode = true;
+  game.setRaw('sys_battleState', '2', 'I');
+  game.ammoSet(5, false, true);
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.ammo, 4);
+});
 
 test('the keyboard picks a verb on the wheel, and Enter uses it', () => {
   const game = wheelGame();

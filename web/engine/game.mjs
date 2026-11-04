@@ -117,6 +117,22 @@ const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
 const SOUND_RESUME_MS = 3000;
+// The cursor's top speed in ExtBase.ingameMoveKeyHandling, in pixels per tick.
+const CURSOR_TOP_SPEED = 5;
+const POINTS_ACROSS = 8;
+// Hotspots at about the same height count as one row when they're cycled through.
+const HOTSPOT_ROW_HEIGHT = 40;
+const CLICKABLE_EVENTS = [
+  EVENT.CLICK,
+  EVENT.LOOKAT,
+  EVENT.USE,
+  EVENT.PICKUP,
+  EVENT.PULL,
+  EVENT.OPEN,
+  EVENT.CLOSE,
+  EVENT.TALKTO,
+  EVENT.USEITEM,
+];
 const NO_PAUSE_ROOMS = new Set(['karen_end', 'game_end', '2e']);
 const LOADED_GAME_TIME = 1000000;
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
@@ -502,6 +518,11 @@ export class Game {
     this.transitionColor = -1;
     this.transitionRequested = false;
     this.transitionCounter = null;
+    this.heldDirections = new Set();
+    this.tappedDirections = new Set();
+    this.cursorSpeedX = 0;
+    this.cursorSpeedY = 0;
+    this.lastHotspot = null;
     this.roomTransitions = this.storedRoomTransitions();
     this.requestedRoom = null;
     this.lastRequestedRoom = null;
@@ -1601,7 +1622,9 @@ export class Game {
       else if (clicked) this.handleMenuClick(menu);
       return;
     }
-    if (clicked) this.handleRoomClick();
+    if (clicked || keys.includes('Enter')) this.handleRoomClick();
+    if (keys.includes('hotspot-next')) this.cycleHotspot(1);
+    if (keys.includes('hotspot-previous')) this.cycleHotspot(-1);
     if (keys.includes('back')) this.goBack();
     if (keys.includes('pause')) this.openPauseMenu();
     const move = keys.find((key) => key.startsWith('move-'));
@@ -1828,7 +1851,7 @@ export class Game {
       this.openPauseMenu();
       return true;
     }
-    if (clicked && this.ammo > 0 && !this.reloading) this.shot = true;
+    if ((clicked || keys.includes('Enter')) && this.ammo > 0 && !this.reloading) this.shot = true;
     this.applyRecoil();
     if (!this.attackAnim) this.runActionKeys(keys);
     return true;
@@ -1876,6 +1899,98 @@ export class Game {
   useObject(object) {
     if (object.executeEvent(EVENT.CLICK, -1) === null) return;
     this.openVerbMenu(object);
+  }
+
+  // A point on this object that no later object covers, as a click would find it.
+  clickPointOn(object) {
+    const covering = this.objects
+      .slice(this.objects.indexOf(object) + 1)
+      .filter(({ visible, active }) => visible && active);
+    const { left, right, top, bottom } = object;
+    const xs = [(left + right) >> 1];
+    const ys = [(top + bottom) >> 1];
+    for (let part = 1; part < POINTS_ACROSS; part++) {
+      xs.push(Math.round(left + ((right - left) * part) / POINTS_ACROSS));
+      ys.push(Math.round(top + ((bottom - top) * part) / POINTS_ACROSS));
+    }
+    for (const x of xs) {
+      for (const y of ys) {
+        const onScreen = x >= 0 && y >= 0 && x < this.roomWidth && y < this.roomHeight;
+        if (onScreen && object.isOver(x, y) && !covering.some((other) => other.isOver(x, y))) return [x, y];
+      }
+    }
+    return null;
+  }
+
+  // What can be clicked in the room, in reading order. A door can be made of two
+  // zones with the same script, and those count as one.
+  hotspots() {
+    const seen = new Set();
+    const row = ({ top, bottom }) => Math.round((top + bottom) / 2 / HOTSPOT_ROW_HEIGHT);
+    const middle = ({ left, right }) => (left + right) / 2;
+    return (this.objects ?? [])
+      .filter(
+        (object) =>
+          object.visible &&
+          object.active &&
+          CLICKABLE_EVENTS.some((event) => object.script?.hasEvent(event)) &&
+          this.clickPointOn(object),
+      )
+      .sort((one, two) => row(one) - row(two) || middle(one) - middle(two))
+      .filter(({ scriptId }) => !seen.has(scriptId) && seen.add(scriptId));
+  }
+
+  // This port's own addition: Q and E put the cursor on each thing that can be clicked.
+  cycleHotspot(step) {
+    if (this.hideCursor) return;
+    const hotspots = this.hotspots();
+    if (!hotspots.length) return;
+    const currentScript = (this.overObject ?? this.lastHotspot)?.scriptId;
+    const current = hotspots.findIndex(({ scriptId }) => scriptId === currentScript);
+    const index =
+      current === -1 ? (step > 0 ? 0 : hotspots.length - 1) : (current + step + hotspots.length) % hotspots.length;
+    this.lastHotspot = hotspots[index];
+    this.moveCursor(...this.clickPointOn(this.lastHotspot));
+  }
+
+  // A tap shorter than a tick still counts, for small corrections to the aim.
+  holdDirection(direction, held) {
+    if (held) {
+      this.heldDirections.add(direction);
+      this.tappedDirections.add(direction);
+    } else {
+      this.heldDirections.delete(direction);
+    }
+  }
+
+  releaseDirections() {
+    this.heldDirections.clear();
+    this.tappedDirections.clear();
+  }
+
+  // Port of ExtBase.ingameMoveKeyHandling, for aiming: the cursor gathers speed while a
+  // key is held, and stops when it's let go. Both directions can be held, for diagonals.
+  moveAimWithKeys() {
+    if (!this.isAiming() || this.menus.length || this.popups.length) {
+      this.cursorSpeedX = 0;
+      this.cursorSpeedY = 0;
+      this.tappedDirections.clear();
+      return;
+    }
+    const pressed = (direction) => this.heldDirections.has(direction) || this.tappedDirections.has(direction);
+    const change = (speed, minus, plus) => {
+      const step = pressed(plus) ? 1 : pressed(minus) ? -1 : -speed;
+      return Math.abs(speed + step) <= CURSOR_TOP_SPEED ? speed + step : speed;
+    };
+    this.cursorSpeedX = change(this.cursorSpeedX, 'left', 'right');
+    this.cursorSpeedY = change(this.cursorSpeedY, 'up', 'down');
+    this.tappedDirections.clear();
+    if (!this.cursorSpeedX && !this.cursorSpeedY) return;
+    const clamp = (value, size) => Math.max(0, Math.min(size - 1, value));
+    this.moveCursor(
+      clamp(this.pointerX + this.cursorSpeedX, this.roomWidth),
+      clamp(this.pointerY + this.cursorSpeedY, this.roomHeight),
+    );
   }
 
   // This port's own addition: the original's keys only moved the cursor. A key does
@@ -1999,6 +2114,7 @@ export class Game {
     if (!this.popups.length) this.tickTime += TICK_MS;
     const fading = this.menus.at(-1);
     if (fading?.id === MENU.TEXT_FADE) this.updateTextFade(fading);
+    this.moveAimWithKeys();
     this.handleInput();
     this.updatePauseSound();
     if (this.pendingRoom !== null) this.loadPendingRoom();
