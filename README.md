@@ -18,7 +18,7 @@ See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
 npm run play
 ```
 
-Then open <http://localhost:8123/> and drop in a JAR, or choose **Load from the Internet Archive** to download a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill). The port only accepts that exact file, by its hash. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build.
+Then open <http://localhost:8123/> and drop in a JAR, or choose **Load from the Internet Archive** to download a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill). The port only accepts that exact file, by its hash, and keeps it in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build.
 
 | Input | What it does |
 | --- | --- |

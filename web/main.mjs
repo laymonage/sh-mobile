@@ -2,6 +2,7 @@ import { Game, MENU } from './engine/game.mjs';
 import { ARCHIVE_JAR, inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
+import { deleteStoredArchiveJar, loadStoredArchiveJar, storeArchiveJar } from './jar-store.mjs';
 import { deleteStoredSoundFont, loadStoredSoundFont, storeSoundFont } from './soundfont-store.mjs';
 import { Renderer } from './renderer.mjs';
 
@@ -299,14 +300,33 @@ async function startFromFile(file) {
   if (file) await start(new Uint8Array(await file.arrayBuffer()));
 }
 
+// The copy kept from an earlier download, if it can still be read as a game.
+async function storedArchiveJar() {
+  const bytes = await loadStoredArchiveJar(ARCHIVE_JAR.integrity);
+  if (!bytes) return null;
+  try {
+    if ((await inspectJar(bytes)).status === 'ok') return bytes;
+  } catch {
+    // It's damaged, so it's replaced by a new download.
+  }
+  await deleteStoredArchiveJar();
+  return null;
+}
+
 async function startFromArchive() {
   archiveButton.disabled = true;
+  const stored = await storedArchiveJar();
+  if (stored) {
+    await start(stored);
+    return;
+  }
   showMessage('Downloading from the Internet Archive...');
   let bytes;
   try {
     const response = await fetch(ARCHIVE_JAR.url, { integrity: ARCHIVE_JAR.integrity });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     bytes = new Uint8Array(await response.arrayBuffer());
+    await storeArchiveJar(ARCHIVE_JAR.integrity, bytes);
   } catch {
     showMessage("Couldn't download the game from the Internet Archive. Try again, or choose a JAR.", 'error');
     archiveButton.disabled = false;

@@ -63,7 +63,6 @@
     #choose:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }
     #file { position: absolute; opacity: 0; width: 1px; height: 1px; }
     #sources { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
-    #drop #archive-note { margin: 12px 0 0; font-size: 0.875rem; }
     #message { margin: 0; max-width: 480px; text-align: center; }
     /* During play, a message floats over the page instead of pushing the game down. */
     body.playing #message { position: fixed; top: 8px; left: 50%; z-index: 1; width: max-content; max-width: calc(100vw - 32px); padding: 4px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; transform: translateX(-50%); }
@@ -190,7 +189,6 @@
       <label id="choose">Choose a JAR<input id="file" type="file" accept=".jar"></label>
       <button type="button" id="archive">Load from the Internet Archive</button>
     </div>
-    <p id="archive-note">The second option downloads a copy of the game from archive.org.</p>
   </div>
   <p id="message" role="status"></p>
   <canvas id="game" width="768" height="768" aria-label="Game screen"></canvas>
