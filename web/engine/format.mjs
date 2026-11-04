@@ -66,11 +66,15 @@ export function parseChunkArchive(bytes) {
   return entries;
 }
 
-export function parseLan(bytes) {
+// M.loadGameLanguage stops reading after the last string, and some files have bytes
+// there: a line feed in es.lan of sh1-2007-a4 and a19, stray text in pt.lan of
+// sh2-2011-base. Only tools looking for such oddities ask for `strict`.
+export function parseLan(bytes, { strict = false } = {}) {
   const reader = new Reader(bytes);
   const count = reader.u16();
   const strings = Array.from({ length: count }, () => reader.utf());
-  if (!reader.done) throw new Error(`${reader.remaining} trailing bytes in language file`);
+  if (reader.remaining < 0) throw new Error('Language file ends inside a string');
+  if (strict && !reader.done) throw new Error(`${reader.remaining} trailing bytes in language file`);
   return strings;
 }
 

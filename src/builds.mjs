@@ -106,7 +106,7 @@ function analyzeInk(zip, result) {
   for (const [name, value] of languages) {
     const language = name.match(/([a-z]+)\.lan$/)[1];
     try {
-      lanStrings.set(language, parseLan(value));
+      lanStrings.set(language, parseLan(value, { strict: true }));
     } catch {
       malformedLanguages.push(language);
     }

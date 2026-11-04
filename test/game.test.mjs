@@ -1517,6 +1517,46 @@ test('the builds the port accepts offer the languages they have files for', asyn
   assert.deepEqual(Object.fromEntries(counts), { 'en,fr,de,it,es,pt': 94, 'en,fr': 4, en: 7 });
 });
 
+test('a build whose Spanish file ends in a stray line feed still loads it', async () => {
+  for (const id of ['sh1-2007-a19', 'sh1-2007-a4']) {
+    const { data: buildData } = await inspectJar(readInput(id));
+    assert.equal(buildData.entries.get('sh/lan/es.lan').at(-1), 0x0a);
+    const game = new Game(buildData, { language: 'en' });
+    assert.ok(game.languages.includes('es'));
+    game.setLanguage('es');
+    assert.equal(game.language, 'es');
+    assert.equal(game.gameTexts.length, parseLan(buildData.entries.get('sh/lan/en.lan')).length);
+    assert.equal(game.gameText(game.gameTexts.length - 1), 'Una brújula.');
+    assert.equal(game.engineText(14), 'Jugar');
+  }
+});
+
+test('language files are read up to their last string, as the original does', () => {
+  const lan = (...tail) => Uint8Array.of(0, 2, 0, 2, 0x68, 0x69, 0, 1, 0x21, ...tail);
+  assert.deepEqual(parseLan(lan()), ['hi', '!']);
+  assert.deepEqual(parseLan(lan(0x0a)), ['hi', '!']);
+  assert.throws(() => parseLan(lan().subarray(0, 8)), /ends inside a string/);
+  assert.throws(() => parseLan(lan().subarray(0, 7)));
+  assert.deepEqual(parseLan(lan(), { strict: true }), ['hi', '!']);
+  assert.throws(() => parseLan(lan(0x0a), { strict: true }), /1 trailing bytes/);
+});
+
+test('every language an accepted build offers loads', async () => {
+  let loaded = 0;
+  for (const { id } of buildsOf('sh1')) {
+    const inspection = await inspectJar(readInput(id));
+    if (inspection.status === 'rejected') continue;
+    const game = new Game(inspection.data, { roomSize: inspection.roomSize });
+    for (const language of game.languages) {
+      game.setLanguage(language);
+      assert.ok(game.gameTexts.length > 0, `${id} ${language}`);
+      assert.ok(game.engineTexts.length > 0, `${id} ${language}`);
+      loaded++;
+    }
+  }
+  assert.equal(loaded, 94 * 6 + 4 * 2 + 7);
+});
+
 // A game standing in `room`, with the room's opening text and scripts out of the way.
 function standIn(game, room) {
   game.menus = [];
