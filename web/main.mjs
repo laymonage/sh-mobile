@@ -7,6 +7,7 @@ import { SoundPlayer } from './audio.mjs';
 import { deleteStoredArchiveJar, loadStoredArchiveJar, storeArchiveJar } from './jar-store.mjs';
 import { deleteStoredSoundFont, loadStoredSoundFont, storeSoundFont } from './soundfont-store.mjs';
 import { Renderer } from './renderer.mjs';
+import { fitText } from './fit-text.mjs';
 
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
@@ -302,6 +303,7 @@ function run(game, renderer) {
     });
   }
   const softButtons = { left: document.getElementById('soft-left'), right: document.getElementById('soft-right') };
+  new ResizeObserver(() => Object.values(softButtons).forEach(fitText)).observe(document.getElementById('panel'));
   for (const [side, button] of Object.entries(softButtons)) {
     button.addEventListener('click', () => {
       game.pressSoftKey(side);
@@ -370,7 +372,10 @@ function run(game, renderer) {
     const keys = game.softKeys();
     for (const [side, button] of Object.entries(softButtons)) {
       button.hidden = !keys[side];
-      if (keys[side] && button.textContent !== keys[side].label) button.textContent = keys[side].label;
+      if (keys[side] && button.textContent !== keys[side].label) {
+        button.textContent = keys[side].label;
+        fitText(button);
+      }
     }
     saveButton.disabled = !game.canSave();
     loadButton.disabled = !game.hasSave();

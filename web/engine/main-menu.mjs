@@ -44,12 +44,12 @@ function pixelFontLabel(game, on = game.pixelFont) {
 }
 
 const MOUSE_LOCK_LABELS = {
-  en: 'Mouse lock:',
-  fr: 'Capture souris\u00a0:',
-  de: 'Maus sperren:',
-  it: 'Blocco mouse:',
-  es: 'Bloqueo ratón:',
-  pt: 'Bloqueio rato:',
+  en: 'Mouse recoil:',
+  fr: 'Recul souris\u00a0:',
+  de: 'Maus-Rückstoß:',
+  it: 'Rinculo mouse:',
+  es: 'Retroceso ratón:',
+  pt: 'Recuo rato:',
 };
 
 function mouseLockLabel(game, on = game.mouseLock) {

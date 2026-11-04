@@ -138,7 +138,7 @@ const NO_PAUSE_ROOMS = new Set(['karen_end', 'game_end', '2e']);
 const LOADED_GAME_TIME = 1000000;
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const PIXEL_FONT_PREFERENCE = 'silent-hill-mobile:pixel-font';
-const MOUSE_LOCK_PREFERENCE = 'silent-hill-mobile:mouse-lock';
+const MOUSE_RECOIL_PREFERENCE = 'silent-hill-mobile:mouse-recoil';
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
@@ -527,7 +527,7 @@ export class Game {
     this.soundPaused = false;
     this.paintingTime = null;
     this.pixelFont = this.storedPixelFont();
-    this.mouseLock = this.readPreference(MOUSE_LOCK_PREFERENCE) === 'on';
+    this.mouseLock = this.readPreference(MOUSE_RECOIL_PREFERENCE) === 'on';
     this.pointerLocked = false;
 
     this.menus = [];
@@ -668,7 +668,7 @@ export class Game {
   // Whether the page captures the mouse while aiming, so that recoil lasts.
   toggleMouseLock() {
     this.mouseLock = !this.mouseLock;
-    this.writePreference(MOUSE_LOCK_PREFERENCE, this.mouseLock);
+    this.writePreference(MOUSE_RECOIL_PREFERENCE, this.mouseLock);
   }
 
   get wantsMouseLock() {

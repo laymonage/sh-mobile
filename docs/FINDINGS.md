@@ -230,7 +230,7 @@ The tests cover drawing the gun, hits and misses, killing a monster, taking dama
 
 The port differs from the original or leaves things out in these ways:
 
-- With a mouse, recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does. With the keys, it stays until the player steers back, as in the original: about 25 pixels up and 9 to the side per shot, where a shot has to land within 8 pixels. Moving the mouse goes back to the mouse's rule. The Mouse lock setting, off by default, captures the mouse with the browser's Pointer Lock while aiming, so that the crosshair is the game's own and recoil lasts with a mouse too. The real pointer reappears where it was when the lock began, so the crosshair jumps there on the next mouse move after a fight.
+- With a mouse, recoil settles back to the pointer, because a mouse doesn't steer back as a keypad does. With the keys, it stays until the player steers back, as in the original: about 25 pixels up and 9 to the side per shot, where a shot has to land within 8 pixels. Moving the mouse goes back to the mouse's rule. The Mouse recoil setting, off by default, captures the mouse with the browser's Pointer Lock while aiming, so that the crosshair is the game's own and recoil lasts with a mouse too. The real pointer reappears where it was when the lock began, so the crosshair jumps there on the next mouse move after a fight.
 - Timing assumes a 60 ms tick, taken from `M.tickBasedTimeUpdate`. The original's real frame rate depended on the phone, and it hasn't been measured, so how often monsters attack may differ.
 
 ### Saving
@@ -349,7 +349,7 @@ The moving enemy compares its name with the word `Enemy`, as `h.s` does. That na
 ### What the port leaves out
 
 - The touch build's icons along the top of the screen and its arrows for turning. The page's buttons and keys do the same, except for the navigation icon, which has no use with a mouse.
-- The Mouse lock setting is shared with the first game and hasn't been tried in Mobile 2.
+- The Mouse recoil setting is shared with the first game and hasn't been tried in Mobile 2.
 
 ### Help and the tutorial
 

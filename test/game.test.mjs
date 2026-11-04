@@ -1240,7 +1240,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
     'Sound: On',
     'Transitions: On',
     'Pixel font: Off',
-    'Mouse lock: Off',
+    'Mouse recoil: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1252,7 +1252,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
     'Sound: Off',
     'Transitions: On',
     'Pixel font: Off',
-    'Mouse lock: Off',
+    'Mouse recoil: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1336,7 +1336,7 @@ test('the first menu also changes transitions and language, in place, and stays 
     'Sound: On',
     'Transitions: Off',
     'Pixel font: Off',
-    'Mouse lock: Off',
+    'Mouse recoil: Off',
     'Language: English',
     'Continue',
   ]);
@@ -1380,7 +1380,7 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
     'Sound: On',
     'Transitions: On',
     'Pixel font: Off',
-    'Mouse lock: Off',
+    'Mouse recoil: Off',
     'Language: English',
   ]);
   assert.deepEqual(game.mainMenu.current.choices[4].values, [
@@ -1398,7 +1398,7 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
     `${game.engineText(19)} ${game.engineText(21)}`,
     `Transitions\u00a0: ${game.engineText(21)}`,
     `Police pixel\u00a0: ${game.engineText(22)}`,
-    `Capture souris\u00a0: ${game.engineText(22)}`,
+    `Recul souris\u00a0: ${game.engineText(22)}`,
     `${game.engineText(0)} Français`,
   ]);
   assert.equal(game.mainMenu.current.selected, 4);
@@ -1540,7 +1540,7 @@ test('the pause menu continues, saves, and changes sound', () => {
   assert.equal(audio.enabled, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: Off', 'Transitions: On', 'Pixel font: Off', 'Mouse lock: Off'],
+    ['Sound: Off', 'Transitions: On', 'Pixel font: Off', 'Mouse recoil: Off'],
   );
 });
 
@@ -1934,7 +1934,7 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   pauseChoice(game, 'Transitions: On');
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: Off', 'Pixel font: Off', 'Mouse lock: Off'],
+    ['Sound: On', 'Transitions: Off', 'Pixel font: Off', 'Mouse recoil: Off'],
   );
   assert.equal(game.menus.at(-1).choices[1].values.length, 2);
   game.pressKey('Escape');
@@ -1973,7 +1973,7 @@ test('the pixel font is off unless turned on, and the choice is remembered', () 
   assert.equal(game.pixelFont, true);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: On', 'Pixel font: On', 'Mouse lock: Off'],
+    ['Sound: On', 'Transitions: On', 'Pixel font: On', 'Mouse recoil: Off'],
   );
   assert.equal(game.menus.at(-1).choices[2].values.length, 2);
   assert.equal(new Game(data, { storage }).pixelFont, true);
@@ -2001,7 +2001,7 @@ test('the pixel font has a well-formed glyph for every character in all six lang
       ...game.engineTexts,
       controlsText(game),
       gameplayText(game),
-      'Pixel font: Transitions : Übergänge: Transiciones: Transições: Police pixel : Fuente píxel: Fonte píxel: Mouse lock: Capture souris : Maus sperren: Blocco mouse: Bloqueo ratón: Bloqueio rato:',
+      'Pixel font: Transitions : Übergänge: Transiciones: Transições: Police pixel : Fuente píxel: Fonte píxel: Mouse recoil: Recul souris : Maus sperren: Blocco mouse: Bloqueo ratón: Bloqueio rato:',
     ];
     for (const text of texts)
       for (const character of String(text))
@@ -2253,14 +2253,14 @@ test('recoil settles back with the mouse, and moving the mouse takes over from t
   assert.deepEqual([game.cursorX, game.cursorY], [100, 100]);
 });
 
-test('the mouse lock setting is off unless turned on, and is only wanted while aiming with nothing open', () => {
+test('the mouse recoil setting is off unless turned on, and is only wanted while aiming with nothing open', () => {
   assert.equal(new Game(data).mouseLock, false);
   const storage = memoryStorage();
   const game = savableGame(storage);
   game.pressKey('Escape');
   game.advance();
   pauseChoice(game, 'Settings');
-  pauseChoice(game, 'Mouse lock: Off');
+  pauseChoice(game, 'Mouse recoil: Off');
   assert.equal(game.mouseLock, true);
   assert.deepEqual(game.menus.at(-1).choices.at(-1).values.length, 2);
   assert.equal(new Game(data, { storage }).mouseLock, true);

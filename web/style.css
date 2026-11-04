@@ -208,8 +208,9 @@ body.strip-panel #panel {
 #item-keys > * {
   flex-basis: auto;
 }
+/* Wide enough for "Sound: off" in any font, so that the row doesn't move when it changes. */
 #panel #sound {
-  flex: 0 0 74px;
+  flex: 0 0 calc(8.5ch + 14px);
 }
 #soundfont-control {
   flex-grow: 1.5;
@@ -243,6 +244,8 @@ body.strip-panel #panel {
 #panel #soft-left,
 #panel #soft-right {
   padding: 0 3px;
+  /* In proportion to the button. fit-text.mjs shrinks a word too long for it. */
+  font-size: clamp(0.875rem, 3.1cqi, 1.25rem);
 }
 /* Bolted steel plates, one rivet in each corner, with text in the notepad's color. */
 #panel button,

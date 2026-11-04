@@ -29,7 +29,7 @@ The page sets a Content Security Policy in a `<meta>` tag, so it applies whereve
 | WASD or arrow keys, with no menu open | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor. In a fight, they aim the crosshair instead |
 | Q and E | Move the cursor to the previous or next thing that can be clicked, including puzzle buttons |
 | Enter or Space | Clicks what the cursor is on, and fires while aiming |
-| Esc, with Mouse lock on and the mouse captured | Lets the mouse go. Clicking the room captures it again |
+| Esc, with Mouse recoil on and the mouse captured | Lets the mouse go. Clicking the room captures it again |
 | Arrow keys or WASD, and Enter, in a menu | Move through and choose from every menu, including the map's floors and the verb wheel, whose arms each go with a direction. Up and Down, or the mouse wheel, also scroll long text, Help and About, and Enter continues text |
 | Left and Right arrows, or A and D | Change a setting in the main menu, and move between items in the inventory |
 | 1, or the Gun button | Draws or puts away the gun |
@@ -45,7 +45,7 @@ The startup screens, main menu, pause menu, all of the JAR's languages, the open
 
 The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
-Settings, in the main menu and the pause menu, and the first menu after the logo can turn the transitions between rooms off, turn on a pixel font that imitates an old phone's text, and turn on a mouse lock for fights.
+Settings, in the main menu and the pause menu, and the first menu after the logo can turn the transitions between rooms off, turn on a pixel font that imitates an old phone's text, and turn on mouse recoil for fights, which captures the mouse while aiming.
 
 Tabbing away stops the game and its sound, and tabbing back carries on from the same moment. Unlike the original, which opens the pause menu, this doesn't interrupt play.
 
