@@ -10,7 +10,7 @@ export function writeReport(name, content) {
   console.log(`Wrote ${relative(ROOT, path)}`);
 }
 
-function jsonValue(key, value) {
+function jsonValue(_key, value) {
   if (value instanceof Set) return [...value].sort();
   if (value instanceof Map) return Object.fromEntries(value);
   return value;

@@ -21,7 +21,9 @@
     "decompile": "node scripts/decompile.mjs",
     "test": "node --test",
     "format": "biome format --write",
-    "format:check": "biome format"
+    "format:check": "biome format",
+    "lint": "biome lint",
+    "check": "biome check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5"

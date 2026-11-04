@@ -71,7 +71,7 @@ async function start(bytes) {
   showPanelArt(inspection.data);
   document.body.classList.add('playing');
   setUpSaving(game);
-  setUpSound(game, audio);
+  setUpSound(audio);
   await setUpSoundFont(audio);
   game.showStartup();
   // Lets the browser pane and tests inspect and step a running game.
@@ -117,7 +117,7 @@ function showSoundState(audio) {
   soundButton.setAttribute('aria-pressed', String(audio.enabled));
 }
 
-function setUpSound(game, audio) {
+function setUpSound(audio) {
   const volume = document.getElementById('volume');
   volume.value = Math.round(audio.volume * 100);
   volume.addEventListener('input', () => audio.setVolume(volume.valueAsNumber / 100));

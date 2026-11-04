@@ -836,7 +836,7 @@ export class Game {
 
   // Scripts.
   executeEvent(script, event, initial, roomObject = null) {
-    if (!script || !script.hasEvent(event)) return initial;
+    if (!script?.hasEvent(event)) return initial;
     return new ScriptThread(script, script.eventOffsets.get(event), roomObject, this).execute(initial);
   }
 

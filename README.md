@@ -61,7 +61,7 @@ There's one save for each version of the game's data, whichever language is chos
 
 ## Requirements
 
-- Node.js 22 or newer. Only formatting needs `npm install`, for Biome. Nothing else has npm dependencies.
+- Node.js 22 or newer. Only formatting and linting need `npm install`, for Biome. Nothing else has npm dependencies.
 - A JDK, for the decompile and bytecode-count steps. The analysis was run on OpenJDK 26.
 
 ## Setup
@@ -96,6 +96,7 @@ You can also run each step on its own:
 | `npm run play` | Serves the browser port on this machine only | `http://localhost:8123/` |
 | `npm run find-route` | Searches for a way through the first game, for the playthrough test | `src/sh1-route.json` |
 | `npm run format` | Formats the code with Biome. `npm run format:check` only reports what it would change | Console |
+| `npm run lint` | Lints the code with Biome. `npm run check` does this and checks the formatting | Console |
 | `npm run verify` | Checks every build's hash | Console |
 | `npm run compare` | Compares every build of each game | `build/reports/builds-sh1.md`, `builds-sh2.md`, `builds-sh3.md`, `builds.json` |
 | `npm run analyze` | Decodes every INK script and room | `build/reports/data.json` |

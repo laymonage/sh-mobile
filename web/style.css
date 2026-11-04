@@ -39,6 +39,30 @@ body {
     16px / 1.5 system-ui,
     sans-serif;
 }
+button {
+  min-height: 44px;
+  padding: 8px 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--accent);
+}
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:disabled:hover {
+  border-color: var(--border);
+}
 #drop {
   width: min(480px, 100%);
   padding: 32px 24px;
@@ -177,12 +201,6 @@ body.playing #panel {
   flex: 1;
   min-width: 0;
 }
-/* These two take turns in one slot, so the Soundfont button keeps its width. */
-#panel #soundfont-remove,
-#panel #soundfont-get {
-  flex: 0 0 max(34px, var(--plate-height));
-  padding: 0;
-}
 #soundfont-get {
   display: flex;
   align-items: center;
@@ -191,6 +209,12 @@ body.playing #panel {
 }
 #soundfont-get[hidden] {
   display: none;
+}
+/* These two take turns in one slot, so the Soundfont button keeps its width. */
+#panel #soundfont-remove,
+#panel #soundfont-get {
+  flex: 0 0 max(34px, var(--plate-height));
+  padding: 0;
 }
 #soft-left[hidden],
 #soft-right[hidden] {
@@ -213,7 +237,7 @@ body.playing #panel {
     radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) calc(100% - 1px) 1px / 5px 5px no-repeat,
     radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) 1px calc(100% - 1px) / 5px 5px no-repeat,
     radial-gradient(circle, var(--rivet) 0 1px, transparent 1.5px) calc(100% - 1px) calc(100% - 1px) / 5px 5px no-repeat,
-    linear-gradient(var(--plate-top), var(--plate-bottom));
+    linear-gradient(to bottom, var(--plate-top), var(--plate-bottom));
   border: 1px solid var(--plate-edge);
   border-radius: 1px;
   box-shadow:
@@ -330,30 +354,6 @@ body.playing #panel {
   #controls {
     grid-area: 2 / 1 / 3 / -1;
   }
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-button:disabled:hover {
-  border-color: var(--border);
-}
-button {
-  min-height: 44px;
-  padding: 8px 14px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font: inherit;
-  cursor: pointer;
-}
-button:hover {
-  border-color: var(--accent);
-}
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 body.playing #drop {
   display: none;

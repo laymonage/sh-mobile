@@ -296,9 +296,9 @@ export class Renderer {
     this.notepad(x, y, width, height);
     c.textAlign = 'left';
     c.fillStyle = css(game.menuTextColor);
-    lines.forEach((line, index) =>
-      this.rowText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * step, ENGINE_ROW),
-    );
+    lines.forEach((line, index) => {
+      this.rowText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * step, ENGINE_ROW);
+    });
   }
 
   outlinedText(text, x, y, align) {
@@ -318,7 +318,6 @@ export class Renderer {
   }
 
   wrap(text, width) {
-    const c = this.context;
     const lines = [];
     for (const paragraph of String(text).split('\n')) {
       let line = '';
@@ -473,9 +472,9 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
-    lines.forEach((line, index) =>
-      this.fillText(line, x + margin + imageSpace, y + margin + index * (LINE_HEIGHT + game.menuLineSpacing)),
-    );
+    lines.forEach((line, index) => {
+      this.fillText(line, x + margin + imageSpace, y + margin + index * (LINE_HEIGHT + game.menuLineSpacing));
+    });
   }
 
   drawTextFade(menu) {
@@ -487,7 +486,9 @@ export class Renderer {
     c.textBaseline = 'top';
     c.fillStyle = css(menu.color);
     const top = (game.roomHeight - lines.length * LINE_HEIGHT) / 2;
-    lines.forEach((line, index) => this.fillText(line, game.roomWidth / 2, top + index * LINE_HEIGHT));
+    lines.forEach((line, index) => {
+      this.fillText(line, game.roomWidth / 2, top + index * LINE_HEIGHT);
+    });
   }
 
   drawVerbs(menu) {
@@ -568,7 +569,9 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
-    titleLines.forEach((line, index) => this.fillText(line, x + margin, y + margin + index * step));
+    titleLines.forEach((line, index) => {
+      this.fillText(line, x + margin, y + margin + index * step);
+    });
     if (titleLines.length) this.delimiter(x, y + margin + titleLines.length * step + (margin >> 1), width);
     const rowsTop = y + margin + titleHeight;
     menu.rows = menu.choices.map((_, index) => ({
@@ -620,7 +623,9 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = css(game.menuTextColor);
-    titleLines.forEach((line, index) => this.fillText(line, x + margin, y + margin + index * step));
+    titleLines.forEach((line, index) => {
+      this.fillText(line, x + margin, y + margin + index * step);
+    });
     this.delimiter(x, y + delimiter1, width);
     this.delimiter(x, y + delimiter2, width);
 
@@ -759,9 +764,9 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = '#000';
-    titleLines.forEach((line, index) =>
-      this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP),
-    );
+    titleLines.forEach((line, index) => {
+      this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP);
+    });
     const rowsTop = y + ENGINE_PADDING + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
     menu.rows = menu.choices.map((_, index) => ({
       x,
@@ -800,9 +805,9 @@ export class Renderer {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillStyle = '#000';
-    lines
-      .slice(menu.scroll, menu.scroll + menu.pageLines)
-      .forEach((line, index) => this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP));
+    lines.slice(menu.scroll, menu.scroll + menu.pageLines).forEach((line, index) => {
+      this.fillText(line, x + ENGINE_PADDING, y + ENGINE_PADDING + index * ENGINE_TEXT_STEP);
+    });
 
     menu.arrows = [];
     const place = (arrow, arrowY, step) => {

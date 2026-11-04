@@ -20,8 +20,20 @@
     }
   },
   "linter": {
-    "enabled": false
+    "enabled": true
   },
+  "overrides": [
+    {
+      "includes": ["web/engine/format.mjs"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedFunctionParameters": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": false
   }

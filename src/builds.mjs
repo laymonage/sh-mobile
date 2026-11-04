@@ -199,7 +199,9 @@ export function analyzeBuild(id) {
   for (const [name, value] of contents) {
     const text = `${name}\n${value.toString('latin1')}`.toLowerCase();
     for (const marker of SITE_MARKERS) {
-      if (text.includes(marker)) (siteMarkers[marker] ??= []).push(name);
+      if (!text.includes(marker)) continue;
+      siteMarkers[marker] ??= [];
+      siteMarkers[marker].push(name);
     }
   }
 
