@@ -1280,8 +1280,8 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   }
   game.pressKey('Enter');
   game.advance();
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Language: English']);
-  assert.deepEqual(game.mainMenu.current.choices[1].values, [
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Language: English']);
+  assert.deepEqual(game.mainMenu.current.choices[2].values, [
     'Language: English',
     'Langue : Français',
     'Sprache: Deutsch',
@@ -1291,14 +1291,16 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   ]);
 
   game.pressKey('ArrowDown');
+  game.pressKey('ArrowDown');
   game.advance();
   choose(game, 'Language: English');
   assert.equal(game.language, 'fr');
   assert.deepEqual(menuTexts(game), [
     `${game.engineText(19)} ${game.engineText(21)}`,
+    `Transitions\u00a0: ${game.engineText(21)}`,
     `${game.engineText(0)} Français`,
   ]);
-  assert.equal(game.mainMenu.current.selected, 1);
+  assert.equal(game.mainMenu.current.selected, 2);
   game.pressKey('ArrowLeft');
   game.advance();
   assert.equal(game.language, 'en');
@@ -1432,7 +1434,7 @@ test('the pause menu continues, saves, and changes sound', () => {
   assert.equal(audio.enabled, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: Off'],
+    ['Sound: Off', 'Transitions: On'],
   );
 });
 
@@ -1813,6 +1815,60 @@ test('a room change shows the pattern over the old room, black, then the pattern
   assert.equal(game.transitionCounter, null);
   assert.deepEqual(transitionKinds(game), []);
   assert.ok(!game.drawList().some((item) => item.kind === 'dissolve-pattern'));
+});
+
+test('room transitions can be turned off, and the choice is remembered', () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  standIn(game, 'a');
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Settings');
+  pauseChoice(game, 'Transitions: On');
+  assert.deepEqual(
+    game.menus.at(-1).choices.map(({ text }) => text),
+    ['Sound: On', 'Transitions: Off'],
+  );
+  assert.equal(game.menus.at(-1).choices[1].values.length, 2);
+  game.pressKey('Escape');
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+
+  assert.equal(game.transitionsEnabled, true);
+  game.moveCursor(100, 20);
+  game.pressKey('move-forward');
+  let sawTransition = false;
+  for (let i = 0; i < 4 && game.currentRoomId === 'a'; i++) {
+    game.tick();
+    if (game.transitionCounter !== null) sawTransition = true;
+  }
+  assert.notEqual(game.currentRoomId, 'a');
+  assert.equal(sawTransition, false);
+  assert.deepEqual(game.transitionItems(), []);
+
+  const later = new Game(data, { storage });
+  assert.equal(later.roomTransitions, false);
+  later.toggleRoomTransitions();
+  assert.equal(new Game(data, { storage }).roomTransitions, true);
+});
+
+test('room transitions are on unless turned off, even without storage', () => {
+  assert.equal(new Game(data).roomTransitions, true);
+  const broken = {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('blocked');
+    },
+  };
+  const game = new Game(data, { storage: broken });
+  assert.equal(game.roomTransitions, true);
+  game.toggleRoomTransitions();
+  assert.equal(game.roomTransitions, false);
 });
 
 test('input waits for a room transition to finish', () => {

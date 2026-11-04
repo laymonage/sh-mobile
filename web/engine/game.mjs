@@ -14,7 +14,7 @@ import {
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
-import { MainMenu, parseIni, soundLabel } from './main-menu.mjs';
+import { MainMenu, parseIni, soundChoice, transitionsChoice } from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -115,6 +115,7 @@ const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
 
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
+const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
@@ -496,6 +497,7 @@ export class Game {
     this.transitionColor = -1;
     this.transitionRequested = false;
     this.transitionCounter = null;
+    this.roomTransitions = this.storedRoomTransitions();
 
     this.menus = [];
     this.pointerX = roomSize >> 1;
@@ -562,6 +564,28 @@ export class Game {
   toggleSound() {
     this.audio?.setEnabled(!this.soundOn);
     if (this.soundOn) this.playSound('sh_shot', 1);
+  }
+
+  // The port's own setting: whether room changes play the original's transition.
+  storedRoomTransitions() {
+    try {
+      return this.storage?.getItem(TRANSITIONS_PREFERENCE) !== 'off';
+    } catch {
+      return true;
+    }
+  }
+
+  toggleRoomTransitions() {
+    this.roomTransitions = !this.roomTransitions;
+    try {
+      this.storage?.setItem(TRANSITIONS_PREFERENCE, this.roomTransitions ? 'on' : 'off');
+    } catch {
+      // It still applies until the page is closed.
+    }
+  }
+
+  pauseSettings() {
+    return [soundChoice(this), transitionsChoice(this)];
   }
 
   // The logo and everything after it, for a page that has just loaded the game.
@@ -1397,7 +1421,8 @@ export class Game {
     this.roomEntered = false;
     this.roomUpdateNeeded = true;
     this.enemySoundPlayed = false;
-    if (this.transitionRequested && this.transitionCounter === null) this.transitionCounter = TRANSITION_START;
+    if (this.transitionRequested && this.roomTransitions && this.transitionCounter === null)
+      this.transitionCounter = TRANSITION_START;
     this.transitionRequested = false;
   }
 
@@ -1610,11 +1635,15 @@ export class Game {
         if (this.canSave()) this.saveGame();
         break;
       case 'settings':
-        this.openPausePage([{ id: 'sound', text: soundLabel(this) }]);
+        this.openPausePage(this.pauseSettings());
         break;
       case 'sound':
         this.toggleSound();
-        menu.choices = [{ id: 'sound', text: soundLabel(this) }];
+        menu.choices = this.pauseSettings();
+        break;
+      case 'transitions':
+        this.toggleRoomTransitions();
+        menu.choices = this.pauseSettings();
         break;
       case 'help':
         this.openPausePage([

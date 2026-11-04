@@ -43,14 +43,37 @@ export function soundLabel(game, on = game.soundOn) {
   return `${game.engineText(TEXT.SOUND)} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
 }
 
+// The port's own setting, so its label isn't in the JAR's text.
+const TRANSITIONS_LABELS = {
+  en: 'Transitions:',
+  fr: 'Transitions\u00a0:',
+  de: 'Übergänge:',
+  it: 'Transizioni:',
+  es: 'Transiciones:',
+  pt: 'Transições:',
+};
+
+function transitionsLabel(game, on = game.roomTransitions) {
+  return `${TRANSITIONS_LABELS[game.language] ?? TRANSITIONS_LABELS.en} ${game.engineText(on ? TEXT.ON : TEXT.OFF)}`;
+}
+
 // A setting's row. The menu is as wide as the row's longest value, so that it keeps
 // its size as the value changes.
-function soundChoice(game) {
+export function soundChoice(game) {
   return {
     id: 'sound',
     text: soundLabel(game),
     softKey: TEXT.CHANGE,
     values: [soundLabel(game, true), soundLabel(game, false)],
+  };
+}
+
+export function transitionsChoice(game) {
+  return {
+    id: 'transitions',
+    text: transitionsLabel(game),
+    softKey: TEXT.CHANGE,
+    values: [transitionsLabel(game, true), transitionsLabel(game, false)],
   };
 }
 
@@ -194,7 +217,7 @@ export class MainMenu {
 
   settingsMenu() {
     const { game } = this;
-    const choices = [soundChoice(game)];
+    const choices = [soundChoice(game), transitionsChoice(game)];
     if (game.languages.length > 1) choices.push(languageChoice(game));
     return this.list('settings', null, choices);
   }
@@ -294,6 +317,8 @@ export class MainMenu {
     const { game } = this;
     if (id === 'sound') {
       game.toggleSound();
+    } else if (id === 'transitions') {
+      game.toggleRoomTransitions();
     } else {
       const { languages } = game;
       const position = languages.indexOf(game.language);
