@@ -197,7 +197,19 @@ From reading the code: `GameMidlet` has a 78-row table of trigger, condition and
 
 ## The prototype
 
-`web/` runs Silent Hill's own scripts in a browser, following `sh1-2014-a7`'s decompiled engine. The tests play from a new game through the tutorial and intro to the first room, open the verb wheel, read a door's text, walk through it and look at an inventory item. Every one of the 112 rooms loads and updates without hitting a command the port doesn't handle, although that only runs each room's entry scripts.
+`web/` runs Silent Hill's own scripts in a browser, following `sh1-2014-a7`'s decompiled engine. The game can be finished in the port. `test/playthrough.test.mjs` plays it from a new game through Ben, Moon and Karen to the ending and back to the main menu, using only the pointer, clicks and keys. It passes through 110 of the 112 rooms: `setup` is over within the first tick, and no script leads to `ben_backToLight`. The route also finishes with a save and load at each of its save points outside the puzzle rooms, which reset when they're entered.
+
+`scripts/find-route.mjs` found the route by trying everything a player could from each state, so the 527 steps include plenty of looking around and aren't a sensible way to play. It was given the answers to the three clocks, the gate and the blackboard, read from their scripts. Moon's clock and the blackboard's word agree with [this walkthrough](https://www.silenthillmemories.net/sh_orphan/walkthrough_en.htm), which doesn't cover Karen's clock or spell out the gate's answer. The safe was solved by the search alone.
+
+The route was also played once in the browser with the real renderer. It reached the ending with no drawing errors, and thumbnails of the rooms looked right by eye. Rooms that stay dark until the lighter is used showed as nearly black. Text layout and animation weren't checked frame by frame, and sound wasn't played.
+
+The route shows that a path exists, not that the game plays well:
+
+- It never took damage: the bot's quick shots keep monsters from attacking. Dying and healing are only covered by other tests.
+- It takes one path, so other orders of play and the many other things a player could try aren't covered.
+- Choice menu rows are marked directly in Node, because the renderer lays them out. The browser run used the pointer.
+
+The same route finishes on 103 of the 105 Silent Hill builds the port accepts or warns about. It fails on `sh1-2007-a2` and `sh1-2010-a9` at Moon's clock, because those builds number their scripts differently there, so the route's button names don't apply. That's a limit of the route rather than something shown to be wrong with those builds. Each of the 103 was only run in Node, once.
 
 From its data alone, the port accepts or explains every Silent Hill and Mobile 2 build:
 
@@ -215,7 +227,7 @@ Only `sh1-2007-a31` has been run in the browser. Being accepted means a build's 
 
 From reading the code: battles are aim-and-shoot. Pressing 1 draws the gun, which starts a battle if the room has a monster, and a shot hits if the crosshair is within 8 pixels of the monster's anchor point. Dark rooms need the flashlight, which hides everything outside a circle around the cursor. With the flashlight on, a monster can only attack while the beam is on it.
 
-The tests cover drawing the gun, hits and misses, killing a monster, taking damage, dying and running out of ammo. One fight was also played in the browser, in room `r`, reached by jumping to it rather than by walking there. The final fight in room `2d` is tested from Karen's arrival, with the room jumped to, through the kill and on to the main menu. The port follows the original there: input locks once the boss is dead, and the ending runs by itself. The other four battle rooms, `y`, `17`, `1d` and `2a`, are only tested for not hitting a command the port doesn't handle.
+The tests cover drawing the gun, hits and misses, killing a monster, taking damage, dying and running out of ammo. The full playthrough fights its way through `17`, `r`, `y`, `1d`, `2a` and the final fight in `2d`, reached by walking there. The port follows the original in `2d`: input locks once the boss is dead, and the ending runs by itself.
 
 The port differs from the original or leaves things out in these ways:
 

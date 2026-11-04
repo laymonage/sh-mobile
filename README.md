@@ -85,6 +85,7 @@ You can also run each step on its own:
 | Command | What it does | Output |
 | --- | --- | --- |
 | `npm run play` | Serves the browser port on this machine only | `http://localhost:8123/` |
+| `npm run find-route` | Searches for a way through the first game, for the playthrough test | `src/sh1-route.json` |
 | `npm run verify` | Checks every build's hash | Console |
 | `npm run compare` | Compares every build of each game | `build/reports/builds-sh1.md`, `builds-sh2.md`, `builds-sh3.md`, `builds.json` |
 | `npm run analyze` | Decodes every INK script and room | `build/reports/data.json` |
