@@ -221,7 +221,7 @@ From its data alone, the port accepts or explains every Silent Hill and Mobile 2
 | Rejected: Mobile 2 isn't supported yet | 61 Mobile 2 builds |
 | Rejected: damaged | `sh2-2008-konno-a3` |
 
-Only `sh1-2007-a31` has been run in the browser. Being accepted means a build's data has the expected form, not that the build has been played.
+`sh1-2007-a31` and `sh1-2014-base` have been run in the browser. Being accepted means a build's data has the expected form, not that the build has been played.
 
 ### Battles
 
@@ -256,7 +256,7 @@ The inventory follows `ExtBase.inventoryMenuPaint`: a page half the room's width
 
 WASD and the arrow keys take the room's exits, which the original doesn't do: its keys only moved the cursor. They run the same script as clicking the exit. With every room loaded from a new game's state, 92 of the 110 that load have directional exits, and none has more than two directions. Rooms `a` and `10` have two forward exits side by side, a doorway and a staircase, and the key takes the one nearer the cursor. Exits that depend on story progress may differ. Many rooms are left through doors and other objects that use the verb wheel, so the keys don't replace the mouse.
 
-The map's floor list marks the current floor with `gfx/map_cursor.png`, using the `var_floor` variable that stairs set, as in `ExtBase.menuPaintIngame`. That code runs for every choice menu, but the map's script is the only one that offers choices. The original's map key also starts with the current floor highlighted, which the port doesn't do, because its highlight follows the mouse.
+The map's floor list marks the current floor with `gfx/map_cursor.png`, using the `var_floor` variable that stairs set, as in `ExtBase.menuPaintIngame`. That code runs for every choice menu, but the map's script is the only one that offers choices. The list starts on the current floor, as the original's map key does, and moving the mouse over a row highlights it. Every menu also takes the arrow keys, WASD and Enter. The verb wheel's arms each go with a direction, as on the original's keypad. Hotspots in a room and puzzle buttons are still only reached with the mouse, because the port has no keyboard cursor.
 
 Room changes use the transition from `Ext.appPaint`: one frame of `dissolveEffectImg` over the old room, three of solid black, then two of the pattern over the new room. Input waits for it to finish, as in `MyCanvas.keyPressed`. It's counted in the port's 60 ms ticks, so it lasts about 360 ms, and its speed on a real phone hasn't been measured.
 
@@ -282,9 +282,8 @@ The port differs in these ways:
 - The sound question has a Continue row, because a mouse can't press the soft key that does this on a phone. It also offers the transitions and language settings.
 - The warnings about a new game and leaving a game are lists with No highlighted, rather than popups answered with soft keys.
 - A battle stops while the pause menu is open. In the original, only a phone call or hiding the app stopped it.
-- The pause menu doesn't stop sound, as the original does.
+- Coming back to the tab doesn't open the pause menu, as the original does on returning to the app, so players can tab in and out without interrupting play. The game's clock stands still while the tab is hidden, so nothing happens in the meantime.
 - The original's Reload choice, for a room that fails to load, isn't there.
-- The original asks before leaving only if something changed since the last save. The port always asks.
 
 The startup, every menu, language switching, saving from the pause menu, leaving for the main menu and loading afterwards were tried in the browser with real clicks and keys, with the game stepped by a timer because the test pane doesn't run animation frames. Whether the music sounds right hasn't been checked by ear. Pausing a battle is only tested in Node, and only `sh1-2007-a31` was tried in the browser.
 
@@ -313,7 +312,7 @@ Every file was rendered in a browser through both sound sources and measured for
 
 ## What hasn't been checked
 
-- No game has been played through, so it's unconfirmed that any can be completed in the port or the original.
+- No person has played a game through. The first game's route in `test/playthrough.test.mjs` was found by a search, and it hasn't been compared with the original on a phone.
 - Mobile 2 and Mobile 3 scripts haven't been run, and most of Silent Hill's have been reached only by the tests above, so most command behavior is only known from reading the code.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.

@@ -417,11 +417,15 @@ export class Renderer {
     const textWidth = game.roomWidth - this.borderLeft - this.borderRight - margin * 3 - (arrow?.info.width ?? 0);
     c.font = this.font;
     const lines = this.wrap(menu.text, textWidth);
-    menu.pageLines = SAY_LINES;
-    menu.maxScroll = Math.max(0, lines.length - SAY_LINES);
-    const shown = lines.slice(menu.scroll, menu.scroll + SAY_LINES);
+    const fullLines = Math.floor((game.roomHeight - this.borderTop - this.borderBottom - margin * 2 + spacing) / step);
+    const pageLines = menu.fullPage ? fullLines : SAY_LINES;
+    menu.pageLines = pageLines;
+    menu.maxScroll = Math.max(0, lines.length - pageLines);
+    const shown = lines.slice(menu.scroll, menu.scroll + pageLines);
     const headerHeight = menu.speaker ? LINE_HEIGHT + margin + this.delimiterHeight + margin : 0;
-    const page = this.bottomPage(headerHeight + Math.min(lines.length, SAY_LINES) * step - spacing);
+    const page = this.bottomPage(
+      headerHeight + (menu.fullPage ? pageLines : Math.min(lines.length, pageLines)) * step - spacing,
+    );
     this.notepad(page.x, page.y, page.width, page.height);
 
     const textX = page.x + margin;
@@ -528,7 +532,7 @@ export class Renderer {
     }
     rows.forEach((row, index) => {
       const rect = menu.rows[index];
-      if (menu.hovered === index) {
+      if (menu.selected === index) {
         c.fillStyle = css(game.menuSelectedColor);
         c.fillRect(rect.x, rect.y, rect.width, rect.height);
       }
@@ -835,7 +839,11 @@ export class Renderer {
     const moved = game.cursorX !== this.hoverX || game.cursorY !== this.hoverY;
     this.hoverX = game.cursorX;
     this.hoverY = game.cursorY;
-    if ((game.mainMenu || menu.id === MENU.PAUSE || menu.id === MENU.INVENTORY) && moved && index !== -1)
+    if (
+      (game.mainMenu || menu.id === MENU.PAUSE || menu.id === MENU.INVENTORY || menu.id === MENU.CHOICE) &&
+      moved &&
+      index !== -1
+    )
       menu.selected = index;
     if (menu.id === MENU.INVENTORY) {
       menu.hoveredArrow = menu.arrows.find(inside)?.step ?? null;

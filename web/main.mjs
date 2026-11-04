@@ -1,4 +1,5 @@
 import { Game, MENU } from './engine/game.mjs';
+import { GameClock } from './engine/clock.mjs';
 import { ARCHIVE_JAR, inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
@@ -20,7 +21,7 @@ const MOVE_KEYS = {
   arrowright: 'right',
 };
 const MENU_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
-const INVENTORY_KEYS = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
+const WASD_IN_MENUS = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
@@ -54,7 +55,15 @@ async function start(bytes) {
   showMessage(inspection.message, inspection.status === 'warning' ? 'warning' : '');
 
   const audio = new SoundPlayer(inspection.data);
-  const game = new Game(inspection.data, { roomSize: inspection.roomSize, storage: browserStorage(), audio });
+  const clock = new GameClock();
+  clock.setHidden(document.hidden);
+  document.addEventListener('visibilitychange', () => clock.setHidden(document.hidden));
+  const game = new Game(inspection.data, {
+    roomSize: inspection.roomSize,
+    storage: browserStorage(),
+    audio,
+    now: () => clock.now(),
+  });
   const renderer = new Renderer(canvas, game);
   await renderer.loadImages(inspection.data);
   showPanelArt(inspection.data);
@@ -232,28 +241,16 @@ function run(game, renderer) {
       game.pressKey(`move-${move}`);
       event.preventDefault();
     }
-    const menuId = game.menus.at(-1)?.id;
-    const inventoryKey = INVENTORY_KEYS[event.key.toLowerCase()];
+    // Every menu takes the arrow keys, WASD and Enter.
+    const menuKey = MENU_KEYS.has(event.key) ? event.key : WASD_IN_MENUS[event.key.toLowerCase()];
     if (
-      inventoryKey &&
-      menuId === MENU.INVENTORY &&
-      !game.popups.length &&
+      menuKey &&
+      (game.mainMenu || game.popups.length || game.menus.length) &&
       !event.metaKey &&
       !event.ctrlKey &&
       !event.altKey
     ) {
-      game.pressKey(inventoryKey);
-      event.preventDefault();
-    }
-    if (
-      (game.mainMenu ||
-        game.popups.length ||
-        menuId === MENU.INVENTORY ||
-        menuId === MENU.PAUSE ||
-        menuId === MENU.SAY) &&
-      MENU_KEYS.has(event.key)
-    ) {
-      game.pressKey(event.key);
+      game.pressKey(menuKey);
       event.preventDefault();
     }
   });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
+import { GameClock } from '../web/engine/clock.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
 import { controlsText, gameplayText } from '../web/engine/help-text.mjs';
 import { pixelFontGlyph } from '../web/pixel-font.mjs';
@@ -1417,6 +1418,8 @@ test('Help describes the web controls with the original headings, and About show
   assert.match(controls, /Equip \/ Unequip weapon:\n1\n/);
   assert.match(controls, /Open Map:\nM \(only after you acquire the map\)/);
   assert.match(controls, /Open Inventory:\nI \(only if no other menus are open\)/);
+  assert.match(controls, /Menu selection:\nMouse \/ Up \/ Down\n/);
+  assert.match(controls, /Select item \/ Fire:\nClick \(or Enter in menus\)/);
   assert.match(controls, /Use first aid kit by pressing key\s3\.$/);
   game.pressKey('Escape');
   game.advance();
@@ -1996,6 +1999,271 @@ test("the pixel font has the phone font's proportions and spacing", () => {
   assert.equal(gap('h', 'a'), 2);
   assert.equal(gap('m', 'y'), 1);
   assert.equal(gap('T', 'h'), 1);
+});
+
+test('the game clock stands still while the tab is hidden', () => {
+  let real = 1000;
+  const clock = new GameClock(() => real);
+  real = 1500;
+  assert.equal(clock.now(), 1500);
+  clock.setHidden(true);
+  real = 9000;
+  assert.equal(clock.now(), 1500);
+  clock.setHidden(true);
+  real = 9500;
+  clock.setHidden(false);
+  assert.equal(clock.now(), 1500);
+  real = 9600;
+  assert.equal(clock.now(), 1600);
+  clock.setHidden(false);
+  assert.equal(clock.now(), 1600);
+});
+
+// Opens the map, whose script offers the floors.
+function mapGame(floor) {
+  const game = savableGame(memoryStorage());
+  game.setInventory('invMap', 1);
+  game.setRaw('var_floor', floor, 'S');
+  game.pressKey('map');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.CHOICE);
+  return game;
+}
+
+test('the map starts on the current floor, and the keyboard chooses from it', () => {
+  assert.equal(mapGame('floor2').menus.at(-1).selected, 0);
+  assert.equal(mapGame('floor_base').menus.at(-1).selected, 2);
+  const game = mapGame('floor1');
+  const menu = game.menus.at(-1);
+  assert.equal(menu.selected, 1);
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(menu.selected, 2);
+  game.pressKey('ArrowDown');
+  game.advance();
+  assert.equal(menu.selected, 0);
+  game.pressKey('ArrowUp');
+  game.advance();
+  assert.equal(menu.selected, 2);
+  game.pressKey('Enter');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'floor_base');
+});
+
+test('Esc closes the map without choosing, and its Select button chooses the highlighted floor', () => {
+  const closed = mapGame('floor1');
+  const room = closed.currentRoomId;
+  closed.pressKey('Escape');
+  closed.advance();
+  assert.equal(closed.menus.length, 0);
+  assert.equal(closed.currentRoomId, room);
+
+  const game = mapGame('floor1');
+  assert.equal(game.softKeys().left.action, 'Enter');
+  game.pressSoftKey('left');
+  game.advance();
+  game.advance();
+  assert.equal(game.currentRoomId, 'floor1');
+});
+
+function wheelGame() {
+  const game = savableGame(memoryStorage());
+  const door = game.objects.find((object) => object.scriptId === '2r');
+  game.moveCursor((door.left + door.right) >> 1, (door.top + door.bottom) >> 1);
+  game.advance();
+  game.click();
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.VERBS);
+  return game;
+}
+
+test('the keyboard picks a verb on the wheel, and Enter uses it', () => {
+  const game = wheelGame();
+  game.moveCursor(5, 5);
+  const wheel = game.menus.at(-1);
+  assert.equal(wheel.selected, null);
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.at(-1), wheel);
+  for (const [key, verb] of [
+    ['ArrowUp', VERB.LOOK],
+    ['ArrowRight', VERB.HAND],
+    ['ArrowDown', VERB.MOUTH],
+    ['ArrowLeft', VERB.INVENTORY],
+  ]) {
+    game.pressKey(key);
+    game.advance();
+    assert.equal(wheel.selected, verb);
+  }
+  game.pressKey('ArrowUp');
+  game.advance();
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.SAY);
+  assert.notEqual(game.menus.includes(wheel), true);
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+});
+
+test("the wheel's Select button uses the highlighted verb, and Esc closes the wheel", () => {
+  const game = wheelGame();
+  game.pressKey('ArrowLeft');
+  game.advance();
+  game.pressSoftKey('left');
+  game.advance();
+  assert.equal(game.menus.at(-1).id, MENU.INVENTORY);
+  game.pressKey('Escape');
+  game.advance();
+  game.pressKey('Escape');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+});
+
+test('Enter moves on from an item being received', () => {
+  const game = savableGame(memoryStorage());
+  game.menus.push({ id: MENU.RECEIVED, text: 'Item' });
+  game.pressKey('Enter');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+});
+
+test("the soft keys follow the original's rules for each room", () => {
+  const game = savableGame(memoryStorage());
+  game.setInventory('invMap', 1);
+  standIn(game, '5');
+  assert.equal(game.softKeys().left.action, 'map');
+  assert.equal(game.softKeys().right.action, 'pause');
+
+  standIn(game, 'clockPuzzle');
+  standIn(game, '5');
+  assert.deepEqual(game.softKeys(), { right: undefined });
+
+  standIn(game, '6');
+  standIn(game, '5');
+  assert.equal(game.softKeys().left.action, 'map');
+
+  standIn(game, 'safePuzzle');
+  game.menus = [];
+  game.pausedThread = null;
+  assert.equal(game.softKeys().left.action, 'back');
+  game.setVariable('var_safePuzzleSolved', 1);
+  assert.equal(game.softKeys().left, undefined);
+
+  // These rooms run the ending, so only the name of the room is changed.
+  standIn(game, '6');
+  assert.equal(game.softKeys().right.action, 'pause');
+  for (const room of ['karen_end', 'game_end', '2e']) {
+    game.setRaw('cur-curRoom', room, 'C');
+    assert.equal(game.softKeys().right, undefined, room);
+  }
+});
+
+test('leaving only warns if something changed since the last save', () => {
+  const game = savableGame(memoryStorage());
+  game.pressKey('Escape');
+  game.advance();
+  game.setRaw('someFlag', '1', 'I');
+  pauseChoice(game, 'Main menu');
+  assert.deepEqual(
+    game.menus.at(-1).choices.map(({ id }) => id),
+    ['yes', 'no'],
+  );
+  pauseChoice(game, 'No');
+  assert.equal(game.mainMenu, null);
+
+  game.saveGame(false);
+  assert.equal(game.changedSinceSave, false);
+  pauseChoice(game, 'Main menu');
+  assert.ok(game.mainMenu);
+});
+
+test('the pause menu silences the game, and a looping sound returns 3 seconds after it closes', () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  game.playSound('sh_bgmusic', -1);
+  audio.calls.length = 0;
+  game.pressKey('Escape');
+  game.advance();
+  assert.deepEqual(audio.calls, [['stop']]);
+
+  audio.calls.length = 0;
+  pauseChoice(game, 'Continue');
+  game.advance(2900);
+  assert.deepEqual(audio.calls, []);
+  game.advance(200);
+  assert.deepEqual(audio.calls, [['play', 'sh_bgmusic', -1]]);
+});
+
+test("a sound that doesn't loop stays silent after the pause menu", () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  game.playSound('lt', 1);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Continue');
+  audio.calls.length = 0;
+  game.advance(4000);
+  game.advance();
+  assert.deepEqual(audio.calls, []);
+});
+
+test('a sound the game plays or stops after the pause menu cancels the return of the old one', () => {
+  const audio = recordingAudio();
+  const game = savableGame(memoryStorage(), { audio });
+  game.playSound('sh_bgmusic', -1);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Continue');
+  game.playSound('lt', 1);
+  audio.calls.length = 0;
+  game.advance(4000);
+  game.advance();
+  assert.deepEqual(audio.calls, []);
+
+  game.playSound('sh_bgmusic', -1);
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Continue');
+  game.stopSound();
+  audio.calls.length = 0;
+  game.advance(4000);
+  game.advance();
+  assert.deepEqual(audio.calls, []);
+});
+
+test('Help in the pause menu opens as a full page', () => {
+  const game = savableGame(memoryStorage());
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Help');
+  pauseChoice(game, 'Controls');
+  assert.equal(game.menus.at(-1).fullPage, true);
+  game.say('A line', 'Ben');
+  assert.equal(game.menus.at(-1).fullPage, false);
+});
+
+test("room 0's painting keeps going while the player is away, and has finished in a loaded game", () => {
+  const storage = memoryStorage();
+  const game = savableGame(storage);
+  game.setVariable('mi', 1);
+  standIn(game, '0');
+  const painting = () => game.objects[6];
+  game.drawList();
+  const startedAt = game.paintingTime;
+  assert.ok(startedAt > 0);
+  standIn(game, '2');
+  for (let i = 0; i < 20; i++) game.advance();
+  standIn(game, '0');
+  game.drawList();
+  assert.equal(painting().animationTime, startedAt);
+
+  assert.equal(game.saveGame(false), true);
+  const later = new Game(data, { storage, now: () => 5000, random: () => 0 });
+  assert.equal(later.loadGame(), true);
+  assert.equal(later.tickTime, 1000000);
+  assert.equal(later.paintingTime, 1);
 });
 
 test('room transitions are on unless turned off, even without storage', () => {

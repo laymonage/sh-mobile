@@ -26,14 +26,14 @@ The page sets a Content Security Policy in a `<meta>` tag, so it applies whereve
 | --- | --- |
 | Click | Looks around, chooses from menus and continues text. With the gun out, it fires |
 | Right-click | Does what the right soft key button shows, such as Back or Menu |
-| WASD or arrow keys | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor |
-| Up and Down arrows, Enter | Move through and choose from the main and pause menus. Up and Down, or the mouse wheel, also scroll long text, Help and About, and Enter continues text |
-| Left and Right arrows | Change a setting in the main menu |
+| WASD or arrow keys, with no menu open | Take the room's exit in that direction: forward, back, left or right. In the two rooms with two forward exits, W or Up takes the one nearer the cursor |
+| Arrow keys or WASD, and Enter, in a menu | Move through and choose from every menu, including the map's floors and the verb wheel, whose arms each go with a direction. Up and Down, or the mouse wheel, also scroll long text, Help and About, and Enter continues text |
+| Left and Right arrows, or A and D | Change a setting in the main menu, and move between items in the inventory |
 | 1, or the Gun button | Draws or puts away the gun |
 | 3, or the First aid button | Uses a first-aid kit |
 | Esc | Skips the opening, goes back from a menu, a puzzle or the map, or opens the pause menu |
 | M | Opens the map, once you have it |
-| I, or the Inventory button | Opens the inventory. Arrow keys, WASD or clicks move between items and actions |
+| I, or the Inventory button | Opens the inventory. Clicks or the keys above move between items and actions |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
 | Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
@@ -43,6 +43,8 @@ The startup screens, main menu, pause menu, all of the JAR's languages, the open
 The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
 Settings, in the main menu and the pause menu, and the first menu after the logo can turn the transitions between rooms off, and turn on a pixel font that imitates an old phone's text.
+
+Tabbing away stops the game and its sound, and tabbing back carries on from the same moment. Unlike the original, which opens the pause menu, this doesn't interrupt play.
 
 Browsers only allow sound after you click or press a key. The sound question after the logo gets that click, so the splash screen's music can play.
 

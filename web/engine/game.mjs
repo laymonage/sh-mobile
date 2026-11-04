@@ -69,6 +69,7 @@ const VERB_EVENTS = {
   [VERB.HAND]: [EVENT.USE, EVENT.PICKUP, EVENT.PULL, EVENT.OPEN, EVENT.CLOSE],
   [VERB.MOUTH]: [EVENT.TALKTO],
 };
+const VERB_KEYS = { ArrowUp: VERB.LOOK, ArrowRight: VERB.HAND, ArrowDown: VERB.MOUTH, ArrowLeft: VERB.INVENTORY };
 const ANIMATION_EVENTS = [EVENT.GETIDLEANIMATION, 19, 20, 21, 22, 23, EVENT.GETRUNANIMATION];
 const ANIMATION_IDLE = 0;
 const ANIMATION_ENEMY_ATTACK_1 = 1;
@@ -115,6 +116,9 @@ const FLOOR_ROWS = ['floor2', 'floor1', 'floor_base'];
 
 const SAVE_VERSION = 1;
 const LANGUAGE_PREFERENCE = 'silent-hill-mobile:language';
+const SOUND_RESUME_MS = 3000;
+const NO_PAUSE_ROOMS = new Set(['karen_end', 'game_end', '2e']);
+const LOADED_GAME_TIME = 1000000;
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const PIXEL_FONT_PREFERENCE = 'silent-hill-mobile:pixel-font';
 const POPUP_LIMIT = 4;
@@ -499,6 +503,13 @@ export class Game {
     this.transitionRequested = false;
     this.transitionCounter = null;
     this.roomTransitions = this.storedRoomTransitions();
+    this.requestedRoom = null;
+    this.lastRequestedRoom = null;
+    this.changedSinceSave = false;
+    this.loopingSound = null;
+    this.soundResumeAt = null;
+    this.soundPaused = false;
+    this.paintingTime = null;
     this.pixelFont = this.storedPixelFont();
 
     this.menus = [];
@@ -551,11 +562,33 @@ export class Game {
       this.firstLoad = false;
       return;
     }
+    // MyCanvas.resumeSound only brings back a sound that loops.
+    this.loopingSound = loops === -1 ? name : null;
+    this.soundResumeAt = null;
     this.audio?.play(name, loops);
   }
 
   stopSound() {
+    this.loopingSound = null;
+    this.soundResumeAt = null;
     this.audio?.stop();
+  }
+
+  // From Ext.appPaint and M.run: the pause menu silences the game, and a sound that
+  // loops comes back 3 seconds after the menu closes.
+  updatePauseSound() {
+    const paused = this.menus.some((menu) => menu.id === MENU.PAUSE);
+    if (paused && !this.soundPaused) {
+      this.soundPaused = true;
+      this.soundResumeAt = null;
+      this.audio?.stop();
+    } else if (!paused && this.soundPaused) {
+      this.soundPaused = false;
+      this.soundResumeAt = this.now() + SOUND_RESUME_MS;
+    } else if (!paused && this.soundResumeAt !== null && this.now() >= this.soundResumeAt) {
+      this.soundResumeAt = null;
+      if (this.loopingSound) this.playSound(this.loopingSound, -1);
+    }
   }
 
   get soundOn() {
@@ -621,8 +654,15 @@ export class Game {
   }
 
   // Variables: M's inkServer store, keeping the type hint beside each value.
+  // Port of M.inkServerSetVariabel and inkServerUnsetVariabel.
   setRaw(name, value, hint) {
     this.vars.set(name, { value, hint });
+    this.changedSinceSave = true;
+  }
+
+  unsetRaw(name) {
+    this.vars.delete(name);
+    this.changedSinceSave = true;
   }
 
   getRaw(name) {
@@ -632,7 +672,7 @@ export class Game {
   setVariable(name, value) {
     if (typeof value === 'string') this.setRaw(name, value, 'S');
     else if (typeof value === 'number') {
-      if (value === 0) this.vars.delete(name);
+      if (value === 0) this.unsetRaw(name);
       else this.setRaw(name, String(value), 'I');
     }
   }
@@ -844,6 +884,10 @@ export class Game {
         this.addChoice(args);
         return null;
       case 25:
+        if (this.choiceMenu) {
+          const row = this.currentFloorRow();
+          this.choiceMenu.selected = row >= 0 && row < this.choiceMenu.choices.length ? row : 0;
+        }
         this.choiceMenu = null;
         thread.status = STATUS.PAUSED;
         return null;
@@ -878,7 +922,7 @@ export class Game {
         return integerArgument(args[0]) < integerArgument(args[1]) ? 1 : 0;
       case 42: {
         const size = this.inventorySize(args[0]) - (count > 1 ? integerArgument(args[1]) : 1);
-        if (size <= 0) this.vars.delete(`inv-${args[0]}`);
+        if (size <= 0) this.unsetRaw(`inv-${args[0]}`);
         else this.setInventory(args[0], size);
         return null;
       }
@@ -1010,12 +1054,14 @@ export class Game {
   }
 
   // Menus.
-  say(text, speaker) {
+  // A full page is Ext.say's menu 27, for Help in the pause menu.
+  say(text, speaker, fullPage = false) {
     // The toboggan note ends with a line break, which would scroll to a blank line.
     this.menus.push({
       id: MENU.SAY,
       text: text.trimEnd(),
       speaker: speaker ?? null,
+      fullPage,
       scroll: 0,
       maxScroll: 0,
       pageLines: 1,
@@ -1221,6 +1267,8 @@ export class Game {
   // Rooms.
   startNewGame() {
     this.resetRun();
+    this.tickTime = 0;
+    this.paintingTime = null;
     this.setupDone = false;
     this.roomInit('setup', false);
   }
@@ -1240,6 +1288,9 @@ export class Game {
     this.pendingRoom = null;
     this.tickObject = null;
     this.hideCursor = false;
+    this.requestedRoom = null;
+    this.lastRequestedRoom = null;
+    this.soundPaused = false;
     this.popups = [];
     this.transitionRequested = false;
     this.transitionCounter = null;
@@ -1331,6 +1382,7 @@ export class Game {
       );
       saved = true;
       this.cachedHasSave = true;
+      this.changedSinceSave = false;
     } catch {
       saved = false;
     }
@@ -1353,6 +1405,9 @@ export class Game {
       this.ammo = 1;
       this.ammoSet(0, true, true);
     }
+    // Far enough on that the painting in room 0 has finished, as in M.startSavedGame.
+    this.tickTime = LOADED_GAME_TIME;
+    this.paintingTime = 1;
     this.setupDone = true;
     this.firstLoad = true;
     this.roomInit('setup', false);
@@ -1404,6 +1459,9 @@ export class Game {
   roomInit(requested, history) {
     let room = requested;
     this.bossDead = false;
+    this.lastRequestedRoom = this.requestedRoom;
+    this.requestedRoom = requested;
+    this.changedSinceSave = false;
     if (room === 'setup') {
       this.transitionsEnabled = false;
       this.transitionColor = -1;
@@ -1417,7 +1475,7 @@ export class Game {
         room = this.roomLastInHistory();
         const size = this.roomHistorySize();
         if (size > 0) {
-          this.vars.delete(`room-${size}`);
+          this.unsetRaw(`room-${size}`);
           this.setRaw('room-size', String(size - 1), 'R');
         }
       } else if (history && room !== this.currentRoom) {
@@ -1537,7 +1595,10 @@ export class Game {
     }
     if (menu) {
       if (menu.id === MENU.SAY) this.scrollSay(menu, keys);
-      if (clicked || (menu.id === MENU.SAY && keys.includes('Enter'))) this.handleMenuClick(menu);
+      if (menu.id === MENU.CHOICE) this.moveChoice(menu, keys);
+      if (menu.id === MENU.VERBS) this.moveVerb(menu, keys);
+      if (keys.includes('Enter')) this.confirmMenu(menu);
+      else if (clicked) this.handleMenuClick(menu);
       return;
     }
     if (clicked) this.handleRoomClick();
@@ -1585,15 +1646,22 @@ export class Game {
       }
       if (menu.id === MENU.PAUSE) return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'Escape') };
       if (menu.id === MENU.RECEIVED) return { left: key(TEXT.OK, 'click') };
-      return { left: key(TEXT.SELECT, 'click'), right: key(TEXT.BACK, 'escape') };
+      return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'escape') };
     }
     const room = this.currentRoom.toLowerCase();
     if (room.includes('intro')) return {};
     if (room.includes('floor') || room === 'children_drawing') return { right: key(TEXT.BACK, 'back') };
     if (this.superBossDead) return {};
-    const pause = this.canPause() ? key(TEXT.MENU, 'pause') : undefined;
-    if (room.includes('puzzle')) return { left: key(TEXT.BACK, 'back'), right: pause };
-    if (!this.battleMode && this.inventorySize('invMap') > 0) return { left: key(TEXT.MAP, 'map'), right: pause };
+    // The rules in Ext.appPaint for which labels show.
+    const afterClock = this.requestedRoom === '5' && this.lastRequestedRoom === 'clockPuzzle';
+    const noPause = afterClock || NO_PAUSE_ROOMS.has(this.currentRoom);
+    const pause = !noPause && this.canPause() ? key(TEXT.MENU, 'pause') : undefined;
+    if (room.includes('puzzle')) {
+      const solved = room === 'safepuzzle' && toBoolean(this.getRaw('var_safePuzzleSolved'));
+      return { left: solved ? undefined : key(TEXT.BACK, 'back'), right: pause };
+    }
+    if (!this.battleMode && !afterClock && this.inventorySize('invMap') > 0)
+      return { left: key(TEXT.MAP, 'map'), right: pause };
     return { right: pause };
   }
 
@@ -1677,14 +1745,19 @@ export class Game {
         ]);
         break;
       case 'gameplay':
-        this.say(gameplayText(this), null);
+        this.say(gameplayText(this), null, true);
         this.menus.at(-1).fromPause = true;
         break;
       case 'controls':
-        this.say(controlsText(this), null);
+        this.say(controlsText(this), null, true);
         this.menus.at(-1).fromPause = true;
         break;
       case 'leave':
+        // The rule in ExtBase.ingameMenuKeyHandling.
+        if (!this.changedSinceSave || this.currentRoom.toLowerCase() === 'control' || this.pausedThread) {
+          this.endGameRequested = true;
+          break;
+        }
         this.openPausePage(
           [
             { id: 'yes', text: this.engineText(TEXT.YES) },
@@ -1819,6 +1892,31 @@ export class Game {
       this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
   }
 
+  moveChoice(menu, keys) {
+    const count = menu.choices.length;
+    if (keys.includes('ArrowUp')) menu.selected = ((menu.selected ?? 0) + count - 1) % count;
+    if (keys.includes('ArrowDown')) menu.selected = ((menu.selected ?? 0) + 1) % count;
+  }
+
+  // Ext.ingameMenuKeyHandling: each direction goes to the verb on that arm of the wheel.
+  moveVerb(menu, keys) {
+    for (const key of keys) {
+      if (VERB_KEYS[key] !== undefined) menu.selected = VERB_KEYS[key];
+    }
+  }
+
+  // Enter does what clicking the highlighted row or arm would do.
+  confirmMenu(menu) {
+    if (menu.id === MENU.CHOICE) {
+      menu.hovered = menu.selected ?? 0;
+      this.handleMenuClick(menu);
+    } else if (menu.id === MENU.VERBS) {
+      if (menu.selected !== null && menu.selected !== undefined) this.chooseVerb(menu.selected);
+    } else if (menu.id === MENU.SAY || menu.id === MENU.RECEIVED) {
+      this.handleMenuClick(menu);
+    }
+  }
+
   scrollSay(menu, keys) {
     for (const key of keys) {
       if (key === 'ArrowUp') menu.scroll = Math.max(menu.scroll - 1, 0);
@@ -1902,6 +2000,7 @@ export class Game {
     const fading = this.menus.at(-1);
     if (fading?.id === MENU.TEXT_FADE) this.updateTextFade(fading);
     this.handleInput();
+    this.updatePauseSound();
     if (this.pendingRoom !== null) this.loadPendingRoom();
     this.roomCheckUpdate();
     if (this.pendingRoom !== null) this.loadPendingRoom();
@@ -2249,7 +2348,7 @@ export class Game {
       if (clips > 0) {
         const loaded = Math.min(clips, AMMO_MAX);
         this.ammoSet(loaded, true, true);
-        if (clips - loaded <= 0) this.vars.delete('inv-invBulletClips');
+        if (clips - loaded <= 0) this.unsetRaw('inv-invBulletClips');
         else this.setInventory('invBulletClips', clips - loaded);
         this.reloading = true;
       } else if (!this.noMoreBullets) {
@@ -2451,8 +2550,15 @@ export class Game {
     } else {
       this.objects.forEach((object, index) => {
         // Hard-coded in ExtBase.roomPaint: the painting in the first room keeps running.
-        if (index === 6 && this.currentRoom.toLowerCase() === '0') object.runAnimLoops = 1;
+        // ExtBase.roomPaint keeps the painting in room 0 going while the player is away.
+        const isPainting = index === 6 && this.currentRoom.toLowerCase() === '0';
+        if (isPainting) {
+          object.runAnimLoops = 1;
+          if (this.paintingTime === null) this.paintingTime = object.animationTime;
+          else object.animationTime = this.paintingTime;
+        }
         object.paintAnimation(list, this.tickTime);
+        if (isPainting) this.paintingTime = object.animationTime;
       });
     }
     list.push(
