@@ -312,7 +312,7 @@ Every file was rendered in a browser through both sound sources and measured for
 
 ## What hasn't been checked
 
-- No person has played a game through. The first game's route in `test/playthrough.test.mjs` was found by a search, and it hasn't been compared with the original on a phone.
-- Mobile 2 and Mobile 3 scripts haven't been run, and most of Silent Hill's have been reached only by the tests above, so most command behavior is only known from reading the code.
+- The first game has been played through once by a person in the browser, who reported that it seemed okay. That wasn't a side-by-side comparison with the original on a phone, and the route in `test/playthrough.test.mjs` hasn't been compared with one either.
+- Mobile 2 and Mobile 3 scripts haven't been run, so their command behavior is only known from reading the code.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.
