@@ -9,10 +9,10 @@
 
 import { writeFileSync } from 'node:fs';
 import { readInput, recommended } from '../src/inputs.mjs';
-import { Player, newPlaythroughGame } from '../src/playthrough.mjs';
+import { Player, copyGame, newPlaythroughGame } from '../src/playthrough.mjs';
 import { EVENT, MENU, VERB } from '../web/engine/game.mjs';
 import { loadGameData, readJar } from '../web/engine/jar.mjs';
-import { Script, toInt } from '../web/engine/vm.mjs';
+import { toInt } from '../web/engine/vm.mjs';
 
 const OUTPUT = new URL('../src/sh1-route.json', import.meta.url);
 const COMMIT_LIMIT = 1500;
@@ -35,40 +35,6 @@ const PUZZLE_ANSWERS = {
 // Variables that don't show progress: positions, counters and what's spent in fights.
 const NOT_PROGRESS =
   /^(room-|sys_battleState|moveAnim|cur-|sys_health|sys_ammo|mm$|nn$|np$|q[0-9a-gm]$|p[d-m]$|n[0-4]$|md$|me$|mc$|mr$|var_floor$|s_compassDirection$|mk$)/;
-const SHARED_FIELDS = new Set(['data', 'gameTexts', 'engineTexts', 'scripts', 'images', 'languages']);
-
-function copyGame(root) {
-  const copies = new Map();
-  const copy = (value) => {
-    if (value === null || typeof value !== 'object' || ArrayBuffer.isView(value) || value instanceof Script)
-      return value;
-    if (copies.has(value)) return copies.get(value);
-    if (value instanceof Map) {
-      const map = new Map();
-      copies.set(value, map);
-      for (const [key, item] of value) map.set(copy(key), copy(item));
-      return map;
-    }
-    if (value instanceof Set) {
-      const set = new Set();
-      copies.set(value, set);
-      for (const item of value) set.add(copy(item));
-      return set;
-    }
-    if (Array.isArray(value)) {
-      const list = [];
-      copies.set(value, list);
-      for (const item of value) list.push(copy(item));
-      return list;
-    }
-    const object = Object.create(Object.getPrototypeOf(value));
-    copies.set(value, object);
-    for (const key of Object.keys(value)) object[key] = SHARED_FIELDS.has(key) ? value[key] : copy(value[key]);
-    return object;
-  };
-  return copy(root);
-}
-
 const facts = (game) => {
   const list = [`@room=${game.currentRoomId}`, ...(game.gains ?? [])];
   for (const [name, { value }] of game.vars) if (!NOT_PROGRESS.test(name)) list.push(`${name}=${value}`);

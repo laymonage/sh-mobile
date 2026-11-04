@@ -6,7 +6,7 @@ import { GameClock } from '../web/engine/clock.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
 import { controlsText, gameplayText } from '../web/engine/help-text.mjs';
 import { pixelFontGlyph } from '../web/pixel-font.mjs';
-import { ARCHIVE_JAR, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
+import { ARCHIVE_JARS, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
 import { allInputs, buildsOf, input, readInput, recommended } from '../src/inputs.mjs';
 
@@ -49,10 +49,20 @@ function hover(game, x, y) {
   game.advance();
 }
 
-test('the Internet Archive download is pinned to a build the port accepts', async () => {
-  const build = input('sh1-2014-base');
-  assert.equal(ARCHIVE_JAR.integrity, `sha256-${Buffer.from(build.sha256, 'hex').toString('base64')}`);
-  assert.equal((await inspectJar(readInput(build.id))).status, 'ok');
+for (const [game, buildId] of [
+  ['sh1', 'sh1-2014-base'],
+  ['sh2', 'sh2-2015-a1'],
+]) {
+  test(`the Internet Archive's ${game} download is pinned to a build the port accepts`, async () => {
+    const build = input(buildId);
+    assert.equal(ARCHIVE_JARS[game].integrity, `sha256-${Buffer.from(build.sha256, 'hex').toString('base64')}`);
+    assert.equal((await inspectJar(readInput(build.id))).status, 'ok');
+  });
+}
+
+test('each Internet Archive download is kept apart, and copies already kept still count', () => {
+  assert.equal(ARCHIVE_JARS.sh1.storageKey, 'archive');
+  assert.notEqual(ARCHIVE_JARS.sh2.storageKey, ARCHIVE_JARS.sh1.storageKey);
 });
 
 test("help describes the mouse and keyboard in every language, in the JAR's own headings", () => {
@@ -96,7 +106,9 @@ test('the page has a strict Content Security Policy, and nothing inline for it t
   assert.deepEqual(directives['default-src'], ["'none'"]);
   assert.deepEqual(directives['script-src'], ["'self'"]);
   assert.deepEqual(directives['style-src'], ["'self'"]);
-  assert.ok(directives['connect-src'].includes(`https://${new URL(ARCHIVE_JAR.url).host}`));
+  for (const { url } of Object.values(ARCHIVE_JARS)) {
+    assert.ok(directives['connect-src'].includes(`https://${new URL(url).host}`));
+  }
   assert.ok(directives['connect-src'].includes('https://*.archive.org'));
   assert.doesNotMatch(policy, /unsafe/);
   assert.doesNotMatch(page, /<style|\sstyle=|\son[a-z]+=/i);
@@ -1122,7 +1134,8 @@ test('the port accepts or explains every JAR, from its data alone', async () => 
     'sh1 ok ok': 88,
     'sh1 warning small-art': 17,
     'sh1 rejected no-ink': 25,
-    'sh2 rejected other-game': 61,
+    'sh2 ok ok': 36,
+    'sh2 warning small-art': 25,
     'sh2 rejected no-ink': 8,
     'sh2 rejected damaged': 1,
   });

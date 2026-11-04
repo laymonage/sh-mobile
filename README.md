@@ -12,13 +12,13 @@ See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
 
 ## Playing the prototype
 
-`web/` is an early browser port of the first game. It reads your own JAR locally and doesn't upload it. Start it with:
+`web/` is an early browser port of the first two games. It reads your own JAR locally and doesn't upload it. Start it with:
 
 ```bash
 npm run play
 ```
 
-Then open <http://localhost:8123/> and drop in a JAR, or choose **Load from the Internet Archive** to download a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill). The port only accepts that exact file, by its hash, and keeps it in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build.
+Then open <http://localhost:8123/> and drop in a JAR, or download one from the Internet Archive: **Silent Hill** gets a copy of `sh1-2014-base` from [archive.org](https://archive.org/details/j2me-game-glu-silenthill), and **Mobile 2** gets a copy of `sh2-2015-a1` from [archive.org](https://archive.org/details/j2me-game-glu-silenthillmobile2). The port only accepts those exact files, by their hashes, and keeps each in this browser so that it's only downloaded once. During development, <http://localhost:8123/?jar=sh1-2007-a31> loads a pinned build, and <http://localhost:8123/?jar=sh2-2015-base> loads Silent Hill Mobile 2's touch build.
 
 The page sets a Content Security Policy in a `<meta>` tag, so it applies wherever the page is hosted. Directives that a tag can't set, such as `frame-ancestors`, need a response header from the host.
 
@@ -59,6 +59,21 @@ To skip the file picker during development, put a `.sf2` in the ignored `soundfo
 
 There's one save for each version of the game's data, whichever language is chosen. It's kept in this browser's local storage, so clearing site data deletes it. As in the original, starting a new game deletes it, after a warning.
 
+### Silent Hill Mobile 2
+
+Mobile 2 plays from a new game to its ending, on the same engine, with what differs in `web/engine/mobile2.mjs`. There are two versions, and both can be finished:
+
+- **The touch build, `sh2-2015-base`:** the painting, the carving and the incision are drawn by dragging with the left mouse button, so these can't be done with the keyboard. This is the build the port's code follows.
+- **The keypad version, including the Internet Archive's `sh2-2015-a1`:** the painting is joined up by clicking its dots, the carving is steered with arrows, and the incision isn't there. It can be played with only the keyboard.
+
+In both:
+
+- The rooms are 310x270, and some are 290 wide and sit centered in the frame.
+- The touch build's icons for the weapon, first aid and inventory are the page's buttons and keys. Its navigation icon isn't there, because the mouse and the walking keys already reach every exit.
+- The tutorial's text is the JAR's own, so it describes a phone. Help adds this port's controls in English only.
+
+Nobody has played Mobile 2 by hand yet.
+
 ## Requirements
 
 - Node.js 22 or newer. Only formatting and linting need `npm install`, for Biome. Nothing else has npm dependencies.
@@ -94,7 +109,8 @@ You can also run each step on its own:
 | Command | What it does | Output |
 | --- | --- | --- |
 | `npm run play` | Serves the browser port on this machine only | `http://localhost:8123/` |
-| `npm run find-route` | Searches for a way through the first game, for the playthrough test | `src/sh1-route.json` |
+| `npm run find-route` | Searches for a way through the first game, for the playthrough test. It can use up to 7 GB of memory | `src/sh1-route.json` |
+| `npm run walk-route` | Writes a way through Mobile 2's touch build by walking between the walkthrough's steps, using about 300 MB. Add `-- --keypad` for the keypad version | `src/sh2-route.json`, `src/sh2-keypad-route.json` |
 | `npm run format` | Formats the code with Biome. `npm run format:check` only reports what it would change | Console |
 | `npm run lint` | Lints the code with Biome. `npm run check` does this and checks the formatting | Console |
 | `npm run verify` | Checks every build's hash | Console |
@@ -124,7 +140,7 @@ node scripts/decompile.mjs sh2-2008-a7
 
 ## Layout
 
-- `web/`: the browser port, with the engine and shared format parsers in `web/engine/`
+- `web/`: the browser port, with the engine and shared format parsers in `web/engine/`. `web/engine/mobile2.mjs` holds what Mobile 2 does differently, and `web/engine/text-tables.mjs` where each game keeps its text
 - `src/`: Node analysis code: class files, SH3 archives, the room renderer and build comparison
 - `scripts/`: the command-line steps above
 - `test/`: pins each number and claim in the findings

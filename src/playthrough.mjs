@@ -11,10 +11,13 @@
 //   choose <row>              pick a row of a choice menu
 //   clicks <script>...        click these in turn, for a puzzle's buttons
 //   fight                     aim and shoot until the enemy is dead
+//   stroke <x,y>...           draw through these points, from the mask's corner
 // An <object> is `script#index`, because a room can use one script twice.
 
-import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
-import { toInt } from '../web/engine/vm.mjs';
+import { ROOM_OBJECT_ZONE_BATTLE } from '../web/engine/format.mjs';
+import { EVENT, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
+import { createGame, Mobile2Game } from '../web/engine/mobile2.mjs';
+import { Script, toInt } from '../web/engine/vm.mjs';
 
 const TICK_MS = 60;
 const WAIT_TICK_MS = 200;
@@ -26,19 +29,18 @@ const SETTLE_LIMIT = 6000;
 const FIGHT_LIMIT = 2500;
 const LOW_HEALTH = 2;
 const VERBS = { look: VERB.LOOK, hand: VERB.HAND, mouth: VERB.MOUTH };
-const WHEEL_OFFSETS = {
-  [VERB.LOOK]: [0, -20],
-  [VERB.HAND]: [20, 0],
-  [VERB.MOUTH]: [0, 20],
-  [VERB.INVENTORY]: [-20, 0],
-};
+const FIRST_AID = { sh: '2g', a: 'g' };
+const AMMO_ITEM = 'invAmmo';
+const STROKE_MS = 400;
 const CHOICE_USE = -2;
 const ITEM_ACTIONS = { use: CHOICE_USE, look: EVENT.LOOKAT, equip: EVENT.EQUIP, unequip: EVENT.UNEQUIP };
 
 // The clock and the dice live on the game, so that a copy of a game carries on from
 // exactly where the original was.
 export function newPlaythroughGame(data, { seed = 12345, storage = null } = {}) {
-  const game = new Game(data, { language: 'en', storage });
+  // Mobile 2's rooms, in the full-resolution builds this is used with.
+  const size = data.dataDir === 'a' ? { roomSize: 310, roomHeight: 270 } : {};
+  const game = createGame(data, { language: 'en', storage, ...size });
   game.clock = 1000;
   game.seed = seed;
   game.now = function now() {
@@ -50,6 +52,41 @@ export function newPlaythroughGame(data, { seed = 12345, storage = null } = {}) 
   };
   game.startNewGame();
   return game;
+}
+
+const SHARED_FIELDS = new Set(['data', 'gameTexts', 'engineTexts', 'scripts', 'images', 'languages', 'text']);
+
+// A copy of a game that carries on from exactly where it was, sharing what never changes.
+export function copyGame(root) {
+  const copies = new Map();
+  const copy = (value) => {
+    if (value === null || typeof value !== 'object' || ArrayBuffer.isView(value) || value instanceof Script)
+      return value;
+    if (copies.has(value)) return copies.get(value);
+    if (value instanceof Map) {
+      const map = new Map();
+      copies.set(value, map);
+      for (const [key, item] of value) map.set(copy(key), copy(item));
+      return map;
+    }
+    if (value instanceof Set) {
+      const set = new Set();
+      copies.set(value, set);
+      for (const item of value) set.add(copy(item));
+      return set;
+    }
+    if (Array.isArray(value)) {
+      const list = [];
+      copies.set(value, list);
+      for (const item of value) list.push(copy(item));
+      return list;
+    }
+    const object = Object.create(Object.getPrototypeOf(value));
+    copies.set(value, object);
+    for (const key of Object.keys(value)) object[key] = SHARED_FIELDS.has(key) ? value[key] : copy(value[key]);
+    return object;
+  };
+  return copy(root);
 }
 
 // A key press takes this many ticks, which is about as fast as a person can tap.
@@ -183,7 +220,7 @@ export class Player {
       return;
     }
     const center = verbWheelCenter(game.menus.at(-1), game.roomWidth, game.roomHeight);
-    const [dx, dy] = WHEEL_OFFSETS[verb];
+    const [dx, dy] = game.constructor.WHEEL_ARMS[verb];
     game.moveCursor(center.x + dx, center.y + dy);
     game.click();
     this.tick();
@@ -240,21 +277,26 @@ export class Player {
         this.tick();
         continue;
       }
-      const enemy = game.objects.find(({ visible, script }) => visible && script?.hasEvent(EVENT.ATTACK1));
+      const enemy = game.objects.find(
+        ({ visible, active, type, script }) =>
+          (visible || (type === ROOM_OBJECT_ZONE_BATTLE && active)) && script?.hasEvent(EVENT.ATTACK1),
+      );
       if (!enemy) {
         if (++quiet > CALM_TICKS) return;
         this.tick();
         continue;
       }
       quiet = 0;
-      if (toInt(game.getRaw('sys_health')) <= LOW_HEALTH && game.inventorySize('2g') > 0) {
+      if (toInt(game.getRaw('sys_health')) <= LOW_HEALTH && game.inventorySize(FIRST_AID[game.dataDir]) > 0) {
         game.pressKey('3');
         this.tick();
       }
-      if (this.keyboard) this.holdTowards(enemy);
-      else game.moveCursor(enemy.x, enemy.y);
+      if (game instanceof Mobile2Game && this.prepareWeapon()) continue;
+      const target = this.aimPoint(enemy);
+      if (this.keyboard) this.holdTowards(target);
+      else game.moveCursor(target.x, target.y);
       this.tick();
-      if (game.hoverObject === enemy && !game.attackAnim && game.ammo > 0 && !game.reloading) {
+      if (game.hoverObject === enemy && !game.attackAnim && game.canFire()) {
         this.confirm();
         this.tick();
         this.tick(WAIT_TICK_MS + 100);
@@ -262,6 +304,52 @@ export class Player {
         this.tick();
       }
     }
+  }
+
+  // Silent Hill's shots land near an enemy's anchor. Mobile 2's land anywhere on it.
+  aimPoint(enemy) {
+    if (!(this.game instanceof Mobile2Game)) return enemy;
+    if (enemy.type === ROOM_OBJECT_ZONE_BATTLE)
+      return { x: enemy.x + (enemy.width >> 1), y: enemy.y + (enemy.height >> 1) };
+    return { x: (enemy.left + enemy.right) >> 1, y: (enemy.top + enemy.bottom) >> 1 };
+  }
+
+  // Mobile 2 starts a fight with the gun away, and only reloads from the inventory.
+  prepareWeapon() {
+    const game = this.game;
+    if (toInt(game.getRaw('sys_battleState')) === 0) {
+      this.pressKey('1');
+      return true;
+    }
+    if (game.ammo === 0 && game.inventorySize(AMMO_ITEM) > 0) {
+      game.pressKey('inventory');
+      this.tick();
+      this.chooseItemAction(AMMO_ITEM, 'equip');
+      return true;
+    }
+    return false;
+  }
+
+  // Draws with the mouse button down, as web/main.mjs passes it on, with time for the
+  // original's delay before a stroke draws anything.
+  stroke(points) {
+    const game = this.game;
+    const mask = game.strokeMask();
+    if (!mask) throw new Error(`There's nothing to draw on in room ${game.currentRoomId}`);
+    const toRoom = (point) => {
+      const [x, y] = point.split(',').map(Number);
+      return [mask.left + x, mask.top + y];
+    };
+    const [first, ...rest] = points.map(toRoom);
+    game.moveCursor(...first);
+    game.startStroke(...first);
+    game.clock += STROKE_MS;
+    for (const point of rest) {
+      game.moveCursor(...point);
+      game.continueStroke(...point);
+    }
+    game.endStroke();
+    this.tick();
   }
 
   // What a keyboard player presses for the soft key's Back.
@@ -309,6 +397,8 @@ export class Player {
       this.tick();
     } else if (command === 'clicks') {
       for (const script of args) this.clickScript(script);
+    } else if (command === 'stroke') {
+      this.stroke(args);
     } else if (command === 'fight') {
       this.fight();
       for (const [minus, plus] of AIM_DIRECTIONS) {

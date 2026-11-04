@@ -6,14 +6,27 @@ async function inflate(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-// Unpacks a whole JAR into memory. A JAR is a ZIP file.
-// A copy of the 2014 build on the Internet Archive, for players who don't have a JAR.
-// The hash means that only this exact file is accepted.
-export const ARCHIVE_JAR = {
-  url: 'https://archive.org/download/j2me-game-glu-silenthill/glu-silenthill.zip/app.jar',
-  integrity: 'sha256-P9YSB/lTDWbDEAcY3411XLHZ1Z2zevIQh8aMUQ+ooa0=',
+// Copies on the Internet Archive, for players who don't have a JAR. The hash means that
+// only this exact file is accepted, and each is kept under its own key in the browser.
+export const ARCHIVE_JARS = {
+  // The first game's 2014 build.
+  sh1: {
+    url: 'https://archive.org/download/j2me-game-glu-silenthill/glu-silenthill.zip/app.jar',
+    integrity: 'sha256-P9YSB/lTDWbDEAcY3411XLHZ1Z2zevIQh8aMUQ+ooa0=',
+    storageKey: 'archive',
+  },
+  // Mobile 2's keypad version, sh2-2015-a1, with the same data as sh2-2008-a7.
+  sh2: {
+    url: 'https://archive.org/download/j2me-game-glu-silenthillmobile2/glu-silenthillmobile2.zip/app.jar',
+    integrity: 'sha256-pIeFM8jy8L2iDmLM/heRKVNwYj++OFfK/4Sb7saqXxw=',
+    storageKey: 'archive-sh2',
+  },
 };
 
+// The width of a full-resolution build's art, by the folder its data is in.
+const FULL_ART_WIDTHS = { sh: 256, a: 310 };
+
+// Unpacks a whole JAR into memory. A JAR is a ZIP file.
 export async function readJar(bytes) {
   const files = new Map();
   for (const [name, entry] of parseZipDirectory(bytes)) {
@@ -26,7 +39,8 @@ export async function readJar(bytes) {
 }
 
 // All game data by logical name, the same way the engine resolves it: most of it
-// sits in chunk archives, and language files sit beside them.
+// sits in chunk archives, and language files sit beside them. Silent Hill Mobile 2
+// keeps those in a top-level lan/ folder, which M.loadGameLanguage opens directly.
 export function loadGameData(files) {
   const entries = new Map();
   for (const [name, value] of files) {
@@ -37,6 +51,7 @@ export function loadGameData(files) {
   const dataDir = [...entries.keys()][0].split('/')[0];
   for (const [name, value] of files) {
     if (name.startsWith(`${dataDir}/`) && !name.endsWith('.class')) entries.set(name, value);
+    if (name.startsWith('lan/')) entries.set(`${dataDir}/${name}`, value);
   }
   return { dataDir, entries, files };
 }
@@ -67,24 +82,24 @@ export async function inspectJar(bytes) {
   } catch {
     return { status: 'rejected', reason: 'damaged', message: "This JAR's game data is damaged." };
   }
-  if (data.dataDir !== 'sh') {
-    return {
-      status: 'rejected',
-      reason: 'other-game',
-      message: "This looks like Silent Hill Mobile 2, which isn't supported yet.",
-    };
+  const fullWidth = FULL_ART_WIDTHS[data.dataDir];
+  if (!fullWidth) {
+    return { status: 'rejected', reason: 'other-game', message: "This isn't a Silent Hill game the port knows." };
   }
 
-  const widths = [...data.entries].filter(([name]) => name.endsWith('.png')).map(([, value]) => pngInfo(value).width);
-  const roomSize = Math.max(...widths);
-  if (roomSize !== 256) {
+  const art = [...data.entries].filter(([name]) => name.endsWith('.png')).map(([, value]) => pngInfo(value));
+  const roomSize = Math.max(...art.map(({ width }) => width));
+  // Silent Hill's rooms are square. Mobile 2's largest art is exactly a room's size.
+  const roomHeight = data.dataDir === 'sh' ? roomSize : Math.max(...art.map(({ height }) => height));
+  if (roomSize !== fullWidth) {
     return {
       status: 'warning',
       reason: 'small-art',
       roomSize,
+      roomHeight,
       data,
       message: `This build has smaller art, ${roomSize} pixels wide. It should run, but its layout hasn't been tuned.`,
     };
   }
-  return { status: 'ok', reason: 'ok', roomSize, data, message: '' };
+  return { status: 'ok', reason: 'ok', roomSize, roomHeight, data, message: '' };
 }

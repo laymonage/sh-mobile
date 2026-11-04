@@ -1,6 +1,7 @@
-import { Game, MENU } from './engine/game.mjs';
+import { MENU } from './engine/game.mjs';
+import { createGame } from './engine/mobile2.mjs';
 import { GameClock } from './engine/clock.mjs';
-import { ARCHIVE_JAR, inspectJar } from './engine/jar.mjs';
+import { ARCHIVE_JARS, inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
 import { deleteStoredArchiveJar, loadStoredArchiveJar, storeArchiveJar } from './jar-store.mjs';
@@ -27,7 +28,7 @@ const MENU_ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right
 
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
-const archiveButton = document.getElementById('archive');
+const archiveButtons = [...document.querySelectorAll('[data-archive]')];
 const message = document.getElementById('message');
 const canvas = document.getElementById('game');
 const saveButton = document.getElementById('save');
@@ -60,13 +61,18 @@ async function start(bytes) {
   const clock = new GameClock();
   clock.setHidden(document.hidden);
   document.addEventListener('visibilitychange', () => clock.setHidden(document.hidden));
-  const game = new Game(inspection.data, {
+  const game = createGame(inspection.data, {
     roomSize: inspection.roomSize,
+    roomHeight: inspection.roomHeight,
     storage: browserStorage(),
     audio,
     now: () => clock.now(),
   });
   const renderer = new Renderer(canvas, game);
+  // Keeps the room's shape, and leaves space for the panel under it.
+  const page = document.documentElement.style;
+  page.setProperty('--game-aspect', String(game.frameWidth / game.frameHeight));
+  page.setProperty('--page-ratio', String(game.frameHeight / game.frameWidth + 0.27));
   await renderer.loadImages(inspection.data);
   showPanelArt(inspection.data);
   document.body.classList.add('playing');
@@ -240,8 +246,8 @@ function run(game, renderer) {
   const toRoom = (event) => {
     const box = canvas.getBoundingClientRect();
     return [
-      ((event.clientX - box.left) / box.width) * game.roomWidth,
-      ((event.clientY - box.top) / box.height) * game.roomHeight,
+      ((event.clientX - box.left) / box.width) * game.frameWidth - game.viewOffsetX,
+      ((event.clientY - box.top) / box.height) * game.frameHeight - game.viewOffsetY,
     ];
   };
   const syncMouseLock = setUpMouseLock(game);
@@ -249,13 +255,14 @@ function run(game, renderer) {
     if (game.pointerLocked) {
       const box = canvas.getBoundingClientRect();
       game.movePointerBy(
-        (event.movementX / box.width) * game.roomWidth,
-        (event.movementY / box.height) * game.roomHeight,
+        (event.movementX / box.width) * game.frameWidth,
+        (event.movementY / box.height) * game.frameHeight,
       );
       return;
     }
     game.aimWithMouse();
     game.moveCursor(...toRoom(event));
+    if (game.stroke) game.continueStroke(game.cursorX, game.cursorY);
   });
   canvas.addEventListener('pointerdown', (event) => {
     syncMouseLock.clicked();
@@ -263,11 +270,18 @@ function run(game, renderer) {
       game.moveCursor(...toRoom(event));
       renderer.updateHoveredRow();
     }
+    if (event.button === 0 && !event.ctrlKey && game.wantsStroke()) {
+      game.startStroke(game.cursorX, game.cursorY);
+      canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     // On a Mac, Control-click is also a right-click.
     if (event.button === 2 || event.ctrlKey) game.pressSoftKey('right');
     else game.click();
     event.preventDefault();
   });
+  canvas.addEventListener('pointerup', () => game.stroke && game.endStroke());
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   for (const button of document.querySelectorAll('#actions button')) {
     button.addEventListener('click', () => {
@@ -358,21 +372,25 @@ async function startFromFile(file) {
 }
 
 // The copy kept from an earlier download, if it can still be read as a game.
-async function storedArchiveJar() {
-  const bytes = await loadStoredArchiveJar(ARCHIVE_JAR.integrity);
+async function storedArchiveJar(jar) {
+  const bytes = await loadStoredArchiveJar(jar);
   if (!bytes) return null;
   try {
     if ((await inspectJar(bytes)).status === 'ok') return bytes;
   } catch {
     // It's damaged, so it's replaced by a new download.
   }
-  await deleteStoredArchiveJar();
+  await deleteStoredArchiveJar(jar);
   return null;
 }
 
-async function startFromArchive() {
-  archiveButton.disabled = true;
-  const stored = await storedArchiveJar();
+function setArchiveButtonsDisabled(disabled) {
+  for (const button of archiveButtons) button.disabled = disabled;
+}
+
+async function startFromArchive(jar) {
+  setArchiveButtonsDisabled(true);
+  const stored = await storedArchiveJar(jar);
   if (stored) {
     await start(stored);
     return;
@@ -380,19 +398,21 @@ async function startFromArchive() {
   showMessage('Downloading from the Internet Archive...');
   let bytes;
   try {
-    const response = await fetch(ARCHIVE_JAR.url, { integrity: ARCHIVE_JAR.integrity });
+    const response = await fetch(jar.url, { integrity: jar.integrity });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     bytes = new Uint8Array(await response.arrayBuffer());
-    await storeArchiveJar(ARCHIVE_JAR.integrity, bytes);
+    await storeArchiveJar(jar, bytes);
   } catch {
     showMessage("Couldn't download the game from the Internet Archive. Try again, or choose a JAR.", 'error');
-    archiveButton.disabled = false;
+    setArchiveButtonsDisabled(false);
     return;
   }
   await start(bytes);
 }
 
-archiveButton.addEventListener('click', startFromArchive);
+for (const button of archiveButtons) {
+  button.addEventListener('click', () => startFromArchive(ARCHIVE_JARS[button.dataset.archive]));
+}
 fileInput.addEventListener('change', () => startFromFile(fileInput.files[0]));
 drop.addEventListener('dragover', (event) => {
   event.preventDefault();

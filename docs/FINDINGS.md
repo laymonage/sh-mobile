@@ -215,10 +215,9 @@ From its data alone, the port accepts or explains every Silent Hill and Mobile 2
 
 | Result | Builds |
 | --- | --- |
-| Accepted | The 88 full-resolution Silent Hill builds |
-| Accepted with a warning about smaller art | The other 17 Silent Hill INK builds |
+| Accepted | The 88 full-resolution Silent Hill builds and 36 full-resolution Mobile 2 builds |
+| Accepted with a warning about smaller art | The other 17 Silent Hill INK builds and 25 Mobile 2 INK builds |
 | Rejected: no INK data | 25 Silent Hill and 8 Mobile 2 low-end builds |
-| Rejected: Mobile 2 isn't supported yet | 61 Mobile 2 builds |
 | Rejected: damaged | `sh2-2008-konno-a3` |
 
 `sh1-2007-a31` and `sh1-2014-base` have been run in the browser. Being accepted means a build's data has the expected form, not that the build has been played.
@@ -310,9 +309,61 @@ There's no limiter. An earlier version had the browser's compressor on the outpu
 
 Every file was rendered in a browser through both sound sources and measured for silence, invalid samples and clipping. Nobody has compared the result with a real phone.
 
+## The Mobile 2 port
+
+`web/engine/mobile2.mjs` runs Silent Hill Mobile 2 on the first game's engine, following `sh2-2015-base`'s decompiled code. Its script interpreter, the `c` class, was read against the port's: the commands mean the same, so the virtual machine is shared unchanged, and the difference between the games is in the engine around it. The tests for Silent Hill passed unchanged, apart from the count of accepted builds above.
+
+The game can be finished in the port. `test/playthrough-sh2.test.mjs` plays it from a new game through Lucas and Vincent to "To be continued..." and back to the main menu, in 235 steps of pointer moves, clicks, keys and strokes. It passes through 30 of the 41 rooms. It leaves out `setup`, which is over within a tick, one of the three enemy rooms, the six map rooms and two rooms that only show something.
+
+`scripts/walk-route.mjs` found the route. Its goals are the steps of [this walkthrough](https://www.silenthillmemories.net/sh_mobile2/walkthrough_en.htm), in order, with a few added from the scripts where a step takes two actions, such as unlocking a door before going through it. The keypad codes 2591 and 21536 and the nameplate order Bill, Marie, Lucas agree with the scripts. The walkthrough shows the drawings only as images, which weren't read, so those strokes come from the regions in `e.b`. The painting's regions are the sides of a triangle through three of its red dots, as the walkthrough's text describes. Searching this way takes about 300 MB, where `scripts/find-route.mjs` allows 7 GB.
+
+The route finishes with each of the eight other dice seeds tried, and on the keyboard, apart from its strokes, which only a mouse can draw. It takes damage, unlike the first game's route, and got as low as 2 of 5 health. That shows a path exists, not that the game plays well.
+
+### The keypad version
+
+The Internet Archive's copy, `sh2-2015-a1`, is the keypad version: all 987 of its data entries match `sh2-2008-a7`. Its scripts and variables have different names from the touch build's, so its route is separate, in `src/sh2-keypad-route.json`, 234 steps long. `scripts/walk-route.mjs` writes both from the same goals, which go by what a player sees, such as item names and what's said.
+
+The port still follows the touch build's engine for this version. Comparing the two builds' hard-coded strings found only the touch build's icons and puzzle code added, but the rest of the keypad engine hasn't been read closely.
+
+Its puzzles are scripts rather than code. The painting is joined up by clicking dots 1, 2, 3, 8 and 1 again, the same triangle as the touch build's. The carving is steered with four arrows, along a staircase of right and up that was found by trying every way. There's no incision: the scalpel cuts the body directly. The route also finishes with four other dice seeds, on only the keyboard, and with saves and loads along the way.
+
+### What differs from the first game
+
+- **Rooms:** `s_screenWidth` and `s_screenHeight` set a room's size, 310x270 or 290x270. The original pans over them on a 240x320 screen, and the port shows the whole room, centered.
+- **Palettes:** corridors are recolored by swapping an image's PNG palette, from `plts/`. An image takes the palette set when it's first loaded after a room change, because the `a` class caches it.
+- **Exits:** there are also `turnback`, `turnleft`, `turnright`, stairs and elevator exits, with cursors of their own. The walking keys take all of them.
+- **The verb wheel:** it has three arms, with no mouth.
+- **Battles:** `h.s` has its own rules. A shot hits anywhere on a target, rather than near an anchor point. Enemies have idle, moving, dodging, attacking and recovering states, and their vulnerable zones change every 20 ticks. A fight starts with the gun away. Reloading is from the inventory.
+- **Being hit:** the screen is tiled with an image the script names, rather than blood spreading.
+- **Skipping:** a `setSkip` variable decides what can be skipped, rather than the room's name.
+- **Text:** the same phrases are numbered differently, so the engine now looks them up by name. Language files sit in a top-level `lan/` folder.
+
+The moving enemy compares its name with the word `Enemy`, as `h.s` does. That name is translated, so in other languages enemies don't walk from side to side. This looks like a bug in the original, and the port keeps it.
+
+### The drawn puzzles
+
+`e.a`, `e.b` and `e.c` draw a line and check its position against regions measured from a mask image's corner. They don't read the mask's pixels. A stroke has to touch three checkpoints without leaving the regions, and only dragging counts, not the point it starts from. As in the original, nothing is drawn for the first 350 ms. The keypad builds have ordinary puzzles in rooms of the same names, and the port lets those be clicked.
+
+### What the port leaves out
+
+- The touch build's icons along the top of the screen and its arrows for turning. The page's buttons and keys do the same, except for the navigation icon, which has no use with a mouse.
+- The tutorial's text is the JAR's, so it describes those icons. Help adds this port's controls in English only.
+- The Mouse lock setting is shared with the first game and hasn't been tried in Mobile 2.
+
+### What was tried
+
+In the browser, with `sh2-2015-base`: the startup, the main menu, the tutorial, the first room, the verb wheel, a recolored corridor, a fight and two drawn puzzles, using real pointer events where it mattered. Those rooms were reached by setting the game's state rather than by walking there, and the rest of the route has only been run in Node. No one has played it by hand, and the music hasn't been listened to.
+
+The Internet Archive's button was clicked in the browser: it downloaded the file, checked its hash, kept it, and a reload played from the kept copy without downloading again. The keypad version's painting was solved there with pointer events. The first game's button was clicked too, after it became one of two.
+
+The two smaller art sizes reach the first room in Node, and no further has been tried.
+
+Playing the route also found a freeze in the engine shared with the first game: pressing Esc in a menu at the moment a script's wait ended closed the text that script had just opened, which left it waiting forever. A key now goes to whatever is on top after the wait ends.
+
 ## What hasn't been checked
 
 - The first game has been played through once by a person in the browser, who reported that it seemed okay. That wasn't a side-by-side comparison with the original on a phone, and the route in `test/playthrough.test.mjs` hasn't been compared with one either.
-- Mobile 2 and Mobile 3 scripts haven't been run, so their command behavior is only known from reading the code.
+- Mobile 3's scripts haven't been run, so its behavior is only known from reading the code.
+- Mobile 2 hasn't been compared with a phone, and how often its monsters attack depends on the same assumed 60 ms tick as the first game's.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.

@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/*.md", "!inputs.json", "!src/sh1-route.json"]
+    "includes": [
+      "**",
+      "!**/*.md",
+      "!inputs.json",
+      "!src/sh1-route.json",
+      "!src/sh2-route.json",
+      "!src/sh2-keypad-route.json"
+    ]
   },
   "formatter": {
     "enabled": true,

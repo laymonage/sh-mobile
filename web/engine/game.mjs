@@ -14,6 +14,7 @@ import {
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
+import { SILENT_HILL_TEXT } from './text-tables.mjs';
 import { MainMenu, mouseLockChoice, parseIni, pixelFontChoice, soundChoice, transitionsChoice } from './main-menu.mjs';
 
 export const EVENT = {
@@ -141,46 +142,12 @@ const MOUSE_LOCK_PREFERENCE = 'silent-hill-mobile:mouse-lock';
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
-// Engine text indexes in localization/*.properties.
-const CHOICE_BACK = -3;
-const CHOICE_USE = -2;
-const TEXT = {
-  SELECT: 7,
-  BACK: 9,
-  YES: 10,
-  NO: 11,
-  SETTINGS: 16,
-  HELP: 17,
-  GAMEPLAY: 23,
-  CONTROLS: 24,
-  SAVE: 35,
-  MENU: 45,
-  MAIN_MENU: 46,
-  CONTINUE: 59,
-  LEAVE_GAME: 81,
-  MAP: 43,
-  NEXT: 147,
-  SKIP: 148,
-  OK: 158,
-  SAVED: 80,
-  SAVE_FAILED: 118,
-  OUT_OF_AMMO: 172,
-  RECEIVED: 47,
-  LOOK_AT: 48,
-  USE: 49,
-  NOTHING_CARRIED: 134,
-  EQUIP: 136,
-  EQUIP_GUN: 90,
-  UNEQUIP: 91,
-  EQUIP_CLIPS: 135,
-  HINT_FORWARD: 150,
-  HINT_BACK: 151,
-  HINT_LEFT: 152,
-  HINT_RIGHT: 153,
-};
+export const CHOICE_BACK = -3;
+export const CHOICE_USE = -2;
 
 // Commands this prototype runs past: chunk downloads, which a JAR doesn't need, and vibration.
 const NO_OP = new Set([47, 56]);
+const LANGUAGE_ORDER = ['en', 'fr', 'de', 'it', 'es', 'pt'];
 
 // The text files write a line break as a backslash and an n, and a space that lines
 // mustn't break at as a plus, as in French punctuation. ExtBase.wrapString converts both.
@@ -278,6 +245,7 @@ class RoomObject {
     if (this.type === ROOM_OBJECT_GFX) {
       const info = this.game.imageInfo(this.gfxId);
       if (!info) return;
+      this.game.imagePalette(this.gfxId);
       const transform = TRANSFORMS[this.transform];
       this.left = this.x - transform.left(info.width, info.height, info.regX, info.regY);
       this.top = this.y - transform.top(info.width, info.height, info.regX, info.regY);
@@ -450,11 +418,26 @@ class RoomObject {
 
 // The game's state and rules, with no dependency on a canvas, so a test can play it.
 export class Game {
+  // What differs between the games. Mobile2Game replaces these.
+  static TEXT = SILENT_HILL_TEXT;
+  static SPEAKER_TEXTS = SPEAKER_COLORS;
+  static FLOOR_VARIABLE = 'var_floor';
+  static FLOOR_ROWS = FLOOR_ROWS;
+  static MENU_MUSIC = 'sh_bgmusic';
+  static WHEEL_ARMS = {
+    [VERB.LOOK]: [1, -20],
+    [VERB.HAND]: [21, -1],
+    [VERB.MOUTH]: [0, 18],
+    [VERB.INVENTORY]: [-20, -1],
+  };
+  static WHEEL_SYMBOLS_X = 1;
+
   constructor(
     data,
     {
       language = null,
       roomSize = 256,
+      roomHeight = null,
       now = () => Date.now(),
       random = Math.random,
       storage = null,
@@ -467,6 +450,7 @@ export class Game {
     this.random = random;
     this.storage = storage;
     this.audio = audio;
+    this.text = this.constructor.TEXT;
     this.mainMenu = null;
     this.languages = this.findLanguages();
     const stored = language ?? this.storedLanguage();
@@ -478,8 +462,11 @@ export class Game {
     this.vars = new Map();
     this.unsupportedCommands = new Set();
 
-    this.roomWidth = roomSize;
-    this.roomHeight = roomSize;
+    // The size of the canvas, in the art's pixels. A room can be narrower than this.
+    this.frameWidth = roomSize;
+    this.frameHeight = roomHeight ?? roomSize;
+    this.roomWidth = this.frameWidth;
+    this.roomHeight = this.frameHeight;
     this.backgroundColor = 0;
     this.menuColor = 0xffffff;
     this.menuTextColor = 0;
@@ -538,14 +525,23 @@ export class Game {
     this.pointerLocked = false;
 
     this.menus = [];
-    this.pointerX = roomSize >> 1;
-    this.pointerY = roomSize >> 1;
+    this.pointerX = this.roomWidth >> 1;
+    this.pointerY = this.roomHeight >> 1;
     this.cursorX = this.pointerX;
     this.cursorY = this.pointerY;
     this.overObject = null;
     this.hoverObject = null;
     this.pendingClick = false;
     this.pendingKeys = [];
+  }
+
+  // Where a room narrower than the frame sits in it.
+  get viewOffsetX() {
+    return (this.frameWidth - this.roomWidth) >> 1;
+  }
+
+  get viewOffsetY() {
+    return (this.frameHeight - this.roomHeight) >> 1;
   }
 
   resetBattle() {
@@ -750,12 +746,15 @@ export class Game {
   findLanguages() {
     const { entries, files } = this.data;
     const settings = files.get('settings.ini');
-    const listed = settings ? (parseIni(settings).get('INK-Languages') ?? '').split(',') : [];
+    const listed = settings ? (parseIni(settings).get('INK-Languages') ?? '').split(/[,_]/) : [];
     const present = listed.filter(
       (language) =>
         entries.has(`${this.dataDir}/lan/${language}.lan`) && files.has(`localization/${language}.properties`),
     );
-    return present.length ? present : ['en'];
+    if (!present.length) return ['en'];
+    // Mobile 2 lists them alphabetically, and its engine puts them in this order.
+    const order = (language) => LANGUAGE_ORDER.indexOf(language) + 1 || LANGUAGE_ORDER.length + 1;
+    return present.sort((one, two) => order(one) - order(two));
   }
 
   storedLanguage() {
@@ -768,10 +767,22 @@ export class Game {
 
   loadLanguage(language) {
     this.language = language;
-    this.gameTexts = adaptTutorialText(
+    this.gameTexts = this.adaptGameTexts(
       parseLan(this.data.entries.get(`${this.dataDir}/lan/${language}.lan`)).map(displayText),
     );
     this.engineTexts = this.readEngineTexts(language);
+  }
+
+  adaptGameTexts(texts) {
+    return adaptTutorialText(texts);
+  }
+
+  gameplayHelp() {
+    return gameplayText(this);
+  }
+
+  controlsHelp() {
+    return controlsText(this);
   }
 
   readEngineTexts(language) {
@@ -832,6 +843,11 @@ export class Game {
       this.images.set(id, bytes ? pngInfo(bytes) : null);
     }
     return this.images.get(id);
+  }
+
+  // Silent Hill draws every image with its own colors. Mobile2Game swaps some.
+  imagePalette() {
+    return 0;
   }
 
   // Scripts.
@@ -930,7 +946,7 @@ export class Game {
         return null;
       case 25:
         if (this.choiceMenu) {
-          const row = this.currentFloorRow();
+          const row = this.initialChoiceRow();
           this.choiceMenu.selected = row >= 0 && row < this.choiceMenu.choices.length ? row : 0;
         }
         this.choiceMenu = null;
@@ -1027,7 +1043,11 @@ export class Game {
       return;
     }
     this.setVariable(name, value);
-    if (args.length !== 3 || toBoolean(args[2])) this.menus = [];
+    if (this.settingVariableClosesMenus() && (args.length !== 3 || toBoolean(args[2]))) this.menus = [];
+  }
+
+  settingVariableClosesMenus() {
+    return true;
   }
 
   // Port of ExtBase.executeCommand_setSystemVar. Settings for the original's menu
@@ -1126,7 +1146,11 @@ export class Game {
   // Which row of a choice menu gets the person marker, from ExtBase.menuPaintIngame.
   // The map is the only thing in the game that offers choices.
   currentFloorRow() {
-    return FLOOR_ROWS.indexOf(this.getRaw('var_floor'));
+    return this.constructor.FLOOR_ROWS.indexOf(this.getRaw(this.constructor.FLOOR_VARIABLE));
+  }
+
+  initialChoiceRow() {
+    return this.currentFloorRow();
   }
 
   // Port of Ext.executeCommand_inventoryAdd, with its special case for ammo clips.
@@ -1147,13 +1171,17 @@ export class Game {
     this.menus = [];
     this.roomUpdateNeeded = true;
     if (!announce) return;
-    const text = this.engineText(TEXT.RECEIVED).replace('<item name>', this.itemName(item));
+    const text = this.receivedText(item);
     this.menus.push({
       id: MENU.RECEIVED,
       text: amount > 1 ? `${text} (${amount})` : text,
       image: this.inventoryImage(item),
     });
     thread.status = STATUS.PAUSED;
+  }
+
+  receivedText(item) {
+    return this.engineText(this.text.RECEIVED).replace('<item name>', this.itemName(item));
   }
 
   inventoryImage(item) {
@@ -1201,7 +1229,7 @@ export class Game {
     const menu = this.menus.at(-1);
     const object = menu.object;
     if (verb === VERB.INVENTORY) {
-      if (menu.options[VERB.INVENTORY] === null) this.say(this.engineText(TEXT.NOTHING_CARRIED), null);
+      if (menu.options[VERB.INVENTORY] === null) this.say(this.engineText(this.text.NOTHING_CARRIED), null);
       else this.openInventory();
       return;
     }
@@ -1250,19 +1278,20 @@ export class Game {
       const equipable = toBoolean(this.executeEvent(script, EVENT.ISEQUIPABLE, null));
       const equipped = toBoolean(this.executeEvent(script, EVENT.ISEQUIPED, null));
       if (script.hasEvent(EVENT.EQUIP) && equipable && !equipped) {
-        const label = item === 'invBulletClips' ? TEXT.EQUIP_CLIPS : item === 'invGun' ? TEXT.EQUIP_GUN : TEXT.EQUIP;
+        const label =
+          item === 'invBulletClips' ? this.text.EQUIP_CLIPS : item === 'invGun' ? this.text.EQUIP_GUN : this.text.EQUIP;
         choices.push({ id: EVENT.EQUIP, text: this.engineText(label) });
       }
       if (script.hasEvent(EVENT.UNEQUIP) && equipable && equipped)
-        choices.push({ id: EVENT.UNEQUIP, text: this.engineText(TEXT.UNEQUIP) });
+        choices.push({ id: EVENT.UNEQUIP, text: this.engineText(this.text.UNEQUIP) });
     }
     if (this.overObject) {
       const direction = this.overObject.executeEvent(EVENT.GETMOVEDIR, null);
       if (!['back', 'right', 'left', 'forward'].includes(direction))
-        choices.push({ id: CHOICE_USE, text: this.engineText(TEXT.USE) });
+        choices.push({ id: CHOICE_USE, text: this.engineText(this.text.USE) });
     }
-    choices.push({ id: EVENT.LOOKAT, text: this.engineText(TEXT.LOOK_AT) });
-    choices.push({ id: CHOICE_BACK, text: this.engineText(TEXT.BACK) });
+    choices.push({ id: EVENT.LOOKAT, text: this.engineText(this.text.LOOK_AT) });
+    choices.push({ id: CHOICE_BACK, text: this.engineText(this.text.BACK) });
     return choices;
   }
 
@@ -1432,7 +1461,7 @@ export class Game {
       saved = false;
     }
     if (!this.gunState) this.ammoSet(0, false, true);
-    if (announce) this.popupCreate(this.engineText(saved ? TEXT.SAVED : TEXT.SAVE_FAILED));
+    if (announce) this.popupCreate(this.engineText(saved ? this.text.SAVED : this.text.SAVE_FAILED));
     return saved;
   }
 
@@ -1444,12 +1473,7 @@ export class Game {
     this.resetRun();
     for (const [name, value, hint] of save.vars) this.setRaw(name, value, hint);
     for (const [key, scriptId] of save.actionKeys) this.actionKeys.set(key, scriptId);
-    this.gunState = this.inventorySize('invGun') > 0;
-    if (!this.gunState) {
-      this.ammoInGun = toInt(this.getRaw('sys_ammo'));
-      this.ammo = 1;
-      this.ammoSet(0, true, true);
-    }
+    this.restoreGunState();
     // Far enough on that the painting in room 0 has finished, as in M.startSavedGame.
     this.tickTime = LOADED_GAME_TIME;
     this.paintingTime = 1;
@@ -1457,6 +1481,15 @@ export class Game {
     this.firstLoad = true;
     this.roomInit('setup', false);
     return true;
+  }
+
+  restoreGunState() {
+    this.gunState = this.inventorySize('invGun') > 0;
+    if (!this.gunState) {
+      this.ammoInGun = toInt(this.getRaw('sys_ammo'));
+      this.ammo = 1;
+      this.ammoSet(0, true, true);
+    }
   }
 
   // Port of ExtBase.popupCreate. A popup holds up all input until it's answered, and
@@ -1540,6 +1573,7 @@ export class Game {
     if (!bytes) throw new Error(`Missing room: ${room}`);
     const parsed = parseRoom(bytes, { wideZones: usesWideZones(this.dataDir) });
     this.currentRoomId = room;
+    this.roomLoading();
     this.saveAllowedInRoom = parsed.strings.includes('savePoint');
     this.objects = parsed.objects.map((source) => new RoomObject(source, this));
     this.roomEntered = false;
@@ -1549,6 +1583,8 @@ export class Game {
       this.transitionCounter = TRANSITION_START;
     this.transitionRequested = false;
   }
+
+  roomLoading() {}
 
   // Port of M.roomCheckUpdate.
   roomCheckUpdate() {
@@ -1598,6 +1634,11 @@ export class Game {
     this.placeCursor();
   }
 
+  // A press that starts a stroke rather than a click. Only Mobile 2 has these.
+  wantsStroke() {
+    return false;
+  }
+
   verbAtCursor(menu) {
     const { x, y } = verbWheelCenter(menu, this.roomWidth, this.roomHeight);
     const dx = this.cursorX - x;
@@ -1618,7 +1659,7 @@ export class Game {
 
   // Port of the original's ExtBase.appKeyHandling, once per tick.
   handleInput() {
-    const menu = this.menus.at(-1);
+    let menu = this.menus.at(-1);
     const clicked = this.pendingClick;
     const keys = this.pendingKeys;
     this.pendingClick = false;
@@ -1634,6 +1675,9 @@ export class Game {
     if (!menu && !this.isAiming()) this.updateHover();
     if (this.battleMode && !menu && this.battleInput(clicked, keys)) return;
     if (this.isWaiting()) return;
+    // A wait that has just ended can have opened new text, and keys belong to what's on top.
+    // Closing that text by mistake would leave its script waiting forever.
+    menu = this.menus.at(-1);
 
     if (keys.includes('Escape')) this.handleEscape(menu);
     if (menu?.id === MENU.INVENTORY) {
@@ -1680,7 +1724,7 @@ export class Game {
   }
 
   speakerColor(speaker) {
-    const match = SPEAKER_COLORS.find(([text]) => this.engineText(text) === speaker);
+    const match = this.constructor.SPEAKER_TEXTS.find(([text]) => this.engineText(text) === speaker);
     return match ? match[1] : this.menuTextColor;
   }
 
@@ -1690,31 +1734,31 @@ export class Game {
     if (this.mainMenu) return this.mainMenu.softKeys();
     if (!this.objects || this.ended) return {};
     const key = (text, action) => ({ label: this.engineText(text), action });
-    if (this.popups.length) return { left: key(TEXT.OK, 'click') };
+    if (this.popups.length) return { left: key(this.text.OK, 'click') };
     const menu = this.menus.at(-1);
     if (menu) {
       if (menu.id === MENU.SAY || menu.id === MENU.TEXT_FADE) {
-        if (this.isStoryRoom()) return { left: key(TEXT.NEXT, 'click'), right: key(TEXT.SKIP, 'escape') };
-        return menu.id === MENU.SAY ? { left: key(TEXT.OK, 'click') } : {};
+        if (this.isStoryRoom()) return { left: key(this.text.NEXT, 'click'), right: key(this.text.SKIP, 'escape') };
+        return menu.id === MENU.SAY ? { left: key(this.text.OK, 'click') } : {};
       }
-      if (menu.id === MENU.PAUSE) return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'Escape') };
-      if (menu.id === MENU.RECEIVED) return { left: key(TEXT.OK, 'click') };
-      return { left: key(TEXT.SELECT, 'Enter'), right: key(TEXT.BACK, 'escape') };
+      if (menu.id === MENU.PAUSE) return { left: key(this.text.SELECT, 'Enter'), right: key(this.text.BACK, 'Escape') };
+      if (menu.id === MENU.RECEIVED) return { left: key(this.text.OK, 'click') };
+      return { left: key(this.text.SELECT, 'Enter'), right: key(this.text.BACK, 'escape') };
     }
     const room = this.currentRoom.toLowerCase();
     if (room.includes('intro')) return {};
-    if (room.includes('floor') || room === 'children_drawing') return { right: key(TEXT.BACK, 'back') };
+    if (room.includes('floor') || room === 'children_drawing') return { right: key(this.text.BACK, 'back') };
     if (this.superBossDead) return {};
     // The rules in Ext.appPaint for which labels show.
     const afterClock = this.requestedRoom === '5' && this.lastRequestedRoom === 'clockPuzzle';
     const noPause = afterClock || NO_PAUSE_ROOMS.has(this.currentRoom);
-    const pause = !noPause && this.canPause() ? key(TEXT.MENU, 'pause') : undefined;
+    const pause = !noPause && this.canPause() ? key(this.text.MENU, 'pause') : undefined;
     if (room.includes('puzzle')) {
       const solved = room === 'safepuzzle' && toBoolean(this.getRaw('var_safePuzzleSolved'));
-      return { left: solved ? undefined : key(TEXT.BACK, 'back'), right: pause };
+      return { left: solved ? undefined : key(this.text.BACK, 'back'), right: pause };
     }
     if (!this.battleMode && !afterClock && this.inventorySize('invMap') > 0)
-      return { left: key(TEXT.MAP, 'map'), right: pause };
+      return { left: key(this.text.MAP, 'map'), right: pause };
     return { right: pause };
   }
 
@@ -1744,14 +1788,23 @@ export class Game {
     if (!this.canPause()) return;
     // Ext.createEscapeMenu cuts off a monster's attack animation.
     this.attackAnim = false;
-    const choices = [{ id: 'continue', text: this.engineText(TEXT.CONTINUE) }];
-    if (this.canSave()) choices.push({ id: 'save', text: this.engineText(TEXT.SAVE) });
+    const choices = [{ id: 'continue', text: this.engineText(this.text.CONTINUE) }];
+    if (this.canSave()) choices.push({ id: 'save', text: this.engineText(this.text.SAVE) });
     choices.push(
-      { id: 'settings', text: this.engineText(TEXT.SETTINGS) },
-      { id: 'help', text: this.engineText(TEXT.HELP) },
-      { id: 'leave', text: this.engineText(TEXT.MAIN_MENU) },
+      { id: 'settings', text: this.engineText(this.text.SETTINGS) },
+      { id: 'help', text: this.engineText(this.text.HELP) },
     );
+    if (this.canLeaveFromPause()) choices.push({ id: 'leave', text: this.engineText(this.text.MAIN_MENU) });
     this.openPausePage(choices);
+  }
+
+  canLeaveFromPause() {
+    return true;
+  }
+
+  // The rule in ExtBase.ingameMenuKeyHandling.
+  leavesWithoutAsking() {
+    return !this.changedSinceSave || this.currentRoom.toLowerCase() === 'control' || Boolean(this.pausedThread);
   }
 
   openPausePage(choices, title = null) {
@@ -1798,30 +1851,29 @@ export class Game {
         break;
       case 'help':
         this.openPausePage([
-          { id: 'gameplay', text: this.engineText(TEXT.GAMEPLAY) },
-          { id: 'controls', text: this.engineText(TEXT.CONTROLS) },
+          { id: 'gameplay', text: this.engineText(this.text.GAMEPLAY) },
+          { id: 'controls', text: this.engineText(this.text.CONTROLS) },
         ]);
         break;
       case 'gameplay':
-        this.say(gameplayText(this), null, true);
+        this.say(this.gameplayHelp(), null, true);
         this.menus.at(-1).fromPause = true;
         break;
       case 'controls':
-        this.say(controlsText(this), null, true);
+        this.say(this.controlsHelp(), null, true);
         this.menus.at(-1).fromPause = true;
         break;
       case 'leave':
-        // The rule in ExtBase.ingameMenuKeyHandling.
-        if (!this.changedSinceSave || this.currentRoom.toLowerCase() === 'control' || this.pausedThread) {
+        if (this.leavesWithoutAsking()) {
           this.endGameRequested = true;
           break;
         }
         this.openPausePage(
           [
-            { id: 'yes', text: this.engineText(TEXT.YES) },
-            { id: 'no', text: this.engineText(TEXT.NO) },
+            { id: 'yes', text: this.engineText(this.text.YES) },
+            { id: 'no', text: this.engineText(this.text.NO) },
           ],
-          this.engineText(TEXT.LEAVE_GAME),
+          this.engineText(this.text.LEAVE_GAME),
         );
         this.menus.at(-1).selected = 1;
         break;
@@ -1888,10 +1940,14 @@ export class Game {
     }
     if (clicked) this.aimingWithKeys = false;
     else if (keys.includes('Enter')) this.aimingWithKeys = true;
-    if ((clicked || keys.includes('Enter')) && this.ammo > 0 && !this.reloading) this.shot = true;
+    if ((clicked || keys.includes('Enter')) && this.canFire()) this.shot = true;
     this.applyRecoil();
     if (!this.attackAnim) this.runActionKeys(keys);
     return true;
+  }
+
+  canFire() {
+    return this.ammo > 0 && !this.reloading;
   }
 
   runActionKeys(keys) {
@@ -2044,10 +2100,15 @@ export class Game {
     const distance = ({ left, right, top, bottom }) =>
       ((left + right) / 2 - this.cursorX) ** 2 + ((top + bottom) / 2 - this.cursorY) ** 2;
     const exits = (this.objects ?? []).filter(
-      (object) => object.visible && object.active && object.executeEvent(EVENT.GETMOVEDIR, null) === direction,
+      (object) =>
+        object.visible && object.active && this.exitGoes(object.executeEvent(EVENT.GETMOVEDIR, null), direction),
     );
     if (exits.length)
       this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
+  }
+
+  exitGoes(moveDirection, direction) {
+    return moveDirection === direction;
   }
 
   moveChoice(menu, keys) {
@@ -2059,8 +2120,13 @@ export class Game {
   // Ext.ingameMenuKeyHandling: each direction goes to the verb on that arm of the wheel.
   moveVerb(menu, keys) {
     for (const key of keys) {
-      if (VERB_KEYS[key] !== undefined) menu.selected = VERB_KEYS[key];
+      const verb = this.verbForKey(key);
+      if (verb !== undefined) menu.selected = verb;
     }
+  }
+
+  verbForKey(key) {
+    return VERB_KEYS[key];
   }
 
   // Enter does what clicking the highlighted row or arm would do.
@@ -2116,7 +2182,7 @@ export class Game {
   handleEscape(menu) {
     const room = this.currentRoom.toLowerCase();
     if (!menu) {
-      if (room.includes('floor') || room === 'children_drawing' || room.includes('puzzle')) this.goBack();
+      if (this.escapeGoesBack(room)) this.goBack();
       else this.openPauseMenu();
       return;
     }
@@ -2124,25 +2190,44 @@ export class Game {
       this.menus.pop();
       return;
     }
-    const isStory = this.isStoryRoom();
     if (menu.id === MENU.SAY || menu.id === MENU.TEXT_FADE) {
-      if (!isStory) return;
+      if (!this.canSkipText(menu)) return;
       this.menus.pop();
       for (
         let i = 0;
-        i < 1000 && !this.endGameRequested && this.currentRoom.toLowerCase() === room && this.pausedThread;
+        i < 1000 &&
+        !this.endGameRequested &&
+        this.currentRoom.toLowerCase() === room &&
+        this.pausedThread &&
+        this.textSkipContinues();
         i++
       ) {
         this.waitStop = 0;
         this.resume();
       }
-      this.menus = [];
+      this.textSkipEnded();
     } else if (menu.id === MENU.CHOICE) {
       this.pausedThread = null;
       this.menus.pop();
     } else {
       this.menus.pop();
     }
+  }
+
+  escapeGoesBack(room) {
+    return room.includes('floor') || room === 'children_drawing' || room.includes('puzzle');
+  }
+
+  canSkipText() {
+    return this.isStoryRoom();
+  }
+
+  textSkipContinues() {
+    return true;
+  }
+
+  textSkipEnded() {
+    this.menus = [];
   }
 
   // One 60 ms engine tick. M.tickBasedTimeUpdate advances the animation clock by
@@ -2512,7 +2597,7 @@ export class Game {
         this.reloading = true;
       } else if (!this.noMoreBullets) {
         this.noMoreBullets = true;
-        if (!this.finalBossDead()) this.say(this.engineText(TEXT.OUT_OF_AMMO), null);
+        if (!this.finalBossDead()) this.say(this.engineText(this.text.OUT_OF_AMMO), null);
       }
     } else {
       this.hudAmmoUpdateNeeded = false;
@@ -2710,7 +2795,7 @@ export class Game {
       this.objects.forEach((object, index) => {
         // Hard-coded in ExtBase.roomPaint: the painting in the first room keeps running.
         // ExtBase.roomPaint keeps the painting in room 0 going while the player is away.
-        const isPainting = index === 6 && this.currentRoom.toLowerCase() === '0';
+        const isPainting = this.isEndlessPainting(index);
         if (isPainting) {
           object.runAnimLoops = 1;
           if (this.paintingTime === null) this.paintingTime = object.animationTime;
@@ -2730,30 +2815,44 @@ export class Game {
     return list;
   }
 
+  isEndlessPainting(index) {
+    return index === 6 && this.currentRoom.toLowerCase() === '0';
+  }
+
+  // A line of text over the room, for as long as this returns it. Only Mobile 2 has one.
+  roomMessage() {
+    return null;
+  }
+
   // Port of the cursor choice in Ext.appPaint.
   cursorView() {
     if (this.hideCursor || !this.objects || this.popups.length) return null;
     const hintsOff = toBoolean(this.getRaw('s_cursorHintDisable'));
-    const at = (id, hint = null) => ({
+    const at = (id, hint = null, dx = 0) => ({
       id,
       hint: hintsOff ? null : hint,
-      x: this.cursorX + this.aimShakeX,
+      x: this.cursorX + this.aimShakeX + dx,
       y: this.cursorY + this.aimShakeY,
     });
     const object = this.overObject;
     if (!object) return at(this.specialCursor.idle ?? 'cursorIdle');
     if (this.specialCursor.hover) return at(this.specialCursor.hover);
-    switch (object.executeEvent(EVENT.GETMOVEDIR, null)) {
+    const [id, hint, dx] = this.cursorForExit(object.executeEvent(EVENT.GETMOVEDIR, null));
+    return at(id, hint === undefined ? null : this.engineText(hint), dx);
+  }
+
+  cursorForExit(moveDirection) {
+    switch (moveDirection) {
       case 'back':
-        return at('cursorBack', this.engineText(TEXT.HINT_BACK));
+        return ['cursorBack', this.text.HINT_BACK];
       case 'left':
-        return at('cursorForwardLeft', this.engineText(TEXT.HINT_LEFT));
+        return ['cursorForwardLeft', this.text.HINT_LEFT];
       case 'right':
-        return at('cursorForwardRight', this.engineText(TEXT.HINT_RIGHT));
+        return ['cursorForwardRight', this.text.HINT_RIGHT];
       case 'forward':
-        return at('cursorForward', this.engineText(TEXT.HINT_FORWARD));
+        return ['cursorForward', this.text.HINT_FORWARD];
       default:
-        return at('cursorPoint');
+        return ['cursorPoint'];
     }
   }
 }

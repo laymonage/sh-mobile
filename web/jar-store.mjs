@@ -4,28 +4,27 @@
 import { withStore } from './browser-database.mjs';
 
 const STORE = 'jars';
-const KEY = 'archive';
 
-export async function storeArchiveJar(integrity, bytes) {
+export async function storeArchiveJar({ storageKey, integrity }, bytes) {
   try {
-    await withStore(STORE, 'readwrite', (store) => store.put({ integrity, bytes }, KEY));
+    await withStore(STORE, 'readwrite', (store) => store.put({ integrity, bytes }, storageKey));
   } catch {
     // It still works until the page is closed.
   }
 }
 
-export async function loadStoredArchiveJar(integrity) {
+export async function loadStoredArchiveJar({ storageKey, integrity }) {
   try {
-    const stored = await withStore(STORE, 'readonly', (store) => store.get(KEY));
+    const stored = await withStore(STORE, 'readonly', (store) => store.get(storageKey));
     return stored?.integrity === integrity ? stored.bytes : null;
   } catch {
     return null;
   }
 }
 
-export async function deleteStoredArchiveJar() {
+export async function deleteStoredArchiveJar({ storageKey }) {
   try {
-    await withStore(STORE, 'readwrite', (store) => store.delete(KEY));
+    await withStore(STORE, 'readwrite', (store) => store.delete(storageKey));
   } catch {
     // Nothing else to do: it's gone or was never there.
   }

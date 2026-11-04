@@ -26,8 +26,9 @@ export class Script {
   constructor(id, parsed, gameText) {
     this.id = id;
     this.code = parsed.code;
-    this.gfxId = parsed.gfxId;
-    this.strings = parsed.strings.map((text) => (text.startsWith('$') ? gameText(text.slice(1)) : text));
+    const resolve = (text) => (text.startsWith('$') ? gameText(text.slice(1)) : text);
+    this.gfxId = typeof parsed.gfxId === 'string' ? resolve(parsed.gfxId) : parsed.gfxId;
+    this.strings = parsed.strings.map(resolve);
     this.eventOffsets = new Map(parsed.events.map(({ id: event, offset }) => [event, offset]));
   }
 

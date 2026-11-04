@@ -140,8 +140,8 @@ body.playing #message {
 }
 #game {
   display: none;
-  width: min(calc(100vw - 32px), calc((100vh - 32px) / 1.27));
-  aspect-ratio: 1;
+  width: min(calc(100vw - 32px), calc((100vh - 32px) / var(--page-ratio, 1.27)));
+  aspect-ratio: var(--game-aspect, 1);
   background: #000;
   cursor: none;
   touch-action: none;
@@ -151,7 +151,7 @@ body.playing #message {
 #panel {
   display: none;
   align-items: center;
-  width: min(calc(100vw - 32px), calc((100vh - 32px) / 1.27));
+  width: min(calc(100vw - 32px), calc((100vh - 32px) / var(--page-ratio, 1.27)));
   aspect-ratio: 240 / 64;
   container: panel / inline-size;
   margin-top: -12px;

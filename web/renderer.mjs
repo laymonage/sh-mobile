@@ -1,5 +1,6 @@
 import { pngInfo, TRANSFORMS } from './engine/format.mjs';
-import { MENU, VERB, VERB_WHEEL_RADIUS, verbWheelCenter } from './engine/game.mjs';
+import { MENU, VERB_WHEEL_RADIUS, verbWheelCenter } from './engine/game.mjs';
+import { parsePaletteIndex, recolorPng } from './engine/palettes.mjs';
 import { PIXEL_FONT_CAP_HEIGHT, pixelFontGlyph } from './pixel-font.mjs';
 
 const SCALE = 3;
@@ -37,9 +38,6 @@ const LOGO_TOP = 2;
 const SPLASH_DROP = 7;
 const RIGHTS_FROM_BOTTOM = 28;
 
-// Where the highlight goes on each arm of the verb wheel, from Ext.menuPaintOMS.
-const WHEEL_ARMS = { [VERB.LOOK]: [1, -20], [VERB.HAND]: [21, -1], [VERB.MOUTH]: [0, 18], [VERB.INVENTORY]: [-20, -1] };
-
 const css = (color) => `#${(color & 0xffffff).toString(16).padStart(6, '0')}`;
 
 export class Renderer {
@@ -47,7 +45,10 @@ export class Renderer {
     this.canvas = canvas;
     this.game = game;
     this.context = canvas.getContext('2d');
-    this.scale = (SCALE * 256) / game.roomWidth;
+    // Silent Hill's smaller art is scaled to fill its canvas, and larger art isn't scaled down.
+    this.scale = game.frameWidth > 256 ? SCALE : (SCALE * 256) / game.frameWidth;
+    canvas.width = Math.round(game.frameWidth * this.scale);
+    canvas.height = Math.round(game.frameHeight * this.scale);
     this.images = new Map();
     this.art = new Map();
     this.pixelGlyphs = new Map();
@@ -166,6 +167,8 @@ export class Renderer {
         }),
     );
 
+    await this.loadPalettes({ entries, files, prefix });
+
     // Border thicknesses come from the art's registration points, per
     // ExtBase.updateSystemResourceValues.
     const info = (id) => this.images.get(id)?.info;
@@ -181,6 +184,35 @@ export class Renderer {
     }
   }
 
+  // Mobile 2's recolored images, keyed by name and palette. They're made ahead of time
+  // because a browser decodes images asynchronously, and a frame has to draw now.
+  async loadPalettes({ entries, files, prefix }) {
+    const index = files.get('plts/palettes.pdt');
+    const bank = files.get('plts/palettes.bin');
+    if (!index || !bank) return;
+    const jobs = [];
+    for (const [name, offsets] of parsePaletteIndex(index)) {
+      const png = entries.get(`${prefix}${name}.png`);
+      if (!png) continue;
+      offsets.forEach((offset, position) => {
+        const recolored = recolorPng(png, bank, offset);
+        if (!recolored) return;
+        jobs.push(
+          createImageBitmap(new Blob([recolored], { type: 'image/png' })).then((bitmap) => {
+            this.images.set(`${name}#${position + 1}`, { bitmap, info: pngInfo(png) });
+          }),
+        );
+      });
+    }
+    await Promise.all(jobs);
+  }
+
+  // An image, in the colors the game gives it right now.
+  image(id) {
+    const palette = this.game.imagePalette(id);
+    return (palette && this.images.get(`${id}#${palette}`)) || this.images.get(String(id));
+  }
+
   draw() {
     const { context: c, game } = this;
     c.setTransform(this.scale, 0, 0, this.scale, 0, 0);
@@ -189,6 +221,12 @@ export class Renderer {
       this.drawMainMenu(game.mainMenu);
       return;
     }
+    // A room narrower than the frame sits in the middle of it.
+    if (game.viewOffsetX || game.viewOffsetY) {
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, game.frameWidth, game.frameHeight);
+      c.translate(game.viewOffsetX, game.viewOffsetY);
+    }
     if (game.transitionKeepsOldRoom) {
       this.drawDissolvePattern();
       return;
@@ -196,18 +234,44 @@ export class Renderer {
     c.fillStyle = css(game.backgroundColor);
     c.fillRect(0, 0, game.roomWidth, game.roomHeight);
 
+    // The original's room is an image of the room's size, so art can't show outside it.
+    c.save();
+    c.beginPath();
+    c.rect(0, 0, game.roomWidth, game.roomHeight);
+    c.clip();
     for (const item of game.drawList()) this.drawItem(item);
+    c.restore();
 
     const menu = game.menus.at(-1);
     if (menu) this.drawMenu(menu);
-    else this.drawCursor(game.cursorView());
+    else {
+      this.drawRoomMessage(game.roomMessage());
+      this.drawCursor(game.cursorView());
+    }
     if (game.popups.length) this.drawPopup(game.popups[0]);
+  }
+
+  // Mobile 2 names the floor in the middle of the room as stairs and elevators arrive there.
+  drawRoomMessage(text) {
+    if (!text) return;
+    const { context: c, game } = this;
+    c.font = this.boldFont;
+    this.outlinedText(text, game.roomWidth >> 1, game.roomHeight >> 1, 'center');
   }
 
   drawItem(item) {
     const { context: c, game } = this;
     if (item.kind === 'dissolve-pattern') {
       this.drawDissolvePattern();
+    } else if (item.kind === 'tiled-image') {
+      this.tile(item.id);
+    } else if (item.kind === 'line') {
+      c.strokeStyle = css(item.color);
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(item.x1, item.y1);
+      c.lineTo(item.x2, item.y2);
+      c.stroke();
     } else if (item.kind === 'compass-letters') {
       const letters = this.art.get(`gfx/HUD_NESW_${game.language}.png`);
       if (letters) c.drawImage(letters, item.x - (letters.width >> 1), item.y - (letters.height >> 1));
@@ -229,7 +293,7 @@ export class Renderer {
       c.textAlign = ['left', 'center', 'right'][item.alignment] ?? 'left';
       this.fillText(item.text, item.x + [0, 15, 30][item.alignment], item.y + item.height / 2);
     } else if (item.raw) {
-      const image = this.images.get(String(item.id));
+      const image = this.image(item.id);
       if (image) c.drawImage(image.bitmap, item.x, item.y);
     } else {
       this.drawImage(item.id, item.x, item.y, item.transform);
@@ -237,8 +301,12 @@ export class Renderer {
   }
 
   drawDissolvePattern() {
+    this.tile('dissolveEffectImg');
+  }
+
+  tile(id) {
     const { game } = this;
-    const image = this.images.get('dissolveEffectImg');
+    const image = this.images.get(String(id));
     if (!image) return;
     for (let x = 0; x < game.roomWidth; x += image.info.width) {
       for (let y = 0; y < game.roomHeight; y += image.info.height) this.context.drawImage(image.bitmap, x, y);
@@ -247,7 +315,7 @@ export class Renderer {
 
   // Places a sprite by its registration point and transform, per M.getLeft and M.getTop.
   drawImage(id, x, y, transformIndex = 0) {
-    const image = this.images.get(String(id));
+    const image = this.image(id);
     if (!image) return;
     const c = this.context;
     const { width, height, regX, regY } = image.info;
@@ -501,10 +569,10 @@ export class Renderer {
     this.outlinedText(menu.name, nameX, center.y - VERB_WHEEL_RADIUS - 14, 'center');
     this.drawCentered('OMS_menu', center.x, center.y);
     if (menu.selected !== null && menu.selected !== undefined) {
-      const [dx, dy] = WHEEL_ARMS[menu.selected];
+      const [dx, dy] = game.constructor.WHEEL_ARMS[menu.selected];
       this.drawCentered('OMS_selected', center.x + dx, center.y + dy);
     }
-    this.drawCentered('OMS_symbols', center.x + 1, center.y);
+    this.drawCentered('OMS_symbols', center.x + game.constructor.WHEEL_SYMBOLS_X, center.y);
     this.drawImage('cursorIdle', game.cursorX, game.cursorY);
   }
 
@@ -728,7 +796,8 @@ export class Renderer {
     if (screen?.kind === 'splash') {
       this.drawArtCentered('gfx/konami_right.png', game.roomHeight - RIGHTS_FROM_BOTTOM);
       const image = this.art.get(screen.image);
-      if (image) c.drawImage(image, 0, ((game.roomHeight - image.height) >> 1) + SPLASH_DROP);
+      if (image)
+        c.drawImage(image, (game.roomWidth - image.width) >> 1, ((game.roomHeight - image.height) >> 1) + SPLASH_DROP);
       return;
     }
     const menu = mainMenu.current;
@@ -758,7 +827,10 @@ export class Renderer {
     const width = Math.ceil(widest) + ENGINE_PADDING * 2;
     const height = rowsHeight + ENGINE_PADDING * 2 + (titleHeight ? titleHeight + ENGINE_TOP_GAP : 0);
     const x = (game.roomWidth - width) >> 1;
-    const y = (game.roomHeight - height) >> 1;
+    // Under the logo where there's room, because Mobile 2's is tall and its screen here short.
+    const logoBottom = LOGO_TOP + (this.art.get('gfx/menu_logo.png')?.height ?? 0);
+    const lowest = game.roomHeight - height - this.borderBottom;
+    const y = Math.max((game.roomHeight - height) >> 1, Math.min(logoBottom, lowest));
     this.notepad(x, y, width, height, ENGINE_PAPER);
 
     c.textAlign = 'left';
