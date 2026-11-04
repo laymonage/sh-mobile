@@ -149,6 +149,9 @@ export class Mobile2Game extends Game {
   // e.b centers the splash art, and draws the logo over it.
   static SPLASH_CENTERED = true;
   static SPLASH_OVER_LOGO = false;
+  // e.c draws this under the room, where the phone's screen is taller than it.
+  static PANEL_ART = 'gfx/border_bottom.png';
+  static PANEL_ART_IS_STRIP = true;
 
   constructor(data, options) {
     super(data, options);

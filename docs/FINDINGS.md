@@ -337,6 +337,7 @@ Its puzzles are scripts rather than code. The painting is joined up by clicking 
 - **Being hit:** the screen is tiled with an image the script names, rather than blood spreading.
 - **Skipping:** a `setSkip` variable decides what can be skipped, rather than the room's name.
 - **The splash screen:** `e.b` centers the art and draws the logo over it, where the first game's `ExtBase.splashPaint` draws it against the left edge, over the logo. The art is 240x320 for a phone's screen, so in the port's 270-pixel-tall frame about 50 of its rows are cut off, and the logo covers more of the top.
+- **The space around rooms:** the JAR has no art in the shape of the first game's panel, so the page's panel is as tall as its controls, with `gfx/border_bottom.png` repeated behind them. On a phone, `e.c` draws that strip and `gfx/border_top.png` above and below the room. It also draws `gfx/screenHUD_left.png` beside narrow rooms, which isn't in any of the four builds looked at, so the port turns the two strips on their sides for that, which is its own choice. The medium and small art builds tried have no strips, so these spaces stay black there.
 - **Text:** the same phrases are numbered differently, so the engine now looks them up by name. Language files sit in a top-level `lan/` folder.
 
 The moving enemy compares its name with the word `Enemy`, as `h.s` does. That name is translated, so in other languages enemies don't walk from side to side. This looks like a bug in the original, and the port keeps it.

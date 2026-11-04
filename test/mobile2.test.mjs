@@ -10,6 +10,7 @@ import { engineMenuTop } from '../web/renderer.mjs';
 
 const data = loadGameData(await readJar(readInput(recommended.sh2.gameData)));
 const keypadData = loadGameData(await readJar(readInput(recommended.sh2.keypadReference)));
+const firstGameData = loadGameData(await readJar(readInput(recommended.sh1.gameData)));
 const FAN_TRANSLATED_BUILD = 'sh2-2008-a10';
 
 function memoryStorage() {
@@ -271,6 +272,16 @@ test('a menu’s border clears the logo, and short menus stay centered', () => {
 test('each game draws its splash art where its original does', () => {
   assert.deepEqual([Game.SPLASH_CENTERED, Game.SPLASH_OVER_LOGO], [false, true]);
   assert.deepEqual([Mobile2Game.SPLASH_CENTERED, Mobile2Game.SPLASH_OVER_LOGO], [true, false]);
+});
+
+test('each game’s panel art is in its JAR, and only Mobile 2’s is a strip', () => {
+  const first = createGame(firstGameData, {});
+  assert.ok(first.data.files.has(Game.PANEL_ART));
+  assert.equal(Game.PANEL_ART_IS_STRIP, false);
+  assert.ok(data.files.has(Mobile2Game.PANEL_ART));
+  assert.ok(keypadData.files.has(Mobile2Game.PANEL_ART));
+  assert.equal(Mobile2Game.PANEL_ART_IS_STRIP, true);
+  for (const name of ['gfx/border_top.png', 'gfx/border_bottom.png']) assert.ok(data.files.has(name), name);
 });
 
 test('a new game reaches the first room, by skipping or by reading', () => {

@@ -11,6 +11,9 @@ import { Renderer } from './renderer.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
+const PANEL_SHAPE_RATIO = 0.27;
+// The three rows of buttons, the gaps between them, and the panel's padding.
+const STRIP_PANEL_HEIGHT = '105px';
 // By the keys' positions, so that they sit the same way on a French or German keyboard.
 const DIRECTIONS = {
   KeyW: 'up',
@@ -69,12 +72,9 @@ async function start(bytes) {
     now: () => clock.now(),
   });
   const renderer = new Renderer(canvas, game);
-  // Keeps the room's shape, and leaves space for the panel under it.
-  const page = document.documentElement.style;
-  page.setProperty('--game-aspect', String(game.frameWidth / game.frameHeight));
-  page.setProperty('--page-ratio', String(game.frameHeight / game.frameWidth + 0.27));
+  layOutPage(game);
   await renderer.loadImages(inspection.data);
-  showPanelArt(inspection.data);
+  showPanelArt(game);
   document.body.classList.add('playing');
   setUpSaving(game);
   setUpSound(audio);
@@ -86,9 +86,21 @@ async function start(bytes) {
   run(game, renderer);
 }
 
-// The rusted steel from under the original's screen, behind the page's controls.
-function showPanelArt({ files }) {
-  const art = files.get('gfx/bigScreenHUD_hor.png');
+// Keeps the room's shape, and leaves space for the panel under it. The first game's panel
+// is a shape of its own, in proportion to the page's width, and Mobile 2's is a set height.
+function layOutPage(game) {
+  const page = document.documentElement.style;
+  const { PANEL_ART_IS_STRIP } = game.constructor;
+  const roomRatio = game.frameHeight / game.frameWidth;
+  page.setProperty('--game-aspect', String(game.frameWidth / game.frameHeight));
+  page.setProperty('--page-ratio', String(PANEL_ART_IS_STRIP ? roomRatio : roomRatio + PANEL_SHAPE_RATIO));
+  page.setProperty('--panel-height', PANEL_ART_IS_STRIP ? STRIP_PANEL_HEIGHT : '0px');
+  document.body.classList.toggle('strip-panel', PANEL_ART_IS_STRIP);
+}
+
+// Rusted steel from the JAR, behind the page's controls.
+function showPanelArt(game) {
+  const art = game.data.files.get(game.constructor.PANEL_ART);
   if (!art) return;
   const url = URL.createObjectURL(new Blob([art], { type: 'image/png' }));
   document.getElementById('panel').style.backgroundImage = `url(${url})`;

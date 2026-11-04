@@ -234,6 +234,7 @@ export class Renderer {
     if (game.viewOffsetX || game.viewOffsetY) {
       c.fillStyle = '#000';
       c.fillRect(0, 0, game.frameWidth, game.frameHeight);
+      this.drawSideBars();
       c.translate(game.viewOffsetX, game.viewOffsetY);
     }
     if (game.transitionKeepsOldRoom) {
@@ -258,6 +259,39 @@ export class Renderer {
       this.drawCursor(game.cursorView());
     }
     if (game.popups.length) this.drawPopup(game.popups[0]);
+  }
+
+  // The space beside a narrow room. The original has art for this that isn't in the JARs,
+  // so this turns the rusted strips it draws above and below rooms on their sides.
+  drawSideBars() {
+    const { context: c, game } = this;
+    const width = game.viewOffsetX;
+    if (width <= 0) return;
+    const strip = (name, left, flip) => {
+      const art = this.art.get(name);
+      if (!art) return;
+      c.save();
+      c.beginPath();
+      c.rect(left, 0, width, game.frameHeight);
+      c.clip();
+      for (let y = 0; y < game.frameHeight; y += art.width) {
+        c.save();
+        // The strip's edge that faced the room on a phone stays toward the room here.
+        if (flip) {
+          c.translate(left + width, y);
+          c.rotate(Math.PI / 2);
+          c.drawImage(art, 0, 0);
+        } else {
+          c.translate(left, y + art.width);
+          c.rotate(-Math.PI / 2);
+          c.drawImage(art, 0, 0);
+        }
+        c.restore();
+      }
+      c.restore();
+    };
+    strip('gfx/border_bottom.png', 0, false);
+    strip('gfx/border_top.png', game.frameWidth - width, true);
   }
 
   // Mobile 2 names the floor in the middle of the room as stairs and elevators arrive there.

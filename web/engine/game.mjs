@@ -434,6 +434,9 @@ export class Game {
   // ExtBase.splashPaint draws the splash art against the screen's left edge, over the logo.
   static SPLASH_CENTERED = false;
   static SPLASH_OVER_LOGO = true;
+  // The art behind the page's buttons, and whether it's a strip to repeat behind them.
+  static PANEL_ART = 'gfx/bigScreenHUD_hor.png';
+  static PANEL_ART_IS_STRIP = false;
 
   constructor(
     data,
