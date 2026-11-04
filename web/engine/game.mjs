@@ -431,6 +431,9 @@ export class Game {
     [VERB.INVENTORY]: [-20, -1],
   };
   static WHEEL_SYMBOLS_X = 1;
+  // ExtBase.splashPaint draws the splash art against the screen's left edge, over the logo.
+  static SPLASH_CENTERED = false;
+  static SPLASH_OVER_LOGO = true;
 
   constructor(
     data,

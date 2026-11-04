@@ -253,6 +253,11 @@ test('a fan translation keeps its own text', async () => {
   assert.match(game.gameplayHelp(), /[А-я]/);
 });
 
+test('each game draws its splash art where its original does', () => {
+  assert.deepEqual([Game.SPLASH_CENTERED, Game.SPLASH_OVER_LOGO], [false, true]);
+  assert.deepEqual([Mobile2Game.SPLASH_CENTERED, Mobile2Game.SPLASH_OVER_LOGO], [true, false]);
+});
+
 test('a new game reaches the first room, by skipping or by reading', () => {
   const skipped = newGame();
   skipTo(skipped, '0');

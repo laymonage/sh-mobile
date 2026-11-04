@@ -792,12 +792,17 @@ export class Renderer {
     }
     c.fillStyle = css(screen?.kind === 'splash' ? screen.color : 0);
     c.fillRect(0, 0, game.roomWidth, game.roomHeight);
-    this.drawArtCentered('gfx/menu_logo.png', LOGO_TOP);
+    const { SPLASH_CENTERED, SPLASH_OVER_LOGO } = game.constructor;
+    const logo = () => this.drawArtCentered('gfx/menu_logo.png', LOGO_TOP);
+    if (screen?.kind !== 'splash' || SPLASH_OVER_LOGO) logo();
     if (screen?.kind === 'splash') {
       this.drawArtCentered('gfx/konami_right.png', game.roomHeight - RIGHTS_FROM_BOTTOM);
       const image = this.art.get(screen.image);
-      if (image)
-        c.drawImage(image, (game.roomWidth - image.width) >> 1, ((game.roomHeight - image.height) >> 1) + SPLASH_DROP);
+      if (image) {
+        const x = SPLASH_CENTERED ? (game.roomWidth - image.width) >> 1 : 0;
+        c.drawImage(image, x, ((game.roomHeight - image.height) >> 1) + SPLASH_DROP);
+      }
+      if (!SPLASH_OVER_LOGO) logo();
       return;
     }
     const menu = mainMenu.current;

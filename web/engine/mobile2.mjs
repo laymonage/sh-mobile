@@ -146,6 +146,9 @@ export class Mobile2Game extends Game {
   static MENU_MUSIC = 'sh_bgtheme';
   static WHEEL_ARMS = { [VERB.LOOK]: [1, -16], [VERB.HAND]: [20, 12], [VERB.INVENTORY]: [-17, 12] };
   static WHEEL_SYMBOLS_X = 2;
+  // e.b centers the splash art, and draws the logo over it.
+  static SPLASH_CENTERED = true;
+  static SPLASH_OVER_LOGO = false;
 
   constructor(data, options) {
     super(data, options);

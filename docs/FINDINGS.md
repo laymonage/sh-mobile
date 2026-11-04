@@ -336,6 +336,7 @@ Its puzzles are scripts rather than code. The painting is joined up by clicking 
 - **Battles:** `h.s` has its own rules. A shot hits anywhere on a target, rather than near an anchor point. Enemies have idle, moving, dodging, attacking and recovering states, and their vulnerable zones change every 20 ticks. A fight starts with the gun away. Reloading is from the inventory.
 - **Being hit:** the screen is tiled with an image the script names, rather than blood spreading.
 - **Skipping:** a `setSkip` variable decides what can be skipped, rather than the room's name.
+- **The splash screen:** `e.b` centers the art and draws the logo over it, where the first game's `ExtBase.splashPaint` draws it against the left edge, over the logo. The art is 240x320 for a phone's screen, so in the port's 270-pixel-tall frame about 50 of its rows are cut off, and the logo covers more of the top.
 - **Text:** the same phrases are numbered differently, so the engine now looks them up by name. Language files sit in a top-level `lan/` folder.
 
 The moving enemy compares its name with the word `Enemy`, as `h.s` does. That name is translated, so in other languages enemies don't walk from side to side. This looks like a bug in the original, and the port keeps it.
