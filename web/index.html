@@ -108,11 +108,14 @@
     #panel #sound { flex: 0 0 74px; }
     #soundfont-control { flex-grow: 1.5; display: flex; gap: 2px; }
     #soundfont { flex: 1; min-width: 0; }
-    #soundfont-remove { flex: 0 0 var(--plate-height); padding: 0; }
+    /* These two take turns in one slot, so the Soundfont button keeps its width. */
+    #panel #soundfont-remove, #panel #soundfont-get { flex: 0 0 max(34px, var(--plate-height)); padding: 0; }
+    #soundfont-get { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+    #soundfont-get[hidden] { display: none; }
     #soft-left[hidden], #soft-right[hidden] { display: block; visibility: hidden; }
     #panel #soft-left, #panel #soft-right { padding: 0 3px; }
     /* Bolted steel plates, one rivet in each corner, with text in the notepad's color. */
-    #panel button, #volume-control {
+    #panel button, #panel a, #volume-control {
       min-height: 0;
       padding: 0 6px;
       color: var(--paper);
@@ -141,9 +144,9 @@
       border-radius: 2px;
       font: 600 0.6875rem ui-monospace, monospace;
     }
-    #panel button:hover:not(:disabled) { color: #fff; border-color: var(--blood); box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), inset 0 0 8px rgba(163, 35, 27, 0.55), 0 1px 3px #000; }
+    #panel a:hover, #panel button:hover:not(:disabled) { color: #fff; border-color: var(--blood); box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), inset 0 0 8px rgba(163, 35, 27, 0.55), 0 1px 3px #000; }
     #panel button:active:not(:disabled) { background-color: #000; box-shadow: inset 0 2px 4px #000; transform: translateY(1px); }
-    #panel button:focus-visible, #volume:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
+    #panel a:focus-visible, #panel button:focus-visible, #volume:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
     #panel button:disabled { color: var(--plate-dim); opacity: 1; text-shadow: none; }
     #volume-control { display: flex; align-items: center; gap: 6px; flex-grow: 1.2; }
     #volume { flex: 1; min-width: 0; height: 100%; margin: 0; background: transparent; cursor: pointer; appearance: none; }
@@ -210,6 +213,7 @@
           <div id="soundfont-control">
             <button type="button" id="soundfont" title="Choose a soundfont">Soundfont</button>
             <button type="button" id="soundfont-remove" aria-label="Remove soundfont" title="Remove soundfont" hidden>×</button>
+            <a id="soundfont-get" href="https://www.musical-artifacts.com/artifacts/693" target="_blank" rel="noopener noreferrer" aria-label="Get the Series 40 soundfont from Musical Artifacts" title="Get the Series 40 soundfont from Musical Artifacts">Get</a>
           </div>
           <input id="soundfont-file" type="file" accept=".sf2" hidden>
         </div>

@@ -44,7 +44,7 @@ Browsers only allow sound after you click or press a key. The sound question aft
 
 ### Soundfonts
 
-The game's music is MIDI, which needs instrument sounds from somewhere. Without a soundfont, the port uses rough built-in voices. For sounds much closer to a Nokia phone, choose a General MIDI SoundFont 2 file such as [Series 40 5th Edition FP1](https://www.musical-artifacts.com/artifacts/693). This repo doesn't include one: check its license yourself. Its listing is reported as CC-BY 4.0, but the file's own metadata says "Copyright © Nokia Corporation. All rights reserved."
+The game's music is MIDI, which needs instrument sounds from somewhere. Without a soundfont, the port uses rough built-in voices. For sounds much closer to a Nokia phone, choose a General MIDI SoundFont 2 file such as [Series 40 5th Edition FP1](https://www.musical-artifacts.com/artifacts/693). The **Get** link beside the Soundfont button opens that page, where you can download it. It's a link because the site doesn't let other pages download from it directly. This repo doesn't include one: check its license yourself. Its listing is reported as CC-BY 4.0, but the file's own metadata says "Copyright © Nokia Corporation. All rights reserved."
 
 To skip the file picker during development, put a `.sf2` in the ignored `soundfonts/` folder and add it to the link, for example `?jar=sh1-2007-a31&soundfont=name.sf2`.
 

@@ -126,11 +126,13 @@ function setUpSound(game, audio) {
 async function setUpSoundFont(audio) {
   const chooseButton = document.getElementById('soundfont');
   const removeButton = document.getElementById('soundfont-remove');
+  const getLink = document.getElementById('soundfont-get');
   const fileInput = document.getElementById('soundfont-file');
   const show = (name) => {
     chooseButton.textContent = name ?? 'Soundfont';
     chooseButton.title = name ? `Soundfont: ${name}` : 'Choose a soundfont';
     removeButton.hidden = !name;
+    getLink.hidden = Boolean(name);
   };
   const use = async (name, bytes) => {
     await audio.setSoundFont(new SoundFont(bytes));
