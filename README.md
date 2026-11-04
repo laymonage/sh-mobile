@@ -40,7 +40,7 @@ The startup screens, main menu, pause menu, all of the JAR's languages, the open
 
 The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
-Settings, in the main menu and the pause menu, can turn the transitions between rooms off.
+Settings, in the main menu and the pause menu, and the first menu after the logo can turn the transitions between rooms off.
 
 Browsers only allow sound after you click or press a key. The sound question after the logo gets that click, so the splash screen's music can play.
 

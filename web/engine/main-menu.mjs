@@ -175,7 +175,7 @@ export class MainMenu {
     return this.list(
       'sound',
       null,
-      [soundChoice(this.game), { id: 'continue', text: this.game.engineText(TEXT.CONTINUE) }],
+      [...this.settingChoices(), { id: 'continue', text: this.game.engineText(TEXT.CONTINUE) }],
       { noBack: true },
     );
   }
@@ -215,11 +215,15 @@ export class MainMenu {
     );
   }
 
-  settingsMenu() {
+  settingChoices() {
     const { game } = this;
     const choices = [soundChoice(game), transitionsChoice(game)];
     if (game.languages.length > 1) choices.push(languageChoice(game));
-    return this.list('settings', null, choices);
+    return choices;
+  }
+
+  settingsMenu() {
+    return this.list('settings', null, this.settingChoices());
   }
 
   helpMenu() {
@@ -323,7 +327,7 @@ export class MainMenu {
       const { languages } = game;
       const position = languages.indexOf(game.language);
       game.setLanguage(languages[(position + direction + languages.length) % languages.length]);
-      this.menus = [this.mainMenu(), this.settingsMenu()];
+      this.menus = menu.kind === 'sound' ? [this.soundMenu()] : [this.mainMenu(), this.settingsMenu()];
       this.current.selected = menu.selected;
       return;
     }

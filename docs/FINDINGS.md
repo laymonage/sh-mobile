@@ -279,7 +279,7 @@ The port differs in these ways:
 
 - There's no Quit, because a web page has nothing to quit to.
 - The logo and splash art sit closer together, because the port's screen is shorter than the phone's. Without the phone's soft key bars, the logo sits at the very top.
-- The sound question has a Continue row, because a mouse can't press the soft key that does this on a phone.
+- The sound question has a Continue row, because a mouse can't press the soft key that does this on a phone. It also offers the transitions and language settings.
 - The warnings about a new game and leaving a game are lists with No highlighted, rather than popups answered with soft keys.
 - A battle stops while the pause menu is open. In the original, only a phone call or hiding the app stopped it.
 - The pause menu doesn't stop sound, as the original does.

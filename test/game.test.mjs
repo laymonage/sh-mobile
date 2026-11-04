@@ -1193,12 +1193,12 @@ test('the sound question plays the shot when sound goes on, and the splash plays
   storage.setItem('silent-hill-mobile:language', 'en');
   const game = startupGame({ audio, storage });
   for (let i = 0; i < 6; i++) game.advance(1000);
-  assert.deepEqual(menuTexts(game), ['Sound: On', 'Continue']);
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: On', 'Language: English', 'Continue']);
   assert.deepEqual(game.mainMenu.current.choices[0].values, ['Sound: On', 'Sound: Off']);
   assert.equal(game.softKeys().left.label, 'Change');
   choose(game, 'Sound: On');
   assert.equal(audio.enabled, false);
-  assert.deepEqual(menuTexts(game), ['Sound: Off', 'Continue']);
+  assert.deepEqual(menuTexts(game), ['Sound: Off', 'Transitions: On', 'Language: English', 'Continue']);
   choose(game, 'Sound: Off');
   assert.equal(audio.enabled, true);
   assert.deepEqual(audio.calls.at(-1), ['play', 'sh_shot', 1]);
@@ -1265,6 +1265,38 @@ test('a save from when each language had its own is still found, and in any lang
   game.removeSave();
   assert.equal(game.hasSave(), false);
   assert.equal(game.readSave(), null);
+});
+
+test('the first menu also changes transitions and language, in place, and stays until Continue', () => {
+  const storage = memoryStorage();
+  storage.setItem('silent-hill-mobile:language', 'en');
+  const game = startupGame({ storage });
+  for (let i = 0; i < 6 && game.mainMenu.current?.kind !== 'sound'; i++) game.advance(1000);
+  assert.equal(game.mainMenu.current.kind, 'sound');
+  choose(game, 'Transitions: On');
+  assert.equal(game.roomTransitions, false);
+  assert.deepEqual(menuTexts(game), ['Sound: On', 'Transitions: Off', 'Language: English', 'Continue']);
+  assert.equal(game.mainMenu.current.selected, 1);
+
+  choose(game, 'Language: English');
+  assert.equal(game.language, 'fr');
+  assert.equal(game.mainMenu.current.kind, 'sound');
+  assert.equal(game.mainMenu.menus.length, 1);
+  assert.equal(game.mainMenu.current.selected, 2);
+  assert.equal(menuTexts(game).at(-1), game.engineText(59));
+  game.pressKey('ArrowLeft');
+  game.advance();
+  assert.equal(game.language, 'en');
+
+  choose(game, 'Continue');
+  assert.notEqual(game.mainMenu.current?.kind, 'sound');
+});
+
+test('a build with one language has no language row on the first menu', () => {
+  const game = startupGame();
+  game.languages = ['en'];
+  const rows = game.mainMenu.soundMenu().choices.map(({ id }) => id);
+  assert.deepEqual(rows, ['sound', 'transitions', 'continue']);
 });
 
 test('Settings changes sound and language, in place, and arrow keys move the highlight', () => {
