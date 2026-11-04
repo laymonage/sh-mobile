@@ -9,6 +9,7 @@ import { parsePaletteIndex, recolorPng } from '../web/engine/palettes.mjs';
 
 const data = loadGameData(await readJar(readInput(recommended.sh2.gameData)));
 const keypadData = loadGameData(await readJar(readInput(recommended.sh2.keypadReference)));
+const FAN_TRANSLATED_BUILD = 'sh2-2008-a10';
 
 function memoryStorage() {
   const items = new Map();
@@ -162,15 +163,94 @@ test('the main menu offers what the original does, with its music and about text
   assert.match(about, /Made with INK Technology\.$/);
 });
 
-test('help has the touch build’s own text and this port’s controls', () => {
-  const game = newGame();
-  assert.match(game.gameplayHelp(), /^Use the touchpad/);
-  const controls = game.controlsHelp();
-  assert.match(controls, /^Mouse: /);
-  assert.match(controls, /Use the Touchpad to:/);
-  const keypad = newGame({ build: keypadData }).controlsHelp();
-  assert.match(keypad, /Move cursor \(or crosshair\):/);
-  assert.doesNotMatch(keypad, /JAVA_APP_INK/);
+const LANGUAGES = ['en', 'fr', 'de', 'it', 'es', 'pt'];
+// Words for a phone's keys and the touch build's icons, in each language.
+const PHONE_WORDS =
+  /JAVA_APP|touchpad|soft ?key|touches de sélection|Auswahltaste|tasti funzione|teclas de selección|^Use as teclas|\b(Num|Key|Touche|Taste|Tasto|Tecla) ?\d|chiffre 0|ic[oô]ne?\b|ícone|icona|icono|symbol|navigation mode/im;
+
+for (const [name, build] of [
+  ['touch', data],
+  ['keypad', keypadData],
+]) {
+  test(`the ${name} build's Help and tutorial describe the mouse and keyboard, in all six languages`, () => {
+    for (const language of LANGUAGES) {
+      const game = newGame({ build, language });
+      const label = `${name} ${language}`;
+      assert.doesNotMatch(game.gameplayHelp(), PHONE_WORDS, `${label} gameplay`);
+      assert.doesNotMatch(game.controlsHelp(), PHONE_WORDS, `${label} controls`);
+      assert.match(game.controlsHelp(), /\nM\b/, `${label} map key`);
+      // The tutorial's lines, apart from the one about the crosshair's icon turning red.
+      const lines = [1, 6, 7, 8, 9, 11].map((index) => game.gameTexts[index]);
+      for (const line of lines) assert.doesNotMatch(line, PHONE_WORDS, `${label}: ${line}`);
+      // Nothing that fights say mentions them either.
+      for (const line of game.gameTexts) {
+        if (/1/.test(line) && /Gun/.test(line)) assert.doesNotMatch(line, PHONE_WORDS, `${label}: ${line}`);
+      }
+    }
+  });
+}
+
+test('no line in the touch build mentions a phone’s keys or an icon the page lacks', () => {
+  for (const language of LANGUAGES) {
+    const game = newGame({ language });
+    // The crosshair's icon turning red is about the crosshair, so it stays.
+    const others = game.gameTexts.filter((_, index) => index !== 10);
+    for (const line of others)
+      assert.doesNotMatch(
+        line,
+        /weapon icon|icone de combat|Kampfsymbol|icona di combattimento|icono de combate|ícone de combate|Navigation icon/i,
+        `${language}: ${line}`,
+      );
+  }
+});
+
+test('each weapon hint is rewritten once, and the names of items are left alone', () => {
+  for (const build of [data, keypadData]) {
+    for (const language of LANGUAGES) {
+      const game = newGame({ build, language });
+      const counts = (text) => game.gameTexts.filter((line) => line === text).length;
+      assert.equal(counts(game.help.equipPipe), 1, `${language} pipe`);
+      assert.equal(counts(game.help.equipGun), 1, `${language} gun`);
+      assert.ok(game.itemName('i').length < 20, `${language}: ${game.itemName('i')}`);
+      assert.ok(game.itemName('invGun').length < 20, `${language}: ${game.itemName('invGun')}`);
+    }
+  }
+  assert.equal(newGame({ language: 'it' }).itemName('i').toLowerCase(), "tubo d'acciaio");
+});
+
+test('the keypad build’s tutorial leaves the lines that are its story alone', () => {
+  const game = newGame({ build: keypadData });
+  assert.equal(game.gameTexts[13], "Don't touch that locker!");
+});
+
+test('help keeps the JAR’s own words for what isn’t about controls', () => {
+  const page = newGame().gameplayHelp();
+  assert.match(page, /The eye is used to look at\/examine objects\./);
+  assert.match(page, /A highlighted crosshair indicates that your aim is correct\.$/);
+  assert.match(page, /^Click, or use the buttons under the screen/);
+  // The Spanish page has a paragraph more, so its end is still in the right place.
+  assert.match(
+    newGame({ language: 'es' }).gameplayHelp(),
+    /La mira resaltada indica que se está apuntando correctamente\.$/,
+  );
+});
+
+test('only the touch build’s controls mention drawing', () => {
+  assert.match(newGame().controlsHelp(), /Draw on a puzzle/);
+  assert.doesNotMatch(newGame({ build: keypadData }).controlsHelp(), /Draw on a puzzle/);
+});
+
+test('a fan translation keeps its own text', async () => {
+  // This build has Russian in the English slot.
+  const inspection = await inspectJar(readInput(FAN_TRANSLATED_BUILD));
+  const game = createGame(inspection.data, {
+    language: 'en',
+    roomSize: inspection.roomSize,
+    roomHeight: inspection.roomHeight,
+  });
+  assert.equal(game.help, null);
+  assert.match(game.gameTexts[1], /[А-я]/);
+  assert.match(game.gameplayHelp(), /[А-я]/);
 });
 
 test('a new game reaches the first room, by skipping or by reading', () => {

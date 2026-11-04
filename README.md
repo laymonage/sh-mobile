@@ -70,7 +70,7 @@ In both:
 
 - The rooms are 310x270, and some are 290 wide and sit centered in the frame.
 - The touch build's icons for the weapon, first aid and inventory are the page's buttons and keys. Its navigation icon isn't there, because the mouse and the walking keys already reach every exit.
-- The tutorial's text is the JAR's own, so it describes a phone. Help adds this port's controls in English only.
+- The tutorial and Help are reworded for a mouse and keyboard, in all six languages. Fan translations keep their original text, so they still describe a phone.
 
 Nobody has played Mobile 2 by hand yet.
 

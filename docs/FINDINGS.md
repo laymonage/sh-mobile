@@ -347,8 +347,11 @@ The moving enemy compares its name with the word `Enemy`, as `h.s` does. That na
 ### What the port leaves out
 
 - The touch build's icons along the top of the screen and its arrows for turning. The page's buttons and keys do the same, except for the navigation icon, which has no use with a mouse.
-- The tutorial's text is the JAR's, so it describes those icons. Help adds this port's controls in English only.
 - The Mouse lock setting is shared with the first game and hasn't been tried in Mobile 2.
+
+### Help and the tutorial
+
+The JAR's Help and tutorial describe a keypad, or the touch build's icons. `web/engine/mobile2-help.mjs` rewrites what's about controls, in all six languages, and keeps the rest in the JAR's words. The tutorial still shows the touch build's pictures of its icons, with lines about the keys that do those jobs here. The translations are this port's own and haven't been checked by native speakers, and the page's buttons are named in English because they stay in English. Fan translations, recognized by the wording of the tutorial's first line, keep their original text. Across the 61 undamaged INK builds, that's 7 with Russian in the English slot, 4 with Chinese in the French slot and 1 with Vietnamese in the Portuguese slot.
 
 ### What was tried
 

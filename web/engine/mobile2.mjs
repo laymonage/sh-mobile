@@ -1,5 +1,6 @@
 import { ROOM_OBJECT_ZONE_BATTLE } from './format.mjs';
 import { CHOICE_BACK, CHOICE_USE, EVENT, Game, MENU, verbWheelCenter, VERB } from './game.mjs';
+import { adaptMobile2Texts, mobile2ControlsText, mobile2GameplayText, mobile2HelpFor } from './mobile2-help.mjs';
 import { MOBILE_2_TEXT } from './text-tables.mjs';
 import { toBoolean, toInt } from './vm.mjs';
 
@@ -133,14 +134,6 @@ const CONTROL_NAMES = [
   ['SOFTKEY_A', 40],
 ];
 
-// This port's controls. Only in English so far.
-const WEB_CONTROLS = [
-  'Mouse: move the cursor, click to choose or fire, right-click for the right button under the screen.',
-  'W / A / S / D or the arrow keys: walk, or aim in a fight.',
-  'Q / E: next or previous object. Enter or Space: click.',
-  '1: weapon. 3: first aid. I: inventory. M: map. Esc: back or pause.',
-].join('\n');
-
 export class Mobile2Game extends Game {
   static TEXT = MOBILE_2_TEXT;
   static SPEAKER_TEXTS = [
@@ -165,21 +158,30 @@ export class Mobile2Game extends Game {
   }
 
   // Text.
+  // Only the touch build has this room, and its puzzles are drawn.
+  get isTouchBuild() {
+    return this.data.entries.has(`${this.dataDir}/rom/puzzleBodyIncision.bin`);
+  }
+
   adaptGameTexts(texts) {
-    return texts;
+    this.help = mobile2HelpFor(texts);
+    return adaptMobile2Texts(texts, this.isTouchBuild);
   }
 
   gameplayHelp() {
-    return this.engineText(this.text.GAMEPLAY_TEXT);
+    const original = this.engineText(this.text.GAMEPLAY_TEXT);
+    return this.help ? mobile2GameplayText(original, this.help) : original;
   }
 
   controlsHelp() {
-    // The touch build has one page for this, and the keypad builds keep a line per control.
+    if (this.help) return mobile2ControlsText(this.help, this.isTouchBuild);
+    // A fan translation keeps its own page. The touch build has one, and the keypad builds
+    // keep a line per control.
     const touch = this.engineText(this.text.TOUCH_CONTROLS);
     let text =
       touch.trim().length > 1 ? touch : this.text.KEYPAD_CONTROLS.map((index) => this.engineText(index)).join('\n\n');
     for (const [name, index] of CONTROL_NAMES) text = text.replaceAll(`<JAVA_APP_INK_${name}>`, this.engineText(index));
-    return `${WEB_CONTROLS}\n\n${text}`;
+    return text;
   }
 
   receivedText(item) {
