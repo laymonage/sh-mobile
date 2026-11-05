@@ -2183,17 +2183,18 @@ export class Game {
 
   // This port's own addition: the original's keys only moved the cursor. A key does
   // what clicking the room's exit in that direction would do. Two rooms have two
-  // forward exits, and the one nearer the cursor is used.
+  // forward exits, and the one nearer the cursor is used. Says whether there was one.
   moveInDirection(direction) {
-    if (this.hideCursor) return;
+    if (this.hideCursor) return false;
     const distance = ({ left, right, top, bottom }) =>
       ((left + right) / 2 - this.cursorX) ** 2 + ((top + bottom) / 2 - this.cursorY) ** 2;
     const exits = (this.objects ?? []).filter(
       (object) =>
         object.visible && object.active && this.exitGoes(object.executeEvent(EVENT.GETMOVEDIR, null), direction),
     );
-    if (exits.length)
-      this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
+    if (!exits.length) return false;
+    this.useObject(exits.reduce((nearest, exit) => (distance(exit) < distance(nearest) ? exit : nearest)));
+    return true;
   }
 
   exitGoes(moveDirection, direction) {

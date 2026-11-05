@@ -69,11 +69,13 @@ const OBJECT_PALETTE_IMAGES = new Set([
 ]);
 
 // Which way each exit in the room goes, for the walking keys. Left and right turn, as the
-// phone's keys do in h.w, and forward goes only forward, though h.w's also takes the stairs
-// and the elevator. The pointer takes the rest, which are all in rooms 3 and 9, mostly
-// beside a forward exit or a turn that the key would otherwise sometimes miss.
+// phone's keys do in h.w, and leave plain left and right exits to the pointer. h.w's
+// forward key also takes the stairs and the elevator. Here it takes them only when they're
+// straight ahead, with no forward exit beside them for the cursor to choose between.
+// They're all in rooms 3 and 9.
 const EXITS_BY_KEY = {
   forward: ['forward'],
+  ahead: ['upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'],
   back: ['back', 'turnback'],
   left: ['turnleft'],
   right: ['turnright'],
@@ -362,6 +364,10 @@ export class Mobile2Game extends Game {
   }
 
   // Walking.
+  moveInDirection(direction) {
+    return super.moveInDirection(direction) || (direction === 'forward' && super.moveInDirection('ahead'));
+  }
+
   exitGoes(moveDirection, direction) {
     return EXITS_BY_KEY[direction]?.includes(moveDirection) ?? false;
   }

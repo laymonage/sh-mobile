@@ -497,18 +497,18 @@ test('the verb wheel has three arms, and no mouth', () => {
   assert.equal(game.menus.at(-1).id, MENU.SAY);
 });
 
-test('the walking keys go forward, back and turn, and leave the rest to the pointer', () => {
+test('the walking keys go forward, ahead, back and turn, and leave the rest to the pointer', () => {
   const game = newGame();
   for (const [key, exits] of Object.entries({
     forward: ['forward'],
+    ahead: ['upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'],
     back: ['back', 'turnback'],
     left: ['turnleft'],
     right: ['turnright'],
   })) {
     for (const exit of exits) assert.ok(game.exitGoes(exit, key), `${key} ${exit}`);
   }
-  for (const exit of ['upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'])
-    assert.ok(!game.exitGoes(exit, 'forward'), exit);
+  assert.ok(!game.exitGoes('elevator', 'forward'));
   assert.ok(!game.exitGoes('left', 'left'));
   assert.ok(!game.exitGoes('right', 'right'));
   assert.ok(!game.exitGoes('turnleft', 'right'));
@@ -529,6 +529,23 @@ test('beside the elevator, the forward key goes forward', () => {
   game.cursorY = (elevator.top + elevator.bottom) / 2;
   game.moveInDirection('forward');
   assert.deepEqual(used, ['forward']);
+});
+
+test('facing the elevator, with no forward exit, the forward key takes it', () => {
+  const game = newGame();
+  skipTo(game, '0');
+  enter(game, '3');
+  const goes = (object) => object.executeEvent(EVENT.GETMOVEDIR, null);
+  for (const exit of game.objects) if (goes(exit) === 'elevator') exit.active = true;
+  assert.ok(!game.objects.some((object) => object.active && goes(object) === 'forward'));
+  const used = [];
+  game.useObject = (object) => used.push(goes(object));
+  assert.ok(game.moveInDirection('forward'));
+  assert.deepEqual(used, ['elevator']);
+  // A room with neither has nothing for the key.
+  for (const exit of game.objects) if (goes(exit) === 'elevator') exit.active = false;
+  assert.ok(!game.moveInDirection('forward'));
+  assert.deepEqual(used, ['elevator']);
 });
 
 test('in a room with both, the left and right keys turn rather than step aside', () => {
