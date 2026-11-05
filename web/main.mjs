@@ -457,6 +457,9 @@ function run(game, renderer) {
     if (event.key.toLowerCase() === 'm' && game.softKeys().left?.action === 'map') game.pressKey('map');
     if (event.key.toLowerCase() === 'i') game.pressKey('inventory');
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.toLowerCase() === game.constructor.LEFT_SOFT_KEY && !event.repeat) {
+      if (!event.target.closest?.('input, select')) game.pressSoftKey('left');
+    }
 
     const direction = DIRECTIONS[event.code];
     const confirming = event.key === 'Enter' || event.key === ' ';

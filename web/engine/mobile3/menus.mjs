@@ -1,3 +1,4 @@
+import { controlsText, MOUSE_RECOIL_LABELS } from './help.mjs';
 import { measureText, wrapText } from './text.mjs';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from './ui.mjs';
 
@@ -13,6 +14,11 @@ const PAUSE_LINES = { RESUME: 437, SAVE: 438, SETTINGS: 439, HELP: 440, QUIT: 44
 const SOUND_LINES = { ON: 432, OFF: 433, VIBRATE_ON: 434, VIBRATE_OFF: 435 };
 const NO_SAVING_LINE = 481;
 const MAIN = { PLAY: 0, SETTINGS: 1, HELP: 2, ABOUT: 3, QUIT: 4 };
+
+function mouseRecoilRow(game) {
+  const label = MOUSE_RECOIL_LABELS[game.languageName] ?? MOUSE_RECOIL_LABELS.English;
+  return `${label}${game.lines[game.tables.onOffLines[game.mouseLock ? 0 : 1]]}`;
+}
 
 export class FrontEnd {
   constructor(game) {
@@ -102,14 +108,20 @@ export class FrontEnd {
     this.setUpArt();
   }
 
+  settingIds() {
+    return ['sound', ...(this.game.vibrator ? ['vibration'] : []), 'mouseRecoil', 'language'];
+  }
+
   settingRows() {
     const { game, tables } = this;
     const { lines } = game;
     const onOff = (on) => lines[tables.onOffLines[on ? 0 : 1]];
-    const rows = [`${lines[tables.settingLabels[0]]}${onOff(game.audio?.enabled ?? true)}`];
-    if (game.vibrator) rows.push(`${lines[tables.settingLabels[1]]}${onOff(game.vibrationOn)}`);
-    rows.push(`${lines[tables.settingLabels[2]]}${game.languageName}`);
-    return rows;
+    return this.settingIds().map((id) => {
+      if (id === 'sound') return `${lines[tables.settingLabels[0]]}${onOff(game.audio?.enabled ?? true)}`;
+      if (id === 'vibration') return `${lines[tables.settingLabels[1]]}${onOff(game.vibrationOn)}`;
+      if (id === 'mouseRecoil') return mouseRecoilRow(game);
+      return `${lines[tables.settingLabels[2]]}${game.languageName}`;
+    });
   }
 
   settingsBox(selected = 0) {
@@ -120,11 +132,13 @@ export class FrontEnd {
 
   changeSetting(row, direction = 1) {
     const { game, tables } = this;
-    const last = this.settingRows().length - 1;
-    if (row === 0) {
+    const id = this.settingIds()[row];
+    if (id === 'sound') {
       game.audio?.setEnabled?.(!game.audio.enabled);
       if (game.audio?.enabled) game.playSound('music');
-    } else if (row === last) {
+    } else if (id === 'mouseRecoil') {
+      game.toggleMouseLock();
+    } else if (id === 'language') {
       const names = tables.languageNames;
       const next = (names.indexOf(game.languageName) + direction + names.length) % names.length;
       game.setLanguage(names[next]);
@@ -224,11 +238,9 @@ export class FrontEnd {
         break;
       case 'help':
         this.showPages(
-          lines[
-            tables.helpLines[row] === LANGUAGE_LINES.CONTROLS
-              ? this.data.hardCoded.lines.controls
-              : LANGUAGE_LINES.GAME_DESCRIPTION
-          ],
+          tables.helpLines[row] === LANGUAGE_LINES.CONTROLS
+            ? controlsText(game, lines[this.data.hardCoded.lines.controls])
+            : lines[LANGUAGE_LINES.GAME_DESCRIPTION],
           () => {
             this.stage = 'help';
             this.current = { kind: 'menu' };
@@ -424,6 +436,7 @@ export class PauseMenu {
     const { lines } = game;
     const rows = [lines[game.audio?.enabled === false ? SOUND_LINES.OFF : SOUND_LINES.ON]];
     if (game.vibrator) rows.push(lines[game.vibrationOn ? SOUND_LINES.VIBRATE_ON : SOUND_LINES.VIBRATE_OFF]);
+    rows.push(mouseRecoilRow(game));
     return rows;
   }
 
@@ -467,18 +480,19 @@ export class PauseMenu {
       }
     } else if (this.stage === 'settings') {
       if (row === 0) game.audio?.setEnabled?.(!game.audio.enabled);
+      else if (row === this.soundRows().length - 1) game.toggleMouseLock();
       else {
         game.vibrationOn = !game.vibrationOn;
         game.saveSettings();
       }
       this.showSettings(row);
     } else if (this.stage === 'help') {
-      const line =
+      const text =
         game.tables.helpLines[row] === LANGUAGE_LINES.CONTROLS
-          ? game.data.hardCoded.lines.controls
-          : LANGUAGE_LINES.GAME_DESCRIPTION;
+          ? controlsText(game, lines[game.data.hardCoded.lines.controls])
+          : lines[LANGUAGE_LINES.GAME_DESCRIPTION];
       this.stage = 'pages';
-      this.box = game.boxes.pages(lines[line]);
+      this.box = game.boxes.pages(text);
     } else if (this.stage === 'quit') {
       if (row === 0) game.quitToFrontEnd();
       else this.showMain();

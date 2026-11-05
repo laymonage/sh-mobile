@@ -343,10 +343,7 @@ export class Fight {
     }
     if (weapon !== 0) {
       const sideways = game.randomBetween(5, 10);
-      game.moveCursor(
-        game.cursorX + (game.randomBit() === 1 ? -sideways : sideways),
-        game.cursorY - game.randomBetween(15, 25),
-      );
+      game.kick(game.randomBit() === 1 ? -sideways : sideways, -game.randomBetween(15, 25));
     }
     game.changeWeaponIfEmpty();
     if (!game.reloading && game.loaded[game.weapon] === 0) game.startReload();

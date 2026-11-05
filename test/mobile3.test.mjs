@@ -7,6 +7,7 @@ import { animationSize, loadMobile3, parseLanguage } from '../web/engine/mobile3
 import {
   createGame,
   FACING,
+  Mobile3Game,
   LIFT_CELLS,
   LIFTS,
   MODE,
@@ -15,6 +16,7 @@ import {
   STEP,
   VERB,
 } from '../web/engine/mobile3/game.mjs';
+import { controlsText, puzzleText } from '../web/engine/mobile3/help.mjs';
 import { BUILD_RESOURCES } from '../web/engine/mobile3/resources.mjs';
 import { actionsOf, conditionsHold, TRIGGER } from '../web/engine/mobile3/rules.mjs';
 
@@ -617,6 +619,8 @@ test('a shot lands only on the monster, and using the pistol spends a bullet', (
   game.click();
   assert.equal(game.fight.health, 100);
   assert.equal(game.loaded[1], 14);
+  // The miss's recoil settles back to the mouse first.
+  while (game.kickX || game.kickY) game.tick();
   const { fight } = game;
   const box = fight.hitBox();
   game.moveCursor(SCREEN_X + fight.x + box.left + 2, fight.y + box.top + 2);
@@ -907,29 +911,22 @@ test("vibrations keep the original's patterns", () => {
 });
 
 for (const [build, prompt, controls, pearlIntro] of [
-  [data, 'Touch the screen', 'Touch the left, right', 563],
-  [keypadData, 'Press any key', 'Move cursor: 2/4/6/8', 553],
+  [data, 'Touch the screen', 557, 563],
+  [keypadData, 'Press any key', 464, 553],
 ]) {
   test(`the ${build.kind} build's own prompt, controls help and pearl instructions show`, () => {
     const front = createGame(build, {});
     front.frontEnd.showPress();
     assert.equal(front.frontEnd.pressLines.join(' '), prompt);
-    front.frontEnd.showMainMenu();
-    front.frontEnd.chooseMain(2);
-    front.frontEnd.chooseRow(build.tables.helpLines.indexOf(416));
-    assert.ok(front.frontEnd.box.lines.join(' ').includes(controls));
+    // The port rewrites the controls and the pearls' instructions, from each build's own line.
+    assert.equal(build.hardCoded.lines.controls, controls);
+    assert.equal(build.hardCoded.lines.pearlIntro, pearlIntro);
 
     const game = newGame({}, build);
-    game.openPause();
-    game.pause.choose(game.pause.rowActions.indexOf('help'));
-    game.pause.choose(build.tables.helpLines.indexOf(416));
-    assert.ok(game.pause.box.lines.join(' ').includes(controls));
-    game.closePause();
-
     game.chapter = 3;
     game.mode = MODE.CORRIDOR;
     game.startPuzzle(6);
-    assert.equal(game.box.text, game.lines[pearlIntro]);
+    assert.equal(game.box.text, puzzleText(game, pearlIntro, 6));
   });
 }
 
@@ -1032,6 +1029,156 @@ test('keypad builds have no targets', () => {
   for (let i = 0; i < 150; i++) game.tick();
   assert.equal(game.targetClock, null);
   assert.deepEqual(game.fight.targets(), []);
+});
+
+const PHONE_WORDS =
+  /\bLSK\b|\bRSK\b|fire\/5|2\/4\/6\/8|\bTouch\b|Berühr|Tocca|Toca |funz|Auswahltaste|Soft-Taste|Steuerkreuz|cruceta|dpad/;
+
+for (const build of [data, keypadData]) {
+  test(`the ${build.kind} build's Controls page and puzzle instructions describe a mouse and keyboard, in every language`, () => {
+    const game = newGame({}, build);
+    for (const { name } of build.languages) {
+      game.setLanguage(name);
+      const original = game.lines[build.hardCoded.lines.controls];
+      const text = controlsText(game, original);
+      assert.notEqual(text, original, name);
+      assert.doesNotMatch(text, PHONE_WORDS, name);
+      assert.match(text, /\nC\n/, `${name} names the C key`);
+      assert.ok(text.endsWith(original.slice(-40).trim()), `${name} keeps the JAR's list of the menu's rows`);
+      assert.equal(
+        text.includes('\n\n') && /ring|cercle|Ring|cerchio|círculo/.test(text),
+        build.kind === 'touch',
+        name,
+      );
+      const { puzzleLines } = build.tables;
+      for (const number of [1, 2, 3, 4, 5, 6]) {
+        const line = number === 6 ? build.hardCoded.lines.pearlIntro : puzzleLines[number];
+        const rewritten = puzzleText(game, line, number);
+        if (number === 4 && build.kind === 'keypad') {
+          assert.equal(rewritten, game.lines[line], 'the keypad safe has its riddle alone');
+          continue;
+        }
+        assert.doesNotMatch(rewritten, PHONE_WORDS, `${name}, puzzle ${number}`);
+        assert.match(rewritten, /Esc|Échap/, `${name}, puzzle ${number}`);
+        if (number === 4 || number === 5) {
+          assert.ok(rewritten.startsWith(game.lines[line].slice(0, 20)), `${name} keeps puzzle ${number}'s riddle`);
+        }
+      }
+    }
+  });
+}
+
+test('a line that does not read as expected keeps its original text', () => {
+  const game = newGame();
+  game.lines = [...game.lines];
+  game.lines[417] = 'A fan translation.';
+  game.lines[data.hardCoded.lines.controls] = 'Some other controls.';
+  assert.equal(puzzleText(game, 417, 1), 'A fan translation.');
+  assert.equal(controlsText(game, 'Some other controls.'), 'Some other controls.');
+});
+
+test('the puzzles show the new instructions, and C confirms them', () => {
+  const game = newGame();
+  game.chapter = 3;
+  game.mode = MODE.CORRIDOR;
+  game.startPuzzle(3);
+  assert.equal(game.box.text, puzzleText(game, data.tables.puzzleLines[3], 3));
+  clear(game);
+  assert.equal(Mobile3Game.LEFT_SOFT_KEY, 'c');
+  game.pressSoftKey('left');
+  assert.equal(game.puzzle, null, 'the clock was confirmed');
+});
+
+test('the Controls page shows from the main menu and the pause menu', () => {
+  const front = createGame(data, {});
+  front.frontEnd.showMainMenu();
+  front.frontEnd.chooseMain(2);
+  front.frontEnd.chooseRow(data.tables.helpLines.indexOf(416));
+  assert.match(front.frontEnd.box.lines.join(' '), /Right click \/ Esc/);
+  const game = newGame();
+  game.openPause();
+  game.pause.choose(game.pause.rowActions.indexOf('help'));
+  game.pause.choose(data.tables.helpLines.indexOf(416));
+  assert.match(game.pause.box.lines.join(' '), /Right click \/ Esc/);
+});
+
+const shotOf = (options = {}) => {
+  const game = fightOf(keypadData, 1, () => 0.9);
+  Object.assign(game, options);
+  game.moveCursor(SCREEN_X + 20, 200);
+  game.click();
+  return game;
+};
+
+test('with a free mouse, recoil kicks the aim up and settles back to the mouse', () => {
+  const game = shotOf();
+  assert.equal(game.pointerY, 200);
+  assert.ok(game.cursorY <= 200 - 15 && game.cursorY >= 200 - 25, `kicked up to ${game.cursorY}`);
+  assert.ok(Math.abs(game.cursorX - game.pointerX) >= 5 && Math.abs(game.cursorX - game.pointerX) <= 10);
+  game.fight = null;
+  for (let i = 0; i < 6; i++) game.tick();
+  assert.deepEqual([game.cursorX, game.cursorY], [game.pointerX, game.pointerY]);
+});
+
+test('aiming with the keys, or with the mouse captured, recoil stays until the player steers back', () => {
+  for (const options of [{ aimingWithKeys: true }, { pointerLocked: true }]) {
+    const game = shotOf(options);
+    const kicked = game.cursorY;
+    assert.ok(kicked <= 185);
+    assert.equal(game.pointerY, kicked, 'the pointer itself moved');
+    game.fight = null;
+    for (let i = 0; i < 6; i++) game.tick();
+    assert.equal(game.cursorY, kicked);
+  }
+});
+
+test('the aim wanders around a free mouse, and with the keys it drifts away', () => {
+  // A pistol's aim only wanders on the updates a coin toss allows, which this always does.
+  const free = fightOf(keypadData, 1, () => 0.1);
+  free.moveCursor(SCREEN_X + 120, 160);
+  const limit = keypadData.tables.aimDrift[free.weapon];
+  for (let i = 0; i < 30; i++) {
+    free.settleKick();
+    free.tickAimDrift();
+    assert.notEqual(free.cursorX, free.pointerX, 'it wanders off the mouse');
+    assert.ok(Math.abs(free.cursorX - free.pointerX) <= limit * 2, 'and stays near it');
+  }
+  assert.deepEqual([free.pointerX, free.pointerY], [SCREEN_X + 120, 160]);
+
+  const keys = fightOf(keypadData, 1, () => 0.1);
+  keys.moveCursor(SCREEN_X + 120, 160);
+  keys.aimWithKeys();
+  for (let i = 0; i < 30; i++) {
+    keys.settleKick();
+    keys.tickAimDrift();
+  }
+  assert.ok(Math.abs(keys.cursorX - (SCREEN_X + 120)) > limit * 2, 'it keeps drifting');
+  assert.equal(keys.cursorX, keys.pointerX);
+});
+
+test('the Mouse recoil setting is shared with the other games, and captures the mouse only in fights', () => {
+  const storage = memoryStorage();
+  const game = newGame({ storage });
+  const front = createGame(data, { storage });
+  const row = front.frontEnd.settingIds().indexOf('mouseRecoil');
+  assert.match(front.frontEnd.settingRows()[row], /^Mouse recoil: /);
+  front.frontEnd.changeSetting(row);
+  assert.equal(storage.getItem('silent-hill-mobile:mouse-recoil'), 'on');
+  const later = createGame(data, { storage, startInGame: true });
+  clear(later);
+  assert.equal(later.mouseLock, true);
+  assert.equal(later.wantsMouseLock, false, 'not outside a fight');
+  later.mode = MODE.CORRIDOR;
+  later.startFight(1, false);
+  assert.equal(later.wantsMouseLock, true);
+  later.openPause();
+  assert.equal(later.wantsMouseLock, false, 'not in the pause menu');
+  const settings = later.pause.rowActions.indexOf('settings');
+  later.pause.choose(settings);
+  later.pause.choose(later.pause.soundRows().length - 1);
+  assert.equal(later.mouseLock, false);
+  assert.equal(storage.getItem('silent-hill-mobile:mouse-recoil'), 'off');
+  assert.equal(game.mouseLock, false);
 });
 
 test('the port follows the v1.7.0 and v1.0.20 families, and explains what it does with the rest', async () => {

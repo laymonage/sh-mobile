@@ -85,11 +85,13 @@ Mobile 3 has a different engine, and the port plays it from the logos to the end
 
 Its Internet Archive button loads `sh3-2010-v1.0.20-a`, a keypad build. During development, <http://localhost:8123/?jar=sh3-2010-v1.0.20-a> or <http://localhost:8123/?jar=sh3-en-v170> loads a build, or you can drop in one of the 41 JARs it follows, which are v1.0.20, v1.0.23, v1.0.24, and v1.1.0, v1.5.0 and v1.7.0 with touch art. It explains that it doesn't follow the others, which include the 3-minute demos of v1.0.17.
 
-Point and click. In a room or corridor, the cursor's words say what a click does, and clicking something opens a wheel of look, use and inventory. W, A, S and D walk and turn, E and Q move to the next thing that can be clicked, I opens the inventory, and M the map once you have it. Enter, Space and the two big buttons do what they're labelled with, and a right-click is the right one.
+Point and click. In a room or corridor, the cursor's words say what a click does, and clicking something opens a wheel of look, use and inventory. W, A, S and D walk and turn, E and Q move to the next thing that can be clicked, I opens the inventory, and M the map once you have it. Enter and Space click, the two big buttons do what they're labelled with, C is the left one and Esc or a right-click the right one. So C confirms the clock, the safe and the pearls, and turns a paper.
 
-In a puzzle or fight the direction keys move the cursor. For the safe, keypad builds take the number keys, and with a mouse the sides of the knob change a number and clicking the display moves to the next. The paper puzzle's Rotate is the left button, or E or Q.
+In a puzzle or fight the direction keys move the cursor. For the safe, keypad builds take the number keys, and with a mouse the sides of the knob change a number and clicking the display moves to the next. In touch builds' fights, clicking the green ring is a sure hit and the red one a critical hit.
 
-The JAR's own help mentions keys or touching, as it did on a phone, and hasn't been rewritten for a mouse.
+Each pistol or shotgun shot kicks the aim up, and the aim wanders while you hold a weapon. With a free mouse, both settle back to the mouse. With the keys they last until you steer back, as on a phone, and the Mouse recoil setting, shared with the other games, captures the mouse in fights so they last with it too. Esc lets it go.
+
+The Controls page and the puzzles' instructions are rewritten for a mouse and keyboard, in all six languages.
 
 Nobody has played Mobile 3 by hand yet.
 

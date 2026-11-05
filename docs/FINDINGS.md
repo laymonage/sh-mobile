@@ -422,6 +422,9 @@ The Internet Archive button loads `sh3-2010-v1.0.20-a`, which has the key that m
 - The door to the last room's words are wrapped to fit their paper. The original wraps them 100 pixels wider than the paper, which hides the end of each line.
 - Keypad builds have no way to enter the safe's number with a mouse, so the port adds one.
 - Long text scrolls by a click before moving on, rather than needing the up and down keys.
+- The Controls page and the puzzles' instructions describe a mouse and keyboard, in all six languages, and keep the JAR's own words for the main menu's rows and the safe's and bottles' riddles. `web/engine/mobile3/help.mjs` has the port's text. A line that doesn't read as expected keeps its original.
+- Each pistol or shotgun shot kicks the aim 5 to 10 pixels to a random side and 15 to 25 up, at once, in both kinds of build, and the aim wanders while a weapon is held. As in the first game, with a free mouse the kick settles back to the mouse over a few updates, and with the keys or a captured mouse it stays until the player steers back, as on a keypad. The Mouse recoil setting, in the settings and the pause menu's settings, captures the mouse in fights, and is shared with the other two games.
+- C is the left button under the screen, as Esc and a right click are the right one, so the clock, the safe and the pearls can be confirmed from the keyboard. In puzzles, Q and E do the same.
 - The demo's 3-minute limit isn't included, as for the other games' checks.
 - A chapter's first line of dialogue shows, where the original's save notice replaces it. See below.
 - Room 13's fifth layer is drawn. See below.

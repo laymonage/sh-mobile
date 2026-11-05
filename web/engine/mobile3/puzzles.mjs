@@ -1,4 +1,5 @@
 import { animationSize } from './data.mjs';
+import { puzzleText } from './help.mjs';
 import { wrapText } from './text.mjs';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from './ui.mjs';
 
@@ -25,7 +26,7 @@ class Puzzle {
   showIntro(line = this.lines[this.number]) {
     const { game } = this;
     this.ready = false;
-    game.showSpeech(game.lines[this.lines[0]], game.lines[line], () => {
+    game.showSpeech(game.lines[this.lines[0]], puzzleText(game, line, this.number), () => {
       this.ready = true;
     });
   }

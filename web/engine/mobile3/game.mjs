@@ -140,6 +140,8 @@ const USED_UP_BY_CHAPTER_THREE = [110, 113];
 const CLIP_SIZE = [-1, 15, 5];
 const SAVE_KEY = 'silent-hill-mobile3:save';
 const SETTINGS_KEY = 'silent-hill-mobile3:settings';
+// Shared with the other two games, which have the same setting.
+const MOUSE_RECOIL_PREFERENCE = 'silent-hill-mobile:mouse-recoil';
 const WEAK_HEALTH = 70;
 const SAFE_DAMAGE = 25;
 // The original draws its red flash once. The page can tick just before it draws, so this lasts
@@ -171,6 +173,9 @@ export class Mobile3Game {
   static PANEL_ART = null;
   static PANEL_ART_IS_STRIP = true;
   static ITEM_ICONS = {};
+  // The page sends this key as the left button under the screen, as Esc and a right click are
+  // the right one. Puzzles need it to confirm.
+  static LEFT_SOFT_KEY = 'c';
 
   constructor(
     data,
@@ -197,8 +202,15 @@ export class Mobile3Game {
     this.frameHeight = SCENE_HEIGHT;
     this.viewOffsetX = 0;
     this.viewOffsetY = 0;
-    this.cursorX = SCENE_WIDTH / 2;
-    this.cursorY = SCENE_HEIGHT / 2;
+    // The cursor is where the mouse or the keys put it, the pointer, moved by recoil and the
+    // aim's wandering, the kick.
+    this.pointerX = SCENE_WIDTH / 2;
+    this.pointerY = SCENE_HEIGHT / 2;
+    this.kickX = 0;
+    this.kickY = 0;
+    this.cursorX = this.pointerX;
+    this.cursorY = this.pointerY;
+    this.aimingWithKeys = false;
     this.boxes = new BoxMaker(data);
     this.languageName = data.languages[0].name;
     this.language = LANGUAGE_CODES[this.languageName];
@@ -210,7 +222,7 @@ export class Mobile3Game {
     // The page looks at these, as it does on the other games.
     this.popups = [];
     this.pointerLocked = false;
-    this.wantsMouseLock = false;
+    this.mouseLock = this.readPreference(MOUSE_RECOIL_PREFERENCE) === 'on';
     this.stroke = null;
     this.frontEnd = null;
     this.time = 0;
@@ -715,7 +727,7 @@ export class Mobile3Game {
     this.mode = MODE.FIGHT;
     this.verbs = null;
     this.fight = new Fight(this, monster, inRoom);
-    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+    this.centerCursor();
     this.shake = 500;
     const weapon = this.weapon;
     if (this.loaded[weapon] === 0) {
@@ -1112,7 +1124,7 @@ export class Mobile3Game {
     this.mode = MODE.PUZZLE;
     this.verbs = null;
     this.puzzle = createPuzzle(this, number);
-    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+    this.centerCursor();
   }
 
   // Where a finished puzzle returns to, from GameMidlet.af() and ag().
@@ -1132,7 +1144,7 @@ export class Mobile3Game {
       this.fire(solved ? TRIGGER.PUZZLE_SOLVED : TRIGGER.PUZZLE_FAILED, number);
     }
     if (this.health <= 0 && !this.gameOver) this.die();
-    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+    this.centerCursor();
   }
 
   // Backing out of the safe isn't a wrong number, so no rule fires, as the right soft key's
@@ -1141,7 +1153,7 @@ export class Mobile3Game {
     this.puzzle = null;
     this.mode = MODE.ROOM;
     this.resumeLoopingSound();
-    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+    this.centerCursor();
   }
 
   safeWasWrong() {
@@ -1381,6 +1393,7 @@ export class Mobile3Game {
     this.tickRoomSound();
     this.tickHeld();
     this.tickHud();
+    this.settleKick();
     if (this.timedDialogue > 0) {
       this.timedDialogue -= MILLISECONDS_PER_TICK;
       if (this.timedDialogue <= 0) this.playSound('whisper', -1);
@@ -1442,7 +1455,44 @@ export class Mobile3Game {
     const wander = (value) => Math.max(-limit, Math.min(limit, value + (this.randomBit() === 1 ? 1 : -1)));
     this.drift.x = wander(this.drift.x);
     this.drift.y = wander(this.drift.y);
-    this.moveCursor(this.cursorX + this.drift.x, this.cursorY + this.drift.y);
+    this.kick(this.drift.x, this.drift.y);
+  }
+
+  // Recoil and the aim's wandering move a cursor that's steered with keys, as on the original's
+  // keypad, and the player steers it back. So they do with a captured mouse. A free mouse's
+  // position is its own, so with one, the kick settles back to it.
+  kick(dx, dy) {
+    if (this.aimingWithKeys || this.pointerLocked) {
+      this.pointerX += dx;
+      this.pointerY += dy;
+    } else {
+      this.kickX += dx;
+      this.kickY += dy;
+    }
+    this.moveCursor(this.pointerX, this.pointerY);
+  }
+
+  settleKick() {
+    if (!this.kickX && !this.kickY) return;
+    this.kickX = Math.trunc(this.kickX / 2);
+    this.kickY = Math.trunc(this.kickY / 2);
+    this.moveCursor(this.pointerX, this.pointerY);
+  }
+
+  centerCursor() {
+    this.kickX = 0;
+    this.kickY = 0;
+    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+  }
+
+  // Keys take over from the mouse where the cursor is, kick and all.
+  aimWithKeys() {
+    if (this.aimingWithKeys) return;
+    this.aimingWithKeys = true;
+    this.pointerX = this.cursorX;
+    this.pointerY = this.cursorY;
+    this.kickX = 0;
+    this.kickY = 0;
   }
 
   // Keys held in a fight or puzzle move the cursor, faster the longer they're down.
@@ -1452,6 +1502,7 @@ export class Mobile3Game {
       this.holdTimer = 0;
       return;
     }
+    this.aimWithKeys();
     this.holdTimer += MILLISECONDS_PER_TICK;
     if (this.holdTimer >= HOLD_STEP_TIME) {
       this.holdTimer = 0;
@@ -1466,8 +1517,10 @@ export class Mobile3Game {
   }
 
   moveCursor(x, y) {
-    this.cursorX = Math.max(0, Math.min(SCENE_WIDTH - 1, x));
-    this.cursorY = Math.max(0, Math.min(SCENE_HEIGHT - 1, y));
+    this.pointerX = Math.max(0, Math.min(SCENE_WIDTH - 1, x));
+    this.pointerY = Math.max(0, Math.min(SCENE_HEIGHT - 1, y));
+    this.cursorX = Math.max(0, Math.min(SCENE_WIDTH - 1, this.pointerX + this.kickX));
+    this.cursorY = Math.max(0, Math.min(SCENE_HEIGHT - 1, this.pointerY + this.kickY));
     if (this.frontEnd) {
       this.frontEnd.hover(this.screenX, this.cursorY);
       return;
@@ -1765,8 +1818,44 @@ export class Mobile3Game {
     return Boolean(this.fight || this.puzzle);
   }
 
-  aimWithMouse() {}
-  movePointerBy() {}
+  aimWithMouse() {
+    this.aimingWithKeys = false;
+  }
+
+  // With the mouse captured, it reports how far it moved rather than where it is.
+  movePointerBy(dx, dy) {
+    this.moveCursor(this.pointerX + dx, this.pointerY + dy);
+  }
+
+  // The Mouse recoil setting captures the mouse in fights, so that recoil lasts with it too.
+  get wantsMouseLock() {
+    return (
+      this.mouseLock &&
+      Boolean(this.fight) &&
+      !this.frontEnd &&
+      !this.pause &&
+      !this.box &&
+      !this.inventory.isOpen &&
+      !this.gameOver
+    );
+  }
+
+  toggleMouseLock() {
+    this.mouseLock = !this.mouseLock;
+    try {
+      this.storage?.setItem(MOUSE_RECOIL_PREFERENCE, this.mouseLock ? 'on' : 'off');
+    } catch {
+      // It still applies until the page is closed.
+    }
+  }
+
+  readPreference(key) {
+    try {
+      return this.storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   // Holding the mouse on the clock's buttons keeps its hands turning.
   wantsStroke() {
