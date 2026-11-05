@@ -377,6 +377,17 @@ export class Mobile3Game {
     return !(this.facing === FACING.SOUTH && this.doorsAt(this.cell)[FACING.SOUTH] in STAIRS);
   }
 
+  // The forward key walks on, or takes the stairs or lift ahead, as clicking them would.
+  // A room's door still needs a click, so the key never opens one by accident.
+  moveForward() {
+    if (this.canWalkForward()) {
+      this.walkForward();
+      return;
+    }
+    const door = this.doorsAt(this.cell)[this.facing];
+    if (door in STAIRS || LIFTS.has(door)) this.useDoor(door);
+  }
+
   // The wall pieces in view, in drawing order, as in GameMidlet.E().
   corridorPieces() {
     const { facing, row, column } = this;
@@ -1693,7 +1704,7 @@ export class Mobile3Game {
     }
     if (this.fight) return;
     if (key === 'move-forward') {
-      if (this.mode === MODE.CORRIDOR && this.canWalkForward()) this.walkForward();
+      if (this.mode === MODE.CORRIDOR) this.moveForward();
     } else if (key === 'move-back') {
       if (this.mode === MODE.ROOM) this.leaveRoom();
       else this.turnTo(behind(this.facing));

@@ -353,6 +353,30 @@ test('the lift goes to the floor chosen from its list', () => {
   assert.deepEqual([game.floor, game.cell], [3, 55]);
 });
 
+test('the forward key takes the stairs or lift ahead, but not a door', () => {
+  const game = newGame();
+  game.mode = MODE.CORRIDOR;
+  game.floor = 1;
+  game.placeInCorridor(36, FACING.EAST);
+  game.pressKey('move-forward');
+  assert.ok(game.liftMenu, 'the lift offers its floors');
+  game.pressKey('Escape');
+
+  game.placeInCorridor(27, FACING.EAST);
+  game.pressKey('move-forward');
+  settle(game);
+  assert.deepEqual([game.floor, game.cell, game.facing], [2, 45, FACING.EAST], 'up the stairs');
+  game.placeInCorridor(45, FACING.WEST);
+  game.pressKey('move-forward');
+  settle(game);
+  assert.deepEqual([game.floor, game.cell, game.facing], [1, 27, FACING.WEST], 'and back down');
+
+  game.placeInCorridor(30, FACING.NORTH);
+  game.pressKey('move-forward');
+  settle(game);
+  assert.deepEqual([game.mode, game.cell], [MODE.CORRIDOR, 30], 'a room door still needs a click');
+});
+
 test('the map shows each floor, once the player has it', () => {
   const game = newGame();
   game.mode = 1;
