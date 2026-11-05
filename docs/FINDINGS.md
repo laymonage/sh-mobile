@@ -193,7 +193,11 @@ Builds to avoid:
 
 ### Game logic
 
-From reading the code: `GameMidlet` has a 78-row table of trigger, condition and action rules, which can be extracted as data. What each number means, and how much logic sits outside the table, hasn't been worked out. There's no script bytecode, and some puzzles may be hard-coded. Vineflower decompiles `sh3-en-v170` into 15,575 lines with no reported failures.
+From reading the code: `GameMidlet` has a 78-row table of trigger, condition and action rules. There's no script bytecode. The rules decide what objects and doors do, and what's outside them is in Java, including six puzzles and four kinds of fight. Vineflower decompiles `sh3-en-v170` into 15,575 lines with no reported failures.
+
+Rule 35 lists four actions but its count says three, so the original never runs the last, which unlocks a door. The port does the same.
+
+The game's rooms, floors, dialogue order and items are arrays built by static initializers, which can be read from the class files without running them. 17 builds have these arrays with the numbers `sh3-en-v170` has, including all of v1.5.0.
 
 `sh3-en-v160` stores its assets as 215 loose PNGs with real names, such as `b_enigma1_telephone.png`, including 97 objects and 22 puzzle images. Its art differs from the top tier, so these names haven't been mapped to the archive entries.
 
@@ -384,10 +388,22 @@ The two smaller art sizes reach the first room in Node, and no further has been 
 
 Playing the route also found a freeze in the engine shared with the first game: pressing Esc in a menu at the moment a script's wait ended closed the text that script had just opened, which left it waiting forever. A key now goes to whatever is on top after the wait ends.
 
+## The Mobile 3 port
+
+Mobile 3's port has just been started. `web/engine/mobile3/` runs on its own engine, reading the game's tables out of the player's JAR, and shares only the page and sound with the other two games. Their code hasn't changed.
+
+A new game opens on the original's first dialogue, in the first room. You can look at and pick up things through the verb wheel, leave the room, walk and turn in corridors drawn from their wall pieces, and go through unlocked doors and up and down stairs. In the browser, it was tried with real clicks and keys from the first room, through the corridor outside it and back through its door. The rest has only been run in Node.
+
+The tests check that every room in both worlds and all chapters, and every corridor view, has art that exists, and that all 31 corridor cells can be reached. They don't check that the pictures look right. That was looked at by eye for the first room and three corridor views.
+
+Instead of the original, the port has browser text and black fades, and words beside the cursor rather than its art. Those are stand-ins until the text and menus are done. What isn't ported shows a red line naming it, including the fight that starts on leaving a room with a monster in it, which is skipped.
+
+The areas for turning and turning back in a corridor are the port's own, because the original's are measured from the edges of a 240-pixel screen.
+
 ## What hasn't been checked
 
 - The first game has been played through once by a person in the browser, who reported that it seemed okay. That wasn't a side-by-side comparison with the original on a phone, and the route in `test/playthrough.test.mjs` hasn't been compared with one either.
-- Mobile 3's scripts haven't been run, so its behavior is only known from reading the code.
+- Only Mobile 3's rooms and corridors have been run, so the rest of its behavior is only known from reading the code.
 - Mobile 2 hasn't been compared with a phone, and how often its monsters attack depends on the same assumed 60 ms tick as the first game's.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.

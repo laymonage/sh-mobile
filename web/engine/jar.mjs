@@ -1,4 +1,5 @@
 import { parseChunkArchive, pngInfo } from './format.mjs';
+import { isMobile3, loadMobile3 } from './mobile3/data.mjs';
 import { parseZipDirectory, storedBytes } from './zip-directory.mjs';
 
 async function inflate(bytes) {
@@ -56,6 +57,30 @@ export function loadGameData(files) {
   return { dataDir, entries, files };
 }
 
+// Mobile 3 is only partly ported, and only for the family of builds it follows so far.
+function inspectMobile3(files) {
+  let data = null;
+  try {
+    data = loadMobile3(files);
+  } catch {
+    return { status: 'rejected', reason: 'damaged', message: "This JAR's game data is damaged." };
+  }
+  if (!data) {
+    return {
+      status: 'rejected',
+      reason: 'mobile3-other-build',
+      message: "The port doesn't follow this build of Silent Hill Mobile 3 yet. It follows v1.7.0 and its twins.",
+    };
+  }
+  return {
+    status: 'warning',
+    reason: 'mobile3-partial',
+    family: 'mobile3',
+    data,
+    message: 'Silent Hill Mobile 3 is only partly ported: you can walk around and look at things.',
+  };
+}
+
 // What the port can do with a JAR, judged only from its data.
 export async function inspectJar(bytes) {
   let files;
@@ -68,6 +93,7 @@ export async function inspectJar(bytes) {
       message: "This file can't be read. It may be damaged, or may not be a JAR.",
     };
   }
+  if (isMobile3(files)) return inspectMobile3(files);
   if (![...files.keys()].some((name) => name.startsWith('chunks/'))) {
     return {
       status: 'rejected',

@@ -12,7 +12,7 @@ See [docs/FINDINGS.md](docs/FINDINGS.md) for the results.
 
 ## Playing the prototype
 
-`web/` is an early browser port of the first two games. It reads your own JAR locally and doesn't upload it. Start it with:
+`web/` is an early browser port of the games. It reads your own JAR locally and doesn't upload it. Start it with:
 
 ```bash
 npm run play
@@ -78,6 +78,12 @@ In both:
 The touch build vibrates as the original does, with its setting, on phones whose browser allows that. Safari on iPhones doesn't. The first game does too.
 
 Nobody has played Mobile 2 by hand yet.
+
+### Silent Hill Mobile 3
+
+Mobile 3 has just been started, and has a different engine. You can walk around, look at things and pick them up, but not much else. It has no menus, puzzles, fights or saving yet, and says so when you reach something that isn't there.
+
+It only follows v1.7.0 and its twins so far. During development, <http://localhost:8123/?jar=sh3-en-v170> loads it, or you can drop in one of those JARs. It has no Internet Archive button yet.
 
 ## Requirements
 
@@ -145,7 +151,7 @@ node scripts/decompile.mjs sh2-2008-a7
 
 ## Layout
 
-- `web/`: the browser port, with the engine and shared format parsers in `web/engine/`. `web/engine/mobile2.mjs` holds what Mobile 2 does differently, and `web/engine/text-tables.mjs` where each game keeps its text
+- `web/`: the browser port, with the engine and shared format parsers in `web/engine/`. `web/engine/mobile2.mjs` holds what Mobile 2 does differently, and `web/engine/text-tables.mjs` where each game keeps its text. Mobile 3's engine is separate, in `web/engine/mobile3/`, and draws with `web/mobile3-renderer.mjs`
 - `src/`: Node analysis code: class files, SH3 archives, the room renderer and build comparison
 - `scripts/`: the command-line steps above
 - `test/`: pins each number and claim in the findings

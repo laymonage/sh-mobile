@@ -1,11 +1,13 @@
 import { MENU } from './engine/game.mjs';
 import { createGame } from './engine/mobile2.mjs';
+import { createGame as createMobile3Game } from './engine/mobile3/game.mjs';
 import { GameClock } from './engine/clock.mjs';
 import { ARCHIVE_JARS, inspectJar } from './engine/jar.mjs';
 import { SoundFont } from './engine/soundfont.mjs';
 import { SoundPlayer } from './audio.mjs';
 import { deleteStoredArchiveJar, loadStoredArchiveJar, storeArchiveJar } from './jar-store.mjs';
 import { deleteStoredSoundFont, loadStoredSoundFont, storeSoundFont } from './soundfont-store.mjs';
+import { Mobile3Renderer } from './mobile3-renderer.mjs';
 import { Renderer } from './renderer.mjs';
 import { fitText } from './fit-text.mjs';
 
@@ -95,7 +97,8 @@ async function start(bytes) {
   const clock = new GameClock();
   clock.setHidden(document.hidden);
   document.addEventListener('visibilitychange', () => clock.setHidden(document.hidden));
-  const game = createGame(inspection.data, {
+  const isMobile3 = inspection.family === 'mobile3';
+  const game = (isMobile3 ? createMobile3Game : createGame)(inspection.data, {
     roomSize: inspection.roomSize,
     roomHeight: inspection.roomHeight,
     storage: browserStorage(),
@@ -105,7 +108,7 @@ async function start(bytes) {
     vibrate: browserVibrator(),
     credits: SOUNDFONTS.map((font) => `Soundfont: ${font.credit}`),
   });
-  const renderer = new Renderer(canvas, game);
+  const renderer = new (isMobile3 ? Mobile3Renderer : Renderer)(canvas, game);
   layOutPage(game);
   await renderer.loadImages(inspection.data);
   showPanelArt(game);
