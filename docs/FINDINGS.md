@@ -396,6 +396,19 @@ Playing the route also found a freeze in the engine shared with the first game: 
 
 In the browser, `sh3-2010-v1.0.20-a` was started from the Internet Archive button and clicked by hand from its logos to the opening dialogue. Screens were looked at by eye on it and `sh3-en-v170`: the menus, the inventory, the map, the verb wheel, a corridor, all six puzzles on the keypad build, three of them on the touch build, and all four monsters on the keypad build. There were no console errors. The rest of the route has only been run in Node, and sound has been parsed, not listened to.
 
+An audit against the decompiled code found these gaps, which are now fixed, with tests. Nothing in the route had noticed them:
+
+- Both close wall pieces are always drawn, as `E()` always sets their flags. The port only drew one if a wall was in view on that side, which left black where the floor and walls should be. Of the 124 places and directions in the game's corridors, 43 lost the left piece and 43 the right.
+- Backing out of the safe no longer counts as a wrong number, which had opened it for free.
+- Erasing the save does erase it.
+- A rule giving several things names the first.
+- A room's looping sound comes back after the safe, on loading a save, and when the world turns over.
+- Saving with the paper puzzle paused comes back to its room.
+- Fades take the original's few updates, in the JAR's stipple, and happen whenever the original's `q(int)` reloads a room. They now cover the health display, boxes and cursor too.
+- The wrong number's red flash shows, for about a frame.
+- Vibrations keep their patterns, on phones that allow them.
+- Keypad builds show their own text where the two kinds of build name different lines: "Press any key" before the main menu rather than "Touch the screen", their keys in the Controls help rather than touching the screen, and their own copy of the pearl puzzle's instructions. Every build's language files hold the lines for both, so this is in `resources.mjs` with the other numbers written into the methods.
+
 ### Which builds
 
 The port follows two kinds of build. They have the same game and tables, and differ in the resource numbers written into their methods, which `web/engine/mobile3/resources.mjs` lists. Touch builds, like `sh3-en-v170`, have extra art for on-screen buttons. Keypad builds, like `sh3-2010-v1.0.20-a`, keep their MIDI files in `b.mbf`, and those are byte-identical to the touch builds' loose files.
@@ -408,8 +421,10 @@ The Internet Archive button loads `sh3-2010-v1.0.20-a`, which has the key that m
 - The door to the last room's words are wrapped to fit their paper. The original wraps them 100 pixels wider than the paper, which hides the end of each line.
 - Keypad builds have no way to enter the safe's number with a mouse, so the port adds one.
 - Long text scrolls by a click before moving on, rather than needing the up and down keys.
-- Fights have no critical hits, as the keypad builds don't. Touch builds add on-screen targets for them, and the port doesn't draw those.
+- Fights have no critical hits or quick shots, as the keypad builds don't. Touch builds add on-screen targets for both, and the port doesn't draw those.
 - The demo's 3-minute limit isn't included, as for the other games' checks.
+- A chapter's first line of dialogue shows, where the original's save notice replaces it. See below.
+- Room 13's fifth layer is drawn. See below.
 
 ### Original behavior that looks like a bug
 
@@ -419,6 +434,11 @@ These are kept:
 - Pouring from the largest bottle into the smallest, or from the middle one into a partly full smallest, doesn't conserve sand. The walkthrough's order isn't affected.
 - The last monster reads its two position tables crosswise, as the bytecode confirms.
 - Picking the Beretta up again in the last chapter gives you a second one.
+
+These aren't kept, so far. Neither has been decided on, and each is a difference from the original:
+
+- Starting a chapter saves the game, and the original's "Game saved!" replaces the first line of the dialogue that's just started. So "Emilie ..." and "When will you understand, you boy??" never show on a phone. This comes from reading the code, and hasn't been seen on one.
+- The original multiplies the height of room 13's fifth layer by 100, as the bytecode confirms, so it never appears in the normal world. The port draws it at (164, 108).
 
 ## What hasn't been checked
 

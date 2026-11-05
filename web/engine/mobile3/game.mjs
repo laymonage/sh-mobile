@@ -2,7 +2,7 @@ import { Fight } from './battle.mjs';
 import { animationSize, ONCE, Playing } from './data.mjs';
 import { Inventory } from './inventory.mjs';
 import { FrontEnd, MapScreen, PauseMenu } from './menus.mjs';
-import { createPuzzle } from './puzzles.mjs';
+import { createPuzzle, PUZZLE } from './puzzles.mjs';
 import { fireItemTrigger, fireTrigger, TRIGGER } from './rules.mjs';
 import { BOX, BoxMaker, SCREEN_WIDTH } from './ui.mjs';
 
@@ -12,7 +12,9 @@ const SCENE_WIDTH = 360;
 const SCENE_HEIGHT = 320;
 export const SCREEN_X = (SCENE_WIDTH - SCREEN_WIDTH) >> 1;
 const MILLISECONDS_PER_TICK = 60;
-const FADE_TICKS = 5;
+// A fade's stages, as GameMidlet.eB, each lasting one update: stippled black from the JAR's art,
+// then black, then stippled again, and one more update before anything else can happen.
+const FADE = { DONE: 0, STIPPLED_IN: 1, BLACK: 2, STIPPLED_OUT: 3 };
 
 export const MODE = { ROOM: 0, CORRIDOR: 1, PUZZLE: 3, FIGHT: 4 };
 export const FACING = { WEST: 0, NORTH: 1, EAST: 2, SOUTH: 3 };
@@ -140,11 +142,20 @@ const SAVE_KEY = 'silent-hill-mobile3:save';
 const SETTINGS_KEY = 'silent-hill-mobile3:settings';
 const WEAK_HEALTH = 70;
 const SAFE_DAMAGE = 25;
-const FLASH_TIME = 1000;
+// The original draws its red flash once. The page can tick just before it draws, so this lasts
+// long enough for one frame to show it.
+const RED_FLASH_TIME = MILLISECONDS_PER_TICK * 2;
 const SHAKE_TIME = 2000;
 const HOLD_START = 2;
 const HOLD_FASTEST = 10;
 const HOLD_STEP_TIME = 300;
+// How long each buzz and each gap lasts, from the end of the update. The last repeats for 3 seconds.
+const VIBRATIONS = [
+  [500],
+  [100, 500, 100, 500, 100],
+  [2000],
+  [100, 100, 200, 500, 100, 100, 200, 500, 100, 100, 200, 500, 100, 100, 200],
+];
 const LANGUAGE_CODES = {
   English: 'en',
   Français: 'fr',
@@ -247,6 +258,7 @@ export class Mobile3Game {
     this.blackBehindDialogue = false;
     this.timedDialogue = 0;
     this.fade = null;
+    this.roomSoundDue = false;
     this.fight = null;
     this.puzzle = null;
     this.pause = null;
@@ -361,16 +373,12 @@ export class Mobile3Game {
       list.push({ sheet: set.sheet, animation: set[side], x, y });
     };
 
-    let wallLeft = false;
-    let wallRight = false;
     const openings = [];
     const look = (distance, onLeft, onRight) => {
       const r = row + stepRow * distance;
       const c = column + stepColumn * distance;
       if (this.canSeeSide(r, c, toLeft)) openings.push(onLeft);
-      else wallLeft = true;
       if (this.canSeeSide(r, c, toRight)) openings.push(onRight);
-      else wallRight = true;
     };
 
     look(0, 'closeLeft', 'closeRight');
@@ -387,8 +395,9 @@ export class Mobile3Game {
       }
     }
 
-    if (wallLeft) add(pieces.closeWall, 'left', PLACE.closeWallLeft);
-    if (wallRight) add(pieces.closeWall, 'right', PLACE.closeWallRight);
+    // These two hold the floor and ceiling too, so E() starts with both flags set, always.
+    add(pieces.closeWall, 'left', PLACE.closeWallLeft);
+    add(pieces.closeWall, 'right', PLACE.closeWallRight);
     if (openings.includes('closeLeft')) add(pieces.closeOpening, 'left', PLACE.closeOpeningLeft);
     if (openings.includes('closeRight')) add(pieces.closeOpening, 'right', PLACE.closeOpeningRight);
     if (ends.includes('near')) {
@@ -582,7 +591,12 @@ export class Mobile3Game {
   // After the screen has gone black, as GameMidlet's aB() and d() arrange. It can stay black
   // for a while, as a monster's moves do.
   startFade(atBlack, holdMilliseconds = 0) {
-    if (!this.fade) this.fade = { ticks: 0, atBlack, hold: holdMilliseconds };
+    if (!this.fade) this.fade = { stage: FADE.STIPPLED_IN, atBlack, hold: holdMilliseconds };
+  }
+
+  // aB() on its own, which sends a fade back to its start. What's waiting for black still happens.
+  restartFade() {
+    this.fade = { stage: FADE.STIPPLED_IN, atBlack: this.fade?.atBlack ?? null, hold: 0 };
   }
 
   fadeThen(atBlack) {
@@ -590,18 +604,22 @@ export class Mobile3Game {
   }
 
   get fadeIsBlack() {
-    return Boolean(this.fade) && this.fade.ticks >= FADE_TICKS && this.fade.hold >= 0;
+    return this.fade?.stage === FADE.BLACK;
   }
 
   walkForward() {
     const [stepRow, stepColumn] = STEP[this.facing];
     const cell = this.grid[this.row + stepRow]?.[this.column + stepColumn];
-    this.fadeThen(() => this.placeInCorridor(cell, this.facing));
+    this.fadeThen(() => {
+      this.placeInCorridor(cell, this.facing);
+      this.restartFade();
+    });
   }
 
   turnTo(facing) {
     this.fadeThen(() => {
       this.facing = facing;
+      this.restartFade();
     });
   }
 
@@ -635,6 +653,7 @@ export class Mobile3Game {
     this.room = room;
     this.mode = MODE.ROOM;
     this.drift = { x: 0, y: 0 };
+    this.restartFade();
     if (!this.roomCleared[room] && this.tables.roomEncounters[room][0] === FINAL_MONSTER) {
       const [, chapter] = this.tables.roomEncounters[room];
       if (chapter === this.chapter) {
@@ -643,7 +662,19 @@ export class Mobile3Game {
       }
     }
     if (room === COLD_ROOM) this.playSound('fridge', -1);
-    if (this.hasMonster(room) && !this.flagM && !this.timedDialogue) this.playSound('whisper', -1);
+    this.roomSoundDue = true;
+  }
+
+  // GameMidlet.q(int) again, on the room that's showing, when a rule has changed it.
+  reloadRoom() {
+    if (this.mode === MODE.ROOM) this.enterRoom(this.room);
+  }
+
+  // The update's p flag, so this comes after the sounds of the rule that's just entered a room.
+  tickRoomSound() {
+    if (!this.roomSoundDue || this.mode !== MODE.ROOM) return;
+    this.roomSoundDue = false;
+    if (this.hasMonster(this.room) && !this.flagM && !this.timedDialogue) this.playSound('whisper', -1);
   }
 
   hasMonster(room) {
@@ -798,7 +829,6 @@ export class Mobile3Game {
     this.verbs = null;
     this.inventory.close();
     this.reloading = false;
-    this.redFlash = 0;
     this.shake = 0;
     this.dialogue = null;
     this.showMessage(this.lines[TEXT.DEAD], { wide: false });
@@ -937,9 +967,11 @@ export class Mobile3Game {
           break;
         case 2:
           this.objectValue[first] = second;
+          this.reloadRoom();
           break;
         case 3:
           this.objectHidden[first] = second;
+          this.reloadRoom();
           break;
         case 4:
           this.startPuzzle(first);
@@ -951,7 +983,8 @@ export class Mobile3Game {
         case 7:
           this.addItem(first);
           this.objectTaken[first] = true;
-          if (this.box?.kind !== BOX.DIALOGUE) {
+          // Any box that's up stays, so a rule giving several things names the first.
+          if (!this.box) {
             this.showMessage(`${this.lines[TEXT.TOOK]}${this.lines[this.tables.objectNames[first]]}`, {
               icon: first,
             });
@@ -965,6 +998,7 @@ export class Mobile3Game {
           break;
         case 11:
           this.setWorld(this.world === 1 ? 2 : 1);
+          this.reloadRoom();
           this.vibrateFor(0);
           this.playSound('alarm');
           break;
@@ -1004,7 +1038,7 @@ export class Mobile3Game {
 
   gainBullets(weapon, amount) {
     this.bullets[weapon] += amount;
-    if (this.box?.kind !== BOX.DIALOGUE) {
+    if (!this.box) {
       const [line, icon] =
         weapon === 1 ? [TEXT.BULLETS_PISTOL, ITEM.PISTOL_BULLETS] : [TEXT.BULLETS_SHOTGUN, ITEM.SHOTGUN_BULLETS];
       this.showMessage(`${this.lines[TEXT.TOOK]}${this.lines[line]}`, { icon });
@@ -1073,10 +1107,9 @@ export class Mobile3Game {
   }
 
   startPuzzle(number) {
+    this.puzzleFrom = this.mode;
     this.mode = MODE.PUZZLE;
     this.verbs = null;
-    this.roomBeforePuzzle = this.room;
-    this.puzzleFrom = this.mode;
     this.puzzle = createPuzzle(this, number);
     this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
   }
@@ -1092,14 +1125,27 @@ export class Mobile3Game {
       if (number === 6) this.flagM = true;
     }
     this.mode = toRoom ? MODE.ROOM : MODE.CORRIDOR;
-    this.fire(solved ? TRIGGER.PUZZLE_SOLVED : TRIGGER.PUZZLE_FAILED, number);
+    if (number === PUZZLE.SAFE) this.resumeLoopingSound();
+    // A number that kills goes straight to dying, with no rule, as GameMidlet.ag() does.
+    if (number !== PUZZLE.SAFE || this.health > 0) {
+      this.fire(solved ? TRIGGER.PUZZLE_SOLVED : TRIGGER.PUZZLE_FAILED, number);
+    }
     if (this.health <= 0 && !this.gameOver) this.die();
+    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+  }
+
+  // Backing out of the safe isn't a wrong number, so no rule fires, as the right soft key's
+  // case for this puzzle.
+  leaveSafe() {
+    this.puzzle = null;
+    this.mode = MODE.ROOM;
+    this.resumeLoopingSound();
     this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
   }
 
   safeWasWrong() {
     this.setHealth(this.health - SAFE_DAMAGE);
-    this.redFlash = FLASH_TIME;
+    this.redFlash = RED_FLASH_TIME;
     this.shake = SHAKE_TIME;
     this.damageFlash.restart();
     this.showBloodOverlay();
@@ -1133,11 +1179,13 @@ export class Mobile3Game {
     if (names[number]) this.playSound(names[number]);
   }
 
-  // The phone's vibration patterns, from the end of the update. The page's vibration takes
-  // one length, so each is the length of its first buzz.
+  resumeLoopingSound() {
+    if (this.loopingSound) this.audio?.play(this.loopingSound, -1);
+  }
+
   vibrateFor(pattern) {
-    if (!this.vibrationOn || !this.vibrator) return;
-    this.vibrator([500, 100, 2000, 100][pattern] ?? 100);
+    if (!this.vibrationOn || !this.vibrator || !VIBRATIONS[pattern]) return;
+    this.vibrator(VIBRATIONS[pattern]);
   }
 
   randomBit() {
@@ -1328,7 +1376,8 @@ export class Mobile3Game {
       return;
     }
     if (this.pause) return;
-    this.tickFade();
+    this.runFadeAction();
+    this.tickRoomSound();
     this.tickHeld();
     this.tickHud();
     if (this.timedDialogue > 0) {
@@ -1342,33 +1391,35 @@ export class Mobile3Game {
         if (this.bullets[this.weapon] >= 0) this.reload(this.weapon);
       }
     }
-    if (this.fade && !this.fight) return;
-    if (this.puzzle && !this.box) this.puzzle.tick(MILLISECONDS_PER_TICK);
-    if (this.fight) {
-      this.tickAimDrift();
-      this.fight?.tick(MILLISECONDS_PER_TICK);
+    if (!this.fade || this.fight) {
+      if (this.puzzle && !this.box) this.puzzle.tick(MILLISECONDS_PER_TICK);
+      if (this.fight) {
+        this.tickAimDrift();
+        this.fight?.tick(MILLISECONDS_PER_TICK);
+      }
     }
+    this.advanceFade();
   }
 
-  tickFade() {
+  runFadeAction() {
+    const { fade } = this;
+    if (fade?.stage !== FADE.BLACK || !fade.atBlack) return;
+    const { atBlack } = fade;
+    fade.atBlack = null;
+    atBlack();
+  }
+
+  // Comes last in an update, as in the original, so what starts a fade in an update sees it
+  // black in the next.
+  advanceFade() {
     const { fade } = this;
     if (!fade) return;
-    if (fade.ticks < FADE_TICKS) {
-      fade.ticks++;
-      if (fade.ticks === FADE_TICKS) {
-        const { atBlack } = fade;
-        fade.atBlack = null;
-        atBlack();
-      }
-      return;
-    }
-    if (fade.hold > 0) {
-      fade.hold -= MILLISECONDS_PER_TICK;
-      return;
-    }
-    fade.hold = -1;
-    fade.ticks++;
-    if (fade.ticks >= FADE_TICKS * 2) this.fade = null;
+    if (fade.stage === FADE.STIPPLED_IN) fade.stage = FADE.BLACK;
+    else if (fade.stage === FADE.BLACK) {
+      if (fade.hold > 0) fade.hold -= MILLISECONDS_PER_TICK;
+      else fade.stage = FADE.STIPPLED_OUT;
+    } else if (fade.stage === FADE.STIPPLED_OUT) fade.stage = FADE.DONE;
+    else this.fade = null;
   }
 
   tickHud() {
@@ -1413,13 +1464,6 @@ export class Mobile3Game {
     this.moveCursor(x, y);
   }
 
-  // How dark the fade makes the screen, from 0 to 1.
-  get fadeLevel() {
-    if (!this.fade) return 0;
-    const { ticks } = this.fade;
-    return ticks <= FADE_TICKS ? ticks / FADE_TICKS : 2 - ticks / FADE_TICKS;
-  }
-
   moveCursor(x, y) {
     this.cursorX = Math.max(0, Math.min(SCENE_WIDTH - 1, x));
     this.cursorY = Math.max(0, Math.min(SCENE_HEIGHT - 1, y));
@@ -1455,7 +1499,6 @@ export class Mobile3Game {
       this.pause.click(this.screenX, this.cursorY);
       return;
     }
-    if (this.isBusy() && !this.fight) return;
     if (this.map) {
       this.map.click(this.screenX);
       return;
@@ -1466,6 +1509,7 @@ export class Mobile3Game {
       this.confirmBox();
       return;
     }
+    if (this.isBusy() && !this.fight) return;
     if (this.inventory.isOpen) {
       this.inventory.click(this.screenX, this.cursorY);
       return;
@@ -1524,7 +1568,6 @@ export class Mobile3Game {
       this.pause.pressKey(key);
       return;
     }
-    if (this.isBusy() && !this.fight) return;
     if (this.map) {
       this.map.pressKey(key);
       return;
@@ -1537,6 +1580,7 @@ export class Mobile3Game {
       else if (key === 'ArrowDown' || key === 'ArrowRight') this.scrollBox(1);
       return;
     }
+    if (this.isBusy() && !this.fight) return;
     if (this.inventory.isOpen) {
       this.inventory.pressKey(key);
       return;
@@ -1638,7 +1682,6 @@ export class Mobile3Game {
       this.pause.pressKey(side === 'left' ? 'Enter' : 'Escape');
       return;
     }
-    if (this.isBusy() && !this.fight) return;
     if (this.map) {
       this.map = null;
       return;
@@ -1649,6 +1692,7 @@ export class Mobile3Game {
       else this.skipBox();
       return;
     }
+    if (this.isBusy() && !this.fight) return;
     if (this.inventory.isOpen) {
       this.inventory.pressKey(side === 'left' ? 'Enter' : 'Escape');
       return;
@@ -1675,7 +1719,7 @@ export class Mobile3Game {
 
   closePause() {
     this.pause = null;
-    if (this.loopingSound) this.audio?.play(this.loopingSound, -1);
+    this.resumeLoopingSound();
   }
 
   softKeys() {
@@ -1759,12 +1803,15 @@ export class Mobile3Game {
     return this.savedExists;
   }
 
+  // The original's r flag says whether a room is showing, or is behind the puzzle that's up.
+  // Pausing the paper puzzle is the one way to save with a puzzle up.
   saveGame({ quietly = false } = {}) {
+    const inRoom = this.mode === MODE.ROOM || (this.puzzle && this.puzzleFrom === MODE.ROOM);
     const state = {
       chapter: this.chapter,
       world: this.world,
       floor: this.floor,
-      mode: this.mode === MODE.ROOM ? MODE.ROOM : MODE.CORRIDOR,
+      mode: inRoom ? MODE.ROOM : MODE.CORRIDOR,
       room: this.room,
       cell: this.cell,
       facing: this.facing,
@@ -1795,6 +1842,16 @@ export class Mobile3Game {
     }
   }
 
+  // As GameMidlet.r(), so that Continue goes, and dying with no later save starts again.
+  eraseSave() {
+    try {
+      this.storage?.removeItem(SAVE_KEY);
+    } catch {
+      // There's nothing more to do, and this visit still won't offer it.
+    }
+    this.savedExists = false;
+  }
+
   readSave() {
     try {
       return JSON.parse(this.storage?.getItem(SAVE_KEY) ?? 'null');
@@ -1813,14 +1870,9 @@ export class Mobile3Game {
     Object.assign(this, fields);
     this.setHealth(state.health);
     this.placeInCorridor(cell, facing);
-    if (mode === MODE.ROOM) {
-      this.room = room;
-      this.mode = MODE.ROOM;
-      if (room === COLD_ROOM) this.playSound('fridge', -1);
-    } else {
-      this.room = room;
-      this.mode = MODE.CORRIDOR;
-    }
+    this.room = room;
+    if (mode === MODE.ROOM) this.enterRoom(room);
+    else this.mode = MODE.CORRIDOR;
     return true;
   }
 
@@ -1859,7 +1911,27 @@ export class Mobile3Game {
   // Everything to draw, in order, for the renderer: sprites and modules from sheets, text
   // in the JAR's fonts, and plain rectangles. All are in the scene's coordinates.
   drawList() {
-    return [...this.drawScreen(), ...this.drawCursor()];
+    const screen = this.drawScreen();
+    const cursor = this.drawCursor();
+    const fade = this.pause ? [] : this.drawFade();
+    // A fade covers everything, as aD() comes last in h(). A monster's long dark redraws these
+    // over itself.
+    if (this.fade?.hold > 0) return [...screen, ...fade, ...this.drawHud(), ...cursor];
+    return [...screen, ...cursor, ...fade];
+  }
+
+  // As GameMidlet.aD(): the JAR's stipple, tiled over the screen, or black.
+  drawFade() {
+    const { fade, frontEnd, map, blackBehindDialogue } = this;
+    if (!fade || fade.stage === FADE.DONE || frontEnd || map || blackBehindDialogue) return [];
+    if (fade.stage === FADE.BLACK) return [{ fill: '#000000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT }];
+    const { sheet, animation } = this.data.hardCoded.fade;
+    const { width: tile } = this.data.moduleSize(sheet, 0);
+    const list = [];
+    for (let x = 0; x < SCENE_WIDTH; x += tile) {
+      for (let y = 0; y < SCENE_HEIGHT; y += tile) list.push({ sheet, animation, frame: 0, x, y });
+    }
+    return list;
   }
 
   drawScreen() {
@@ -1875,10 +1947,9 @@ export class Mobile3Game {
       return list;
     }
     list.push(...this.drawWorld(shifted));
-    if (this.fade)
-      list.push({ fill: '#000000', opacity: this.fadeLevel, x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
+    if (this.redFlash > 0) list.push({ fill: '#aa0000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
     if (this.pause) {
-      list.push(...onPhone(this.pause.draw()));
+      list.push(...this.drawFade(), ...onPhone(this.pause.draw()));
       return list;
     }
     list.push(...this.drawHud());
@@ -1904,7 +1975,6 @@ export class Mobile3Game {
       if (puzzle.background() === 'corridor') list.push(...shifted(this.scene()));
       else list.push({ fill: '#000000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
       list.push(...shifted(onPhone(puzzle.draw())));
-      if (this.redFlash > 0) list.push({ fill: '#aa0000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
       return list;
     }
     if (fight?.intro) {

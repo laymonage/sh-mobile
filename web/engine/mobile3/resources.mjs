@@ -1,9 +1,11 @@
-// Resource numbers written directly into the original's methods rather than into its tables,
-// so they can't be read from a JAR. The touch builds, like v1.7.0, have extra art for their
+// Resource and text line numbers written directly into the original's methods rather than into
+// its tables, so they can't be read from a JAR. Every build's language files hold the lines for both. The touch builds, like v1.7.0, have extra art for their
 // on-screen buttons, which moves most numbers. The keypad builds, like v1.0.20, are the rest.
 export const BUILD_RESOURCES = {
   touch: {
     firstRoomLayer: 16777791,
+    // The prompt before the main menu, the Controls help and the pearls' instructions.
+    lines: { press: 617, controls: 557, pearlIntro: 563 },
     walls: {
       1: {
         far: { sheet: 16777644, left: 16777347, right: 16777523 },
@@ -68,6 +70,7 @@ export const BUILD_RESOURCES = {
   },
   keypad: {
     firstRoomLayer: 16777775,
+    lines: { press: 472, controls: 464, pearlIntro: 553 },
     walls: {
       1: {
         far: { sheet: 16777629, left: 16777345, right: 16777521 },

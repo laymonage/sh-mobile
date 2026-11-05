@@ -482,7 +482,8 @@ class Safe extends Puzzle {
     this.slot = 0;
     this.dial = 0;
     this.layOut();
-    game.stopSound();
+    // Only until the puzzle ends: a room's looping sound comes back, as GameMidlet.ax() has it.
+    game.audio?.stop?.();
   }
 
   layOut() {
@@ -603,7 +604,7 @@ class Safe extends Puzzle {
       this.slot = 0;
       this.dial = 0;
     } else {
-      this.game.finishPuzzle(this, false);
+      this.game.leaveSafe();
     }
     return true;
   }
@@ -787,7 +788,7 @@ class Pearls extends Puzzle {
     this.chosenSlot = -1;
     // Which cavity holds which pearl.
     this.placed = new Map();
-    this.showIntro(563);
+    this.showIntro(this.data.hardCoded.lines.pearlIntro);
     this.wording = wrapText(this.data, TEXT_FONT, game.lines[this.lines[6]], this.textWidth);
   }
 

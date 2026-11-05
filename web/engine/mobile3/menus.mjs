@@ -8,7 +8,7 @@ const MENU_FONT = 1;
 const LOGO_TIME = 2000;
 const PRESS_TIME = 10000;
 const MENU_TOP = 100;
-const LANGUAGE_LINES = { ABOUT: 477, QUIT: 469, HELP_CONTROLS: 463, HELP_GAME: 557, ERASE: 470, PRESS: 617 };
+const LANGUAGE_LINES = { ABOUT: 477, QUIT: 469, GAME_DESCRIPTION: 463, CONTROLS: 416, ERASE: 470 };
 const PAUSE_LINES = { RESUME: 437, SAVE: 438, SETTINGS: 439, HELP: 440, QUIT: 441, QUIT_ASK: 471 };
 const SOUND_LINES = { ON: 432, OFF: 433, VIBRATE_ON: 434, VIBRATE_OFF: 435 };
 const NO_SAVING_LINE = 481;
@@ -90,7 +90,7 @@ export class FrontEnd {
     this.stage = 'press';
     this.wait = PRESS_TIME;
     this.box = null;
-    this.pressLines = wrapText(this.data, MENU_FONT, this.game.lines[LANGUAGE_LINES.PRESS], SCREEN_WIDTH);
+    this.pressLines = wrapText(this.data, MENU_FONT, this.game.lines[this.data.hardCoded.lines.press], SCREEN_WIDTH);
     this.game.playSound('music');
   }
 
@@ -216,6 +216,7 @@ export class FrontEnd {
       case 'erase':
         if (row === 0) {
           game.stopSound();
+          game.eraseSave();
           game.startNewGame();
         } else {
           this.showMainMenu();
@@ -223,7 +224,11 @@ export class FrontEnd {
         break;
       case 'help':
         this.showPages(
-          lines[tables.helpLines[row] === 416 ? LANGUAGE_LINES.HELP_GAME : LANGUAGE_LINES.HELP_CONTROLS],
+          lines[
+            tables.helpLines[row] === LANGUAGE_LINES.CONTROLS
+              ? this.data.hardCoded.lines.controls
+              : LANGUAGE_LINES.GAME_DESCRIPTION
+          ],
           () => {
             this.stage = 'help';
             this.current = { kind: 'menu' };
@@ -468,7 +473,10 @@ export class PauseMenu {
       }
       this.showSettings(row);
     } else if (this.stage === 'help') {
-      const line = game.tables.helpLines[row] === 416 ? 557 : 463;
+      const line =
+        game.tables.helpLines[row] === LANGUAGE_LINES.CONTROLS
+          ? game.data.hardCoded.lines.controls
+          : LANGUAGE_LINES.GAME_DESCRIPTION;
       this.stage = 'pages';
       this.box = game.boxes.pages(lines[line]);
     } else if (this.stage === 'quit') {

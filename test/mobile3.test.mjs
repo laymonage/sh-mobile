@@ -28,11 +28,16 @@ const clear = (game) => {
 const newGame = (options = {}, build = data) => {
   const game = createGame(build, { startInGame: true, ...options });
   clear(game);
+  settle(game);
   return game;
 };
 const memoryStorage = () => {
   const values = new Map();
-  return { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
 };
 const EXPECTED_UNUSED = [35];
 const EXPECTED_FOLLOWED = 41;
@@ -365,6 +370,7 @@ test('the map shows each floor, once the player has it', () => {
 test('the inventory uses items on what the verb wheel was opened on', () => {
   const game = newGame();
   game.enterRoom(10);
+  settle(game);
   game.addItem(105);
   game.moveCursor(
     ...(({ x0, x1, y0, y1 }) => [(x0 + x1) >> 1, (y0 + y1) >> 1])(game.hotspots().find(({ id }) => id === 37)),
@@ -514,6 +520,7 @@ for (const build of [data, keypadData]) {
     const game = newGame({}, build);
     game.chapter = 3;
     game.enterRoom(15);
+    settle(game);
     game.startPuzzle(4);
     game.pressKey('9');
     game.pressSoftKey('left');
@@ -526,6 +533,7 @@ for (const build of [data, keypadData]) {
     const game = newGame({}, build);
     game.chapter = 3;
     game.enterRoom(15);
+    settle(game);
     game.startPuzzle(4);
     const { puzzle } = game;
     const click = (x, y) => {
@@ -699,6 +707,231 @@ test('a rule fires once, and only when its conditions hold', () => {
   assert.equal(game.fire(TRIGGER.USE_OBJECT, 41), false);
   assert.ok(game.hasItem(73) || game.bullets[2] > 0);
 });
+
+const soundSpy = () => {
+  const plays = [];
+  return { plays, audio: { play: (name, loops) => plays.push([name, loops]), stop() {} } };
+};
+const WHISPER = ['whisper', -1];
+
+for (const build of [data, keypadData]) {
+  test(`the ${build.kind} build draws both close walls in every corridor view, which hold the floor and ceiling`, () => {
+    const game = newGame({}, build);
+    game.mode = MODE.CORRIDOR;
+    for (const world of [1, 2]) {
+      game.world = world;
+      const { closeWall } = build.hardCoded.walls[world];
+      for (const floor of [1, 2, 3]) {
+        game.floor = floor;
+        for (const cell of game.grid.flat().filter((cell) => cell >= 26)) {
+          for (const facing of Object.values(FACING)) {
+            game.placeInCorridor(cell, facing);
+            const [first, second] = game.corridorPieces();
+            assert.equal(first.animation, closeWall.left, `floor ${floor}, cell ${cell}, facing ${facing}`);
+            assert.equal(second.animation, closeWall.right, `floor ${floor}, cell ${cell}, facing ${facing}`);
+          }
+        }
+      }
+    }
+  });
+
+  test(`backing out of the ${build.kind} build's safe opens nothing, and the whisper comes back`, () => {
+    const { plays, audio } = soundSpy();
+    const game = newGame({ audio }, build);
+    game.chapter = 3;
+    game.enterRoom(15);
+    settle(game);
+    assert.deepEqual(plays.at(-1), WHISPER, 'the room has a monster');
+    const hidden = game.objectHidden[54];
+    game.startPuzzle(4);
+    plays.length = 0;
+    game.pressSoftKey('right');
+    assert.equal(game.puzzle, null);
+    assert.equal(game.mode, MODE.ROOM);
+    assert.equal(game.objectHidden[54], hidden);
+    assert.equal(game.health, 100);
+    assert.deepEqual(plays, [WHISPER]);
+  });
+}
+
+test('a wrong number flashes red for a moment, over the room it returns to', () => {
+  const game = newGame();
+  game.chapter = 3;
+  game.enterRoom(15);
+  settle(game);
+  game.startPuzzle(4);
+  const red = () => game.drawList().some(({ fill }) => fill === '#aa0000');
+  game.pressKey('9');
+  game.pressSoftKey('left');
+  assert.equal(game.puzzle, null);
+  assert.ok(red());
+  game.tick();
+  game.tick();
+  assert.equal(red(), false);
+});
+
+test('a wrong number that kills goes to dying without its rule', () => {
+  const game = newGame();
+  game.chapter = 3;
+  game.enterRoom(15);
+  settle(game);
+  game.setHealth(25);
+  const hidden = game.objectHidden[54];
+  game.startPuzzle(4);
+  game.pressKey('9');
+  game.pressSoftKey('left');
+  assert.ok(game.gameOver);
+  assert.equal(game.objectHidden[54], hidden);
+});
+
+test('erasing the save takes Continue away, and dying then starts again', () => {
+  const storage = memoryStorage();
+  const saved = newGame({ storage });
+  saved.setHealth(33);
+  saved.saveGame({ quietly: true });
+  const game = createGame(data, { storage });
+  assert.ok(game.hasSave());
+  game.eraseSave();
+  game.startNewGame();
+  clear(game);
+  assert.equal(game.hasSave(), false);
+  assert.equal(game.readSave(), null);
+  game.setHealth(50);
+  game.retry();
+  assert.equal(game.health, 100);
+});
+
+test('a rule that gives several things names the first', () => {
+  const name = (game, item) => `${game.lines[410]}${game.lines[game.tables.objectNames[item]]}`;
+  const cases = [
+    { object: 62, room: 9, chapter: 1, item: 111 },
+    { object: 141, room: 11, chapter: 2, item: 120 },
+    { object: 140, room: 7, chapter: 3, item: 120 },
+    { object: 139, room: 22, chapter: 1, item: 73 },
+  ];
+  for (const { object, room, chapter, item } of cases) {
+    const game = newGame();
+    Object.assign(game, { room, chapter, world: 2 });
+    assert.ok(game.fire(TRIGGER.USE_OBJECT, object), `the rule for object ${object}`);
+    assert.equal(game.currentText.text ?? game.box.text, name(game, item));
+    assert.equal(game.box.icon.item, item);
+  }
+});
+
+test("loading a save in a monster's room brings its whisper back", () => {
+  const { plays, audio } = soundSpy();
+  const game = newGame({ audio, storage: memoryStorage() });
+  game.chapter = 3;
+  game.enterRoom(15);
+  settle(game);
+  game.saveGame({ quietly: true });
+  plays.length = 0;
+  game.loadGame();
+  game.tick();
+  assert.deepEqual(plays, [WHISPER]);
+});
+
+test('turning the world over in a room with a monster starts its whisper after the alarm', () => {
+  const { plays, audio } = soundSpy();
+  const game = newGame({ audio });
+  game.enterRoom(20);
+  settle(game);
+  game.flagL = true;
+  assert.equal(game.hasMonster(20), false);
+  plays.length = 0;
+  assert.ok(game.fire(TRIGGER.USE_OBJECT, 144));
+  assert.deepEqual(plays, [['alarm', 1]]);
+  assert.ok(game.fade, 'the room fades as it changes');
+  game.tick();
+  assert.deepEqual(plays, [['alarm', 1], WHISPER]);
+});
+
+test('saving while the paper puzzle is paused comes back to its room', () => {
+  const game = newGame({ storage: memoryStorage() });
+  game.enterRoom(20);
+  settle(game);
+  game.startPuzzle(2);
+  game.saveGame({ quietly: true });
+  game.loadGame();
+  assert.equal(game.mode, MODE.ROOM);
+  assert.equal(game.room, 20);
+});
+
+test("fades take the original's few updates, in the JAR's art", () => {
+  const game = newGame();
+  game.mode = MODE.CORRIDOR;
+  game.placeInCorridor(30, FACING.NORTH);
+  const { sheet } = data.hardCoded.fade;
+  const stippled = () => game.drawList().filter((item) => item.sheet === sheet).length;
+  const black = () => game.drawList().at(-1).fill === '#000000';
+  game.turnTo(FACING.EAST);
+  assert.ok(stippled() > 400, 'stippled before an update has passed');
+  const seen = [];
+  while (game.fade) {
+    game.tick();
+    seen.push(stippled() > 0 ? 'stippled' : black() ? 'black' : 'clear');
+  }
+  assert.equal(game.facing, FACING.EAST);
+  assert.deepEqual(seen, ['black', 'black', 'stippled', 'clear', 'clear']);
+});
+
+test('a rule changing the room it is in fades, and a box still answers meanwhile', () => {
+  const game = newGame();
+  game.room = 9;
+  game.chapter = 1;
+  game.world = 2;
+  game.objectHidden[62] = 0;
+  game.runActions([
+    [0, 410],
+    [3, 62, 1],
+  ]);
+  assert.ok(game.fade);
+  assert.ok(game.box);
+  game.pressKey('Enter');
+  assert.equal(game.box, null);
+  settle(game);
+});
+
+test("vibrations keep the original's patterns", () => {
+  const patterns = [];
+  const game = newGame({ vibrate: (pattern) => patterns.push(pattern) });
+  patterns.length = 0;
+  for (const pattern of [0, 1, 2]) game.vibrateFor(pattern);
+  assert.deepEqual(patterns, [[500], [100, 500, 100, 500, 100], [2000]]);
+  // It repeats for 3 seconds, and the last buzz starts just before they're up.
+  game.vibrateFor(3);
+  assert.equal(
+    patterns[3].reduce((total, length) => total + length),
+    3100,
+  );
+});
+
+for (const [build, prompt, controls, pearlIntro] of [
+  [data, 'Touch the screen', 'Touch the left, right', 563],
+  [keypadData, 'Press any key', 'Move cursor: 2/4/6/8', 553],
+]) {
+  test(`the ${build.kind} build's own prompt, controls help and pearl instructions show`, () => {
+    const front = createGame(build, {});
+    front.frontEnd.showPress();
+    assert.equal(front.frontEnd.pressLines.join(' '), prompt);
+    front.frontEnd.showMainMenu();
+    front.frontEnd.chooseMain(2);
+    front.frontEnd.chooseRow(build.tables.helpLines.indexOf(416));
+    assert.ok(front.frontEnd.box.lines.join(' ').includes(controls));
+
+    const game = newGame({}, build);
+    game.openPause();
+    game.pause.choose(game.pause.rowActions.indexOf('help'));
+    game.pause.choose(build.tables.helpLines.indexOf(416));
+    assert.ok(game.pause.box.lines.join(' ').includes(controls));
+    game.closePause();
+
+    game.chapter = 3;
+    game.mode = MODE.CORRIDOR;
+    game.startPuzzle(6);
+    assert.equal(game.box.text, game.lines[pearlIntro]);
+  });
+}
 
 test('the port follows the v1.7.0 and v1.0.20 families, and explains what it does with the rest', async () => {
   const results = {};
