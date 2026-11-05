@@ -497,17 +497,39 @@ test('the verb wheel has three arms, and no mouth', () => {
   assert.equal(game.menus.at(-1).id, MENU.SAY);
 });
 
-test('the walking keys take every kind of exit', () => {
+test('the walking keys take every kind of exit, and left and right turn', () => {
   const game = newGame();
   for (const [key, exits] of Object.entries({
     forward: ['forward', 'upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'],
     back: ['back', 'turnback'],
-    left: ['left', 'turnleft'],
-    right: ['right', 'turnright'],
+    left: ['turnleft'],
+    right: ['turnright'],
   })) {
     for (const exit of exits) assert.ok(game.exitGoes(exit, key), `${key} ${exit}`);
   }
-  assert.ok(!game.exitGoes('left', 'right'));
+  assert.ok(!game.exitGoes('left', 'left'));
+  assert.ok(!game.exitGoes('right', 'right'));
+  assert.ok(!game.exitGoes('turnleft', 'right'));
+});
+
+test('in a room with both, the left and right keys turn rather than step aside', () => {
+  for (const side of ['left', 'right']) {
+    const game = newGame();
+    skipTo(game, '0');
+    enter(game, '3');
+    const dirs = game.objects.map((object) => object.executeEvent(EVENT.GETMOVEDIR, null));
+    assert.ok(dirs.includes(side) && dirs.includes(`turn${side}`), side);
+    const used = [];
+    game.useObject = (object) => used.push(object.executeEvent(EVENT.GETMOVEDIR, null));
+    // The plain exit is live only some of the time. The key turns even when it is, and
+    // the cursor is right on it.
+    const plain = game.objects.find((object) => object.executeEvent(EVENT.GETMOVEDIR, null) === side);
+    plain.active = true;
+    game.cursorX = (plain.left + plain.right) / 2;
+    game.cursorY = (plain.top + plain.bottom) / 2;
+    game.moveInDirection(side);
+    assert.deepEqual(used, [`turn${side}`]);
+  }
 });
 
 test('each exit has its own cursor, and most name where they go', () => {

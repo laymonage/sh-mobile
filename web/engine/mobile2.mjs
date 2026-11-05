@@ -68,13 +68,14 @@ const OBJECT_PALETTE_IMAGES = new Set([
   'corridor_window_front',
 ]);
 
-// Which way each exit in the room goes, for the walking keys. h.w maps the same exits to
-// the phone's keys, except that its keys don't take plain left and right exits.
+// Which way each exit in the room goes, for the walking keys, as h.w maps them to the
+// phone's keys. Left and right turn, and leave plain left and right exits to the pointer:
+// the two rooms that have those also have turns, which the keys would otherwise miss.
 const EXITS_BY_KEY = {
   forward: ['forward', 'upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'],
   back: ['back', 'turnback'],
-  left: ['left', 'turnleft'],
-  right: ['right', 'turnright'],
+  left: ['turnleft'],
+  right: ['turnright'],
 };
 
 // Rooms that only show something, which the original's back key leaves. h.y.
