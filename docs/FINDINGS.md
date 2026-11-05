@@ -407,6 +407,7 @@ An audit against the decompiled code found these gaps, which are now fixed, with
 - Fades take the original's few updates, in the JAR's stipple, and happen whenever the original's `q(int)` reloads a room. They now cover the health display, boxes and cursor too.
 - The wrong number's red flash shows, for about a frame.
 - Vibrations keep their patterns, on phones that allow them.
+- Touch builds' fights have their green and red tap targets. See below.
 - Keypad builds show their own text where the two kinds of build name different lines: "Press any key" before the main menu rather than "Touch the screen", their keys in the Controls help rather than touching the screen, and their own copy of the pearl puzzle's instructions. Every build's language files hold the lines for both, so this is in `resources.mjs` with the other numbers written into the methods.
 
 ### Which builds
@@ -421,10 +422,19 @@ The Internet Archive button loads `sh3-2010-v1.0.20-a`, which has the key that m
 - The door to the last room's words are wrapped to fit their paper. The original wraps them 100 pixels wider than the paper, which hides the end of each line.
 - Keypad builds have no way to enter the safe's number with a mouse, so the port adds one.
 - Long text scrolls by a click before moving on, rather than needing the up and down keys.
-- Fights have no critical hits or quick shots, as the keypad builds don't. Touch builds add on-screen targets for both, and the port doesn't draw those.
 - The demo's 3-minute limit isn't included, as for the other games' checks.
 - A chapter's first line of dialogue shows, where the original's save notice replaces it. See below.
 - Room 13's fifth layer is drawn. See below.
+
+### The touch builds' targets
+
+All 17 touch builds the port follows, and none of the 24 keypad builds, add two targets to fights. Both show while the monster is alive and no box is up, and their timers are static fields, so they carry on from one fight to the next.
+
+- A green ring shows for 2.5 s of every 3 s, at the screen's right edge, its left edge or under the health picture, a third of the time each. The second monster only gets the top one. Tapping it fires as if at the monster, a sure hit.
+- A red ring shows for 2 s of every 4.5 s at the top left corner of the monster's hit box. Tapping it fires a critical hit: twice the damage before armor, a 200 ms shake, four more sparks around the hit, and the ring goes. Its spot is meant to be random, but `h()` subtracts the random number back out, so it never moves from the corner.
+- Each tap spends a bullet as any shot does. A red tap with an empty clip, or against the second monster where the shotgun can't land, leaves the critical waiting for the next shot that lands, and monsters don't start attacks meanwhile.
+
+In the port, a click stands in for a tap. Keypad builds, including the Internet Archive one, have neither target, and the game description's line about pressing "when the 2 squares merge" is in their text all the same.
 
 ### Original behavior that looks like a bug
 

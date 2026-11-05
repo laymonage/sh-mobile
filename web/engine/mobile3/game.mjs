@@ -1,4 +1,4 @@
-import { Fight } from './battle.mjs';
+import { Fight, newTargetClock } from './battle.mjs';
 import { animationSize, ONCE, Playing } from './data.mjs';
 import { Inventory } from './inventory.mjs';
 import { FrontEnd, MapScreen, PauseMenu } from './menus.mjs';
@@ -218,6 +218,7 @@ export class Mobile3Game {
     this.holdSpeed = HOLD_START;
     this.holdTimer = 0;
     this.savedExists = this.readSave() !== null;
+    this.targetClock = data.hardCoded.targets ? newTargetClock() : null;
     this.inventory = new Inventory(this);
     this.resetRun();
     if (startInGame) this.startNewGame();
@@ -567,7 +568,7 @@ export class Mobile3Game {
 
   // Which of the cursor's pictures shows, from GameMidlet.m().
   cursorFrame() {
-    if (this.fight) return this.fight.isOnTarget(this.screenX, this.cursorY) ? CURSOR.AIM_ON : CURSOR.AIM_OFF;
+    if (this.fight) return this.fight.isAimedAt(this.screenX, this.cursorY) ? CURSOR.AIM_ON : CURSOR.AIM_OFF;
     if (this.puzzle) return this.puzzle.isHot(this.screenX, this.cursorY) ? CURSOR.INTERACT : CURSOR.NORMAL;
     const action = this.action();
     if (!action) return CURSOR.NORMAL;
@@ -1519,7 +1520,7 @@ export class Mobile3Game {
       return;
     }
     if (this.fight) {
-      this.fight.fire(this.fight.isOnTarget(this.screenX, this.cursorY));
+      this.fight.click(this.screenX, this.cursorY);
       return;
     }
     if (this.verbs) {

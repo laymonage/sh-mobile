@@ -264,6 +264,11 @@ function moduleSize(sheet, index) {
 
 // An animation's bounds over all of its frames, as in k.a(c, int, int[], int).
 export function animationSize(sheet, animation) {
+  const { left, top, right, bottom } = animationBounds(sheet, animation);
+  return { width: right - left, height: bottom - top };
+}
+
+export function animationBounds(sheet, animation) {
   let right = Number.NEGATIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
   let left = Number.POSITIVE_INFINITY;
@@ -277,7 +282,7 @@ export function animationSize(sheet, animation) {
       bottom = Math.max(bottom, height - part.y);
     }
   }
-  return { width: right - left, height: bottom - top };
+  return { left, top, right, bottom };
 }
 
 // A bitmap font: glyphs that are a sheet's modules, as in GameMidlet.D(int).

@@ -1,4 +1,4 @@
-import { animationSize, LOOP, ONCE, Playing } from './data.mjs';
+import { animationBounds, animationSize, LOOP, ONCE, Playing } from './data.mjs';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from './ui.mjs';
 
 // The four monsters, as in GameMidlet.y(int) and the fourth mode of its update. All positions
@@ -23,6 +23,28 @@ const HURT = [0, () => NONE, BY_STANCE([4, 5, 6, 4]), () => NONE, () => NONE];
 const STRIKE = [0, () => 2, () => 8, () => 1, BY_STANCE([7, 3, 11, 15])];
 const DEATH = [0, () => 3, () => 9, () => 4, BY_STANCE([6, 2, 10, 14])];
 const IDLE = [0, () => 0, BY_STANCE([0, 1, 2, 3]), () => 0, BY_STANCE([4, 0, 8, 12])];
+
+// The touch builds' targets, from the fights' part of GameMidlet.h(). Tapping the green one fires
+// a sure hit, and the red one a critical hit, twice as hard.
+const SURE_EVERY = 3000;
+const SURE_SHOWS = 2500;
+const CRITICAL_EVERY = 4500;
+const CRITICAL_SHOWS = 2000;
+const CRITICAL_SHAKE = 200;
+const SPARK_SPREAD = 15;
+
+// The targets' timers are the original's static fields, so they carry on from fight to fight.
+export function newTargetClock() {
+  return {
+    sureWait: SURE_EVERY,
+    sureLeft: SURE_SHOWS,
+    sureShowing: false,
+    sureRoll: 0,
+    criticalWait: CRITICAL_EVERY,
+    criticalLeft: CRITICAL_SHOWS,
+    criticalShowing: false,
+  };
+}
 
 const STRIKE_DAMAGE = [0, 5, 10, 10, 15];
 const HEAVY_STRIKE_DAMAGE = [0, 5, 10, 20, 25];
@@ -68,6 +90,9 @@ export class Fight {
     this.hit = new Playing(data.animation(hardCoded.hit), ONCE);
     this.hit.running = false;
     this.extras = monster === 3 ? tables.monster3Extras.map((id) => new Playing(data.animation(id), ONCE)) : null;
+    this.critical = false;
+    this.sparks = null;
+    this.setUpTargets();
     this.size = this.playing.map((playing) =>
       playing ? animationSize(data.sheet(this.sheet), playing.animation) : { width: 0, height: 0 },
     );
@@ -129,6 +154,23 @@ export class Fight {
       this.x = this.placesX[8];
       this.y = this.placesY[8];
     }
+  }
+
+  setUpTargets() {
+    const { data } = this.game;
+    this.targetArt = data.hardCoded.targets ?? null;
+    if (!this.targetArt) return;
+    const { sheet, sure, critical } = this.targetArt;
+    this.sureSize = animationSize(data.sheet(sheet), data.animation(sure));
+    this.criticalSize = animationSize(data.sheet(sheet), data.animation(critical));
+    // GameMidlet.o(): the lowest of the health pictures, which the top target sits under.
+    const { hud } = data.hardCoded;
+    this.belowHealth = Math.max(
+      0,
+      ...[hud.fine, hud.hurt, hud.dying, hud.damage, hud.healed].map(
+        ({ sheet: onSheet, animation }) => animationBounds(data.sheet(onSheet), data.animation(animation)).bottom,
+      ),
+    );
   }
 
   get attack() {
@@ -200,8 +242,68 @@ export class Fight {
     return x >= left && y >= top && x <= left + box.width && y <= top + box.height;
   }
 
-  // A shot, as in GameMidlet.c(boolean).
-  fire(onTarget) {
+  // Where the targets are, as the original places them and their tap areas. The red one's spot
+  // is meant to be random, but the drawing cancels it out, so it stays at the hit box's corner.
+  targets() {
+    const clock = this.game.targetClock;
+    if (!this.targetArt || !clock || this.health <= 0) return [];
+    const list = [];
+    if (clock.sureShowing) {
+      const { width, height } = this.sureSize;
+      const roll = clock.sureRoll;
+      let place = null;
+      if (roll > 0 && roll < 33) place = this.monster === 2 ? null : { x: SCREEN_WIDTH - 8 - width, y: CENTER_Y };
+      else if (roll > 0 && roll < 66) place = this.monster === 2 ? null : { x: 8, y: CENTER_Y };
+      else if (roll > 0 && roll < 100) place = { x: CENTER_X - (width >> 1), y: 16 + this.belowHealth };
+      if (place) list.push({ kind: 'sure', x: place.x, y: place.y, left: place.x, width, height });
+    }
+    if (clock.criticalShowing) {
+      const { width, height } = this.criticalSize;
+      const box = this.hitBox();
+      const x = this.x + box.left;
+      const y = this.y + box.top;
+      list.push({ kind: 'critical', x, y, left: x - (width >> 1), width, height });
+    }
+    return list;
+  }
+
+  // The red one is drawn last, so it's the one a click finds where they meet.
+  targetAt(x, y) {
+    return (
+      this.targets().findLast(
+        (target) => x >= target.left && x < target.left + target.width && y >= target.y && y < target.y + target.height,
+      ) ?? null
+    );
+  }
+
+  isAimedAt(x, y) {
+    return this.isOnTarget(x, y) || this.targetAt(x, y) !== null;
+  }
+
+  // A click on a target is a tap on it, which lands somewhere in the hit box.
+  click(x, y) {
+    const target = this.targetAt(x, y);
+    if (!target) {
+      this.fire(this.isOnTarget(x, y));
+      return;
+    }
+    const spot = () => {
+      const box = this.hitBox();
+      const left = this.x + box.left;
+      const top = this.y + box.top;
+      const { game } = this;
+      return { x: game.randomBetween(left, left + box.width), y: game.randomBetween(top, top + box.height) };
+    };
+    if (target.kind === 'critical') {
+      this.critical = true;
+      this.criticalSpot = spot();
+    }
+    this.fire(true, spot());
+  }
+
+  // A shot, as in GameMidlet.c(boolean). A critical waits for the next shot that lands, if this
+  // one doesn't, as the original's flag does.
+  fire(onTarget, place = { x: this.game.screenX, y: this.game.cursorY }) {
     const { game, tables } = this;
     const weapon = game.weapon;
     if (game.loaded[weapon] === 0) return;
@@ -214,9 +316,17 @@ export class Fight {
     if (lands) {
       let damage = tables.weaponDamage[weapon];
       if (this.monster === 3 && this.state === 3) damage = Math.trunc(damage / 2);
+      this.sparks = null;
+      if (this.critical) {
+        this.critical = false;
+        damage *= 2;
+        game.shake = CRITICAL_SHAKE;
+        this.sparks = this.criticalSpot ?? place;
+        if (game.targetClock) game.targetClock.criticalShowing = false;
+      }
       damage = Math.trunc((damage * (100 - tables.monsterArmor[this.monster][weapon])) / 100);
       this.health -= damage;
-      this.hitPlace = { x: game.screenX, y: game.cursorY };
+      this.hitPlace = place;
       this.hit.restart();
       this.hitShowing = true;
       if (this.health <= 0) {
@@ -269,9 +379,13 @@ export class Fight {
       this.musicPlaying = false;
     }
     if (this.dead) return;
+    this.tickTargets(milliseconds);
     if (this.hitShowing) {
       this.hit.advance(milliseconds);
-      if (!this.hit.running) this.hitShowing = false;
+      if (!this.hit.running) {
+        this.hitShowing = false;
+        this.sparks = null;
+      }
     }
     const playing = this.playing[this.state];
     playing.advance(milliseconds);
@@ -280,6 +394,37 @@ export class Fight {
     this.deathWait -= milliseconds;
     if (this.tickState(playing, milliseconds)) return;
     if (this.health > 0) this.think();
+  }
+
+  // While the monster lives and nothing covers the fight.
+  tickTargets(milliseconds) {
+    const clock = this.game.targetClock;
+    if (!this.targetArt || !clock || this.health <= 0 || this.game.box) return;
+    clock.sureWait -= milliseconds;
+    if (clock.sureWait < 0) {
+      clock.sureShowing = true;
+      clock.sureWait = SURE_EVERY;
+      clock.sureRoll = this.game.randomBetween(0, 100);
+    }
+    if (clock.sureShowing) {
+      clock.sureLeft -= milliseconds;
+      if (clock.sureLeft < 0) {
+        clock.sureShowing = false;
+        clock.sureLeft = SURE_SHOWS;
+      }
+    }
+    clock.criticalWait -= milliseconds;
+    if (clock.criticalWait < 0) {
+      clock.criticalShowing = true;
+      clock.criticalWait = CRITICAL_EVERY;
+    }
+    if (clock.criticalShowing) {
+      clock.criticalLeft -= milliseconds;
+      if (clock.criticalLeft < 0) {
+        clock.criticalShowing = false;
+        clock.criticalLeft = CRITICAL_SHOWS;
+      }
+    }
   }
 
   tickIntro(milliseconds) {
@@ -360,7 +505,7 @@ export class Fight {
       this.lastFrame = playing.frame;
     }
     this.x += step * this.direction;
-    if (this.nextAttack < 0) {
+    if (this.nextAttack < 0 && !this.critical) {
       if (game.randomBit() === 1) this.enter(this.attack);
       this.nextAttack = this.tables.monsterAttackGap[1];
     }
@@ -403,7 +548,7 @@ export class Fight {
       game.startFade(() => {}, TELEPORT_DARK);
       this.hitShowing = false;
     }
-    if (this.nextAttack < 0 && this.stance === 3) {
+    if (this.nextAttack < 0 && this.stance === 3 && !this.critical) {
       this.attackCount++;
       this.enter(this.attack);
       this.nextAttack = tables.monsterAttackGap[2];
@@ -413,7 +558,7 @@ export class Fight {
   // Sometimes waits, then lands a heavier blow.
   thinkThird() {
     const { game, tables } = this;
-    if ((this.state === this.idle || this.state === this.taunt) && this.nextAttack < 0) {
+    if ((this.state === this.idle || this.state === this.taunt) && this.nextAttack < 0 && !this.critical) {
       if (game.randomBetween(0, 100) < 45) {
         this.pounce = true;
         this.enter(this.attack);
@@ -426,12 +571,12 @@ export class Fight {
         this.nextAttack = tables.monsterAttackGap[3];
       }
     }
-    if (this.state === this.charge && this.nextAttack < 0) {
+    if (this.state === this.charge && this.nextAttack < 0 && !this.critical) {
       this.heavy = true;
       this.enter(this.secondAttack);
       this.nextAttack = tables.monsterAttackGap[3];
     }
-    if (this.state === this.taunt && this.nextAttack < 0 && game.randomBetween(0, 30) === 0) {
+    if (this.state === this.taunt && this.nextAttack < 0 && game.randomBetween(0, 30) === 0 && !this.critical) {
       this.state = this.idle;
       this.nextAttack = tables.monsterAttackGap[3];
     }
@@ -458,7 +603,7 @@ export class Fight {
       this.nextThink = tables.monsterAttackGap[4];
       this.hitShowing = false;
     }
-    if (this.nextAttack < 0) {
+    if (this.nextAttack < 0 && !this.critical) {
       this.enter(this.attack);
       this.nextAttack = tables.monsterAttackGap[4];
     }
@@ -482,19 +627,45 @@ export class Fight {
       return [
         sprite(attack, sheet, this.x, this.y),
         sprite(this.playing[state], game.data.hardCoded.hitSheet, CENTER_X, CENTER_Y + 20),
+        ...this.targetSprites(),
       ];
     }
     const list = [sprite(this.playing[state], sheet, this.x, this.y)];
     if (this.hitShowing) {
+      const { hitSheet } = game.data.hardCoded;
       const { x, y } = this.hitPlace;
-      list.push(sprite(this.hit, game.data.hardCoded.hitSheet, x, y));
+      list.push(sprite(this.hit, hitSheet, x, y));
+      if (this.sparks) {
+        const { x: sx, y: sy } = this.sparks;
+        for (const [dx, dy] of [
+          [-SPARK_SPREAD, 0],
+          [SPARK_SPREAD, 0],
+          [0, SPARK_SPREAD],
+          [0, -SPARK_SPREAD],
+        ]) {
+          list.push(sprite(this.hit, hitSheet, sx + dx, sy + dy));
+        }
+      }
     }
     if (this.extraShowing) {
       const which = state === this.secondAttack ? 0 : 1;
       const { x, y } = this.extraPlaces[which];
       list.push(sprite(this.extras[which], game.data.hardCoded.monster3ExtraSheet, x, y));
     }
+    list.push(...this.targetSprites());
     return list;
+  }
+
+  targetSprites() {
+    if (!this.targetArt) return [];
+    const { sheet, sure, critical } = this.targetArt;
+    return this.targets().map(({ kind, x, y }) => ({
+      sheet,
+      animation: kind === 'sure' ? sure : critical,
+      frame: 0,
+      x,
+      y,
+    }));
   }
 
   monsterSprite() {

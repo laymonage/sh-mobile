@@ -40,6 +40,8 @@ export const BUILD_RESOURCES = {
     fade: { sheet: 16777770, animation: 16777513 },
     bloodOverlay: { sheet: 16777615, animation: 16777273 },
     hitSheet: 16777602,
+    // The fights' tap targets, from the on-screen buttons' sheet and its table az.
+    targets: { sheet: 16777788, sure: 16777573, critical: 16777572 },
     hit: 16777394,
     monster3ExtraSheet: 16777772,
     inventory: { sheet: 16777662, animation: 16777327 },

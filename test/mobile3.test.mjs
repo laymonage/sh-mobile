@@ -933,6 +933,107 @@ for (const [build, prompt, controls, pearlIntro] of [
   });
 }
 
+// A fight on its own, past its flashing start, with a pistol and a full clip.
+const fightOf = (build, monster, random = () => 0.5) => {
+  const game = newGame({ random }, build);
+  game.mode = MODE.CORRIDOR;
+  game.addItem(111);
+  game.weapon = 1;
+  game.bullets[1] = 15;
+  game.loaded[1] = 15;
+  game.startFight(monster, false);
+  game.fight.intro = null;
+  return game;
+};
+const waitFor = (game, condition, limit = 200) => {
+  while (!condition() && limit-- > 0) game.tick();
+  assert.ok(limit > 0, 'it happened');
+};
+const clickAt = (game, x, y) => {
+  game.moveCursor(SCREEN_X + x, y);
+  game.click();
+};
+const middleOf = ({ left, y, width, height }) => [left + (width >> 1), y + (height >> 1)];
+const pistolDamage = (build, monster) =>
+  Math.trunc((build.tables.weaponDamage[1] * (100 - build.tables.monsterArmor[monster][1])) / 100);
+
+test('the touch build shows a green target every 3 seconds, and clicking it is a sure hit', () => {
+  const game = fightOf(data, 1, () => 0.5);
+  const { fight } = game;
+  assert.deepEqual(fight.targets(), []);
+  waitFor(game, () => fight.targets().some(({ kind }) => kind === 'sure'));
+  assert.ok(game.time >= 3000);
+  const sure = fight.targets().find(({ kind }) => kind === 'sure');
+  assert.equal(sure.x, 8, 'a middle roll puts it at the left edge');
+  assert.ok(game.drawList().some(({ animation }) => animation === data.hardCoded.targets.sure));
+  assert.equal(fight.isOnTarget(...middleOf(sure)), false, 'it is away from the monster');
+  clickAt(game, ...middleOf(sure));
+  assert.equal(fight.health, 100 - pistolDamage(data, 1));
+  assert.equal(game.loaded[1], 14);
+});
+
+test("the touch build's red target sits on the monster, and clicking it hits twice as hard", () => {
+  const game = fightOf(data, 1);
+  const { fight } = game;
+  waitFor(game, () => fight.targets().some(({ kind }) => kind === 'critical'));
+  assert.ok(game.time >= 4500);
+  const critical = fight.targets().find(({ kind }) => kind === 'critical');
+  const box = fight.hitBox();
+  assert.deepEqual([critical.x, critical.y], [fight.x + box.left, fight.y + box.top]);
+  clickAt(game, ...middleOf(critical));
+  assert.equal(
+    fight.health,
+    100 - Math.trunc((data.tables.weaponDamage[1] * 2 * (100 - data.tables.monsterArmor[1][1])) / 100),
+  );
+  assert.equal(game.shake, 200);
+  assert.ok(fight.sparks, 'four more sparks show');
+  assert.equal(
+    fight.targets().some(({ kind }) => kind === 'critical'),
+    false,
+    'it goes once it has landed',
+  );
+});
+
+test('a red target clicked with an empty clip makes the next shot that lands a critical, and holds attacks off', () => {
+  const game = fightOf(data, 1);
+  const { fight } = game;
+  waitFor(game, () => fight.targets().some(({ kind }) => kind === 'critical'));
+  const critical = fight.targets().find(({ kind }) => kind === 'critical');
+  game.loaded[1] = 0;
+  clickAt(game, ...middleOf(critical));
+  assert.equal(fight.health, 100);
+  assert.ok(fight.critical);
+  fight.nextAttack = -1;
+  fight.think();
+  assert.equal(fight.state, fight.idle, 'no attack while it waits');
+  game.loaded[1] = 1;
+  const box = fight.hitBox();
+  clickAt(game, fight.x + box.left + (box.width >> 1), fight.y + box.top + (box.height >> 1) + 3);
+  assert.equal(fight.critical, false);
+  assert.equal(game.shake, 200);
+});
+
+test('the second monster only gets the green target at the top', () => {
+  const game = fightOf(data, 2, () => 0.2);
+  const { fight } = game;
+  game.tick();
+  game.targetClock.sureWait = 0;
+  game.fight.tickTargets(60);
+  assert.deepEqual(fight.targets(), [], 'a roll for a side shows nothing');
+  game.targetClock.sureRoll = 80;
+  const [top] = fight.targets();
+  assert.equal(top.kind, 'sure');
+  assert.equal(top.x, 120 - (top.width >> 1));
+  assert.ok(top.y > 16, 'under the health picture');
+});
+
+test('keypad builds have no targets', () => {
+  const game = fightOf(keypadData, 1);
+  for (let i = 0; i < 150; i++) game.tick();
+  assert.equal(game.targetClock, null);
+  assert.deepEqual(game.fight.targets(), []);
+});
+
 test('the port follows the v1.7.0 and v1.0.20 families, and explains what it does with the rest', async () => {
   const results = {};
   for (const { id } of buildsOf('sh3')) {
