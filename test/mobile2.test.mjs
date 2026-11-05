@@ -497,19 +497,38 @@ test('the verb wheel has three arms, and no mouth', () => {
   assert.equal(game.menus.at(-1).id, MENU.SAY);
 });
 
-test('the walking keys take every kind of exit, and left and right turn', () => {
+test('the walking keys go forward, back and turn, and leave the rest to the pointer', () => {
   const game = newGame();
   for (const [key, exits] of Object.entries({
-    forward: ['forward', 'upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'],
+    forward: ['forward'],
     back: ['back', 'turnback'],
     left: ['turnleft'],
     right: ['turnright'],
   })) {
     for (const exit of exits) assert.ok(game.exitGoes(exit, key), `${key} ${exit}`);
   }
+  for (const exit of ['upstairs_left', 'upstairs_right', 'downstairs_left', 'downstairs_right', 'elevator'])
+    assert.ok(!game.exitGoes(exit, 'forward'), exit);
   assert.ok(!game.exitGoes('left', 'left'));
   assert.ok(!game.exitGoes('right', 'right'));
   assert.ok(!game.exitGoes('turnleft', 'right'));
+});
+
+test('beside the elevator, the forward key goes forward', () => {
+  const game = newGame();
+  skipTo(game, '0');
+  enter(game, '3');
+  const exits = game.objects.filter((object) =>
+    ['forward', 'elevator'].includes(object.executeEvent(EVENT.GETMOVEDIR, null)),
+  );
+  for (const exit of exits) exit.active = true;
+  const used = [];
+  game.useObject = (object) => used.push(object.executeEvent(EVENT.GETMOVEDIR, null));
+  const elevator = exits.find((object) => object.executeEvent(EVENT.GETMOVEDIR, null) === 'elevator');
+  game.cursorX = (elevator.left + elevator.right) / 2;
+  game.cursorY = (elevator.top + elevator.bottom) / 2;
+  game.moveInDirection('forward');
+  assert.deepEqual(used, ['forward']);
 });
 
 test('in a room with both, the left and right keys turn rather than step aside', () => {

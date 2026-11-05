@@ -344,7 +344,7 @@ Its puzzles are scripts rather than code. The painting is joined up by clicking 
 
 - **Rooms:** `s_screenWidth` and `s_screenHeight` set a room's size, 310x270 or 290x270. The original pans over them on a 240x320 screen, and the port shows the whole room, centered.
 - **Palettes:** corridors are recolored by swapping an image's PNG palette, from `plts/`. An image takes the palette set when it's first loaded after a room change, because the `a` class caches it.
-- **Exits:** there are also `turnback`, `turnleft`, `turnright`, stairs and elevator exits, with cursors of their own. The walking keys take all of them, except that left and right take only the turns, as the phone's keys did.
+- **Exits:** there are also `turnback`, `turnleft`, `turnright`, stairs and elevator exits, with cursors of their own. The walking keys take the turns and `turnback`, but forward takes only a plain forward exit, and left and right only the turns. The stairs, the elevator and plain left and right exits, all in rooms 3 and 9, are for the pointer.
 - **The verb wheel:** it has three arms, with no mouth.
 - **Battles:** `h.s` has its own rules. A shot hits anywhere on a target, rather than near an anchor point. Enemies have idle, moving, dodging, attacking and recovering states, and their vulnerable zones change every 20 ticks. A fight starts with the gun away. Reloading is from the inventory.
 - **Being hit:** the screen is tiled with an image the script names, rather than blood spreading.
