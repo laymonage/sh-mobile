@@ -449,6 +449,7 @@ export class Game {
       storage = null,
       audio = null,
       onQuit = null,
+      credits = [],
     } = {},
   ) {
     this.data = data;
@@ -458,6 +459,7 @@ export class Game {
     this.storage = storage;
     this.audio = audio;
     this.onQuit = onQuit;
+    this.credits = credits;
     this.text = this.constructor.TEXT;
     this.mainMenu = null;
     this.languages = this.findLanguages();

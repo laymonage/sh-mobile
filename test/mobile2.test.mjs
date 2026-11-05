@@ -306,6 +306,13 @@ test('a menu with the extra row still clears the logo', () => {
   assert.ok(top - 7 >= 82);
 });
 
+test('the About page credits what the page passes in', () => {
+  const game = createGame(data, { language: 'en', roomSize: 310, roomHeight: 270, credits: ['Credit line'] });
+  game.showMainMenu();
+  game.mainMenu.activate(game.mainMenu.current, 'about');
+  assert.match(game.mainMenu.current.text, /Made with INK Technology\.\n\nCredit line$/);
+});
+
 test('each game draws its splash art where its original does', () => {
   assert.deepEqual([Game.SPLASH_CENTERED, Game.SPLASH_OVER_LOGO], [false, true]);
   assert.deepEqual([Mobile2Game.SPLASH_CENTERED, Mobile2Game.SPLASH_OVER_LOGO], [true, false]);

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { INPUT_ROOT } from '../src/inputs.mjs';
+import { INPUT_ROOT, readInput, recommended } from '../src/inputs.mjs';
+import { loadGameData, readJar } from '../web/engine/jar.mjs';
+import { parseMidi } from '../web/engine/midi.mjs';
 import { envelopeSteps, SoundFont } from '../web/engine/soundfont.mjs';
 
 const ascii = (text, length) => {
@@ -210,4 +213,40 @@ test('the Series 40 soundfont has the slow door instrument', {
   assert.ok(applause.attack > 2);
   assert.ok(applause.release > 1);
   assert.equal(applause.loop, true);
+});
+
+const shippedFonts = ['DroidSymbioteBank-BV.sf2', 'DroidSymbioteBank-BSD.sf2'].map(
+  (name) => new URL(`../web/soundfonts/${name}`, import.meta.url),
+);
+
+test('the shipped soundfonts are the files their notice describes', () => {
+  const notice = readFileSync(new URL('../web/soundfonts/NOTICE.md', import.meta.url), 'utf8');
+  for (const font of shippedFonts) {
+    assert.ok(notice.includes(createHash('sha256').update(readFileSync(font)).digest('hex')), font.pathname);
+  }
+  assert.match(notice, /Creative Commons Attribution 4\.0/);
+  assert.match(notice, /Copyright \(c\) 2009 Beatnik, Inc All rights reserved\./);
+});
+
+test('the shipped soundfonts have an instrument for every note both games play', async () => {
+  const games = [recommended.sh1.gameData, recommended.sh2.gameData, recommended.sh2.keypadReference].map((id) => ({
+    id,
+    entries: null,
+  }));
+  for (const game of games) game.entries = loadGameData(await readJar(readInput(game.id))).entries;
+  for (const font of shippedFonts) {
+    const real = new SoundFont(new Uint8Array(readFileSync(font)));
+    assert.equal(real.presets.size, 130);
+    for (const { id, entries } of games) {
+      let notes = 0;
+      for (const [name, bytes] of entries) {
+        if (!name.endsWith('.mid')) continue;
+        for (const note of parseMidi(bytes).notes) {
+          notes++;
+          assert.ok(real.voicesFor(note).length > 0, `${font.pathname} ${id} ${name} program ${note.program}`);
+        }
+      }
+      assert.ok(notes > 100, id);
+    }
+  }
 });

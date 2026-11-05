@@ -107,7 +107,7 @@ function aboutText(game) {
   const { 'MIDlet-Name': name, 'MIDlet-Version': version, 'MIDlet-Vendor': vendor } = game.manifest;
   const details = `${game.engineText(game.text.NAME)}${name}\n${game.engineText(game.text.VERSION)}${version}\n${game.engineText(game.text.VENDOR)}${vendor}`;
   const [rights, ...sections] = game.text.ABOUT_SECTIONS.map((index) => game.engineText(index));
-  return [rights, details, ...sections].join('\n\n');
+  return [rights, details, ...sections, ...game.credits].join('\n\n');
 }
 
 export function parseIni(bytes) {

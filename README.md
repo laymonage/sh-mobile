@@ -40,7 +40,7 @@ The page sets a Content Security Policy in a `<meta>` tag, so it applies whereve
 | Quit, in the main menu | Goes back to the page's choice of games, after asking |
 | Save and Load buttons | Save to this browser, and load from it. Load asks for a second click |
 | Sound button and Volume slider | Turn sound on or off and set its level, and remember the choice |
-| Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser |
+| Soundfont button | Plays sound with a SoundFont 2 file you choose, kept in this browser, instead of the default |
 
 The startup screens, main menu, pause menu, all of the JAR's languages, the opening, rooms, hotspots, the verb wheel, text, choices, inventory, the map, room changes and their transitions, battles, the flashlight, the HUD, saving and sound work. Nobody has played it to the end.
 
@@ -54,7 +54,9 @@ Browsers only allow sound after you click or press a key. The sound question aft
 
 ### Soundfonts
 
-The game's music is MIDI, which needs instrument sounds from somewhere. Without a soundfont, the port uses rough built-in voices. For sounds much closer to a Nokia phone, choose a General MIDI SoundFont 2 file such as [Series 40 5th Edition FP1](https://www.musical-artifacts.com/artifacts/693). The **Get** link beside the Soundfont button opens that page, where you can download it. It's a link because the site doesn't let other pages download from it directly. This repo doesn't include one: check its license yourself. Its listing is reported as CC-BY 4.0, but the file's own metadata says "Copyright © Nokia Corporation. All rights reserved."
+The game's music is MIDI, which needs instrument sounds from somewhere. By default the port uses the BV version of the [Symbiote Soundfont](https://musical-artifacts.com/artifacts/7181) by NHP, which is about 220 KB and imitates old phones. Its BSD version is the other choice in the soundfont menu, at about 130 KB, with fewer samples and clearer licensing. These are the only sound files in this repo: see [their notice](web/soundfonts/NOTICE.md) for their licenses. If one can't load, the port uses rough built-in voices.
+
+For sounds much closer to a Nokia phone, choose a General MIDI SoundFont 2 file such as [Series 40 5th Edition FP1](https://www.musical-artifacts.com/artifacts/693). The **Get** link beside the soundfont menu opens that page, where you can download it. It's a link because the site doesn't let other pages download from it directly. This repo doesn't include that one: check its license yourself. Its listing is reported as CC-BY 4.0, but the file's own metadata says "Copyright © Nokia Corporation. All rights reserved." To use it, press the **File** button beside the menu. Your file stays in your browser and joins the menu, and the × button removes it and goes back to the default.
 
 To skip the file picker during development, put a `.sf2` in the ignored `soundfonts/` folder and add it to the link, for example `?jar=sh1-2007-a31&soundfont=name.sf2`.
 

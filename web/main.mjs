@@ -12,6 +12,22 @@ import { fitText } from './fit-text.mjs';
 const TICK_MS = 60;
 const MAX_TICKS_PER_FRAME = 5;
 const LOAD_CONFIRM_MS = 3000;
+// The first is the default.
+const SOUNDFONTS = [
+  {
+    id: 'symbiote-bv',
+    label: 'Symbiote BV',
+    url: new URL('./soundfonts/DroidSymbioteBank-BV.sf2', import.meta.url),
+    credit: 'Symbiote BV by NHP, CC BY 4.0',
+  },
+  {
+    id: 'symbiote-bsd',
+    label: 'Symbiote BSD',
+    url: new URL('./soundfonts/DroidSymbioteBank-BSD.sf2', import.meta.url),
+    credit: 'Symbiote BSD by NHP, BSD license',
+  },
+];
+const SOUNDFONT_PREFERENCE = 'silent-hill-mobile:soundfont';
 const PANEL_SHAPE_RATIO = 0.27;
 // The three rows of buttons, the gaps between them, and the panel's padding.
 const STRIP_PANEL_HEIGHT = '105px';
@@ -80,6 +96,7 @@ async function start(bytes) {
     audio,
     now: () => clock.now(),
     onQuit: returnToStartPage,
+    credits: SOUNDFONTS.map((font) => `Soundfont: ${font.credit}`),
   });
   const renderer = new Renderer(canvas, game);
   layOutPage(game);
@@ -162,65 +179,141 @@ function setUpSound(audio) {
   window.audio = audio;
 }
 
-// Soundfonts have their own licenses, so players bring their own. The choice is
-// kept in this browser, and is never uploaded.
+// The port ships its soundfonts, and a player can choose their own, which stays in their
+// browser and is never uploaded. If a shipped one can't load, the built-in voices play.
+async function useShippedSoundFont(audio, font) {
+  try {
+    const response = await fetch(font.url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    await audio.setSoundFont(new SoundFont(new Uint8Array(await response.arrayBuffer())));
+    showMessage('');
+  } catch {
+    await audio.setSoundFont(null);
+    showMessage(`${font.label} couldn't load, so the built-in voices are playing.`, 'warning');
+  }
+}
+
+function rememberShippedSoundFont(id) {
+  try {
+    if (id) window.localStorage.setItem(SOUNDFONT_PREFERENCE, id);
+    else window.localStorage.removeItem(SOUNDFONT_PREFERENCE);
+  } catch {
+    // The choice just won't last beyond this visit.
+  }
+}
+
 async function setUpSoundFont(audio) {
-  const chooseButton = document.getElementById('soundfont');
+  const select = document.getElementById('soundfont');
   const removeButton = document.getElementById('soundfont-remove');
   const getLink = document.getElementById('soundfont-get');
+  const fileButton = document.getElementById('soundfont-open');
   const fileInput = document.getElementById('soundfont-file');
-  const show = (name) => {
-    chooseButton.textContent = name ?? 'Soundfont';
-    chooseButton.title = name ? `Soundfont: ${name}` : 'Choose a soundfont';
-    removeButton.hidden = !name;
-    getLink.hidden = Boolean(name);
+  const ownOption = new Option('', 'own');
+  select.append(...SOUNDFONTS.map((font) => new Option(font.label, font.id)));
+  let own = null;
+
+  const setOwn = (file) => {
+    own = file;
+    ownOption.textContent = file?.name ?? '';
+    if (file) select.add(ownOption);
+    else ownOption.remove();
   };
-  const use = async (name, bytes) => {
-    await audio.setSoundFont(new SoundFont(bytes));
-    show(name);
+  const show = (value) => {
+    select.value = value;
+    const font = SOUNDFONTS.find((candidate) => candidate.id === value);
+    select.title = `Soundfont: ${font?.credit ?? own.name}`;
+    removeButton.hidden = !own || value !== 'own';
+    getLink.hidden = !removeButton.hidden;
+  };
+  const useShipped = async (font) => {
+    await useShippedSoundFont(audio, font);
+    show(font.id);
+  };
+  const useOwn = async () => {
+    await audio.setSoundFont(new SoundFont(own.bytes));
+    show('own');
+  };
+  // Measuring a soundfont's loudness takes a moment, and two at once would mix their levels.
+  const whileSwitching = async (work) => {
+    select.disabled = true;
+    try {
+      await work();
+    } finally {
+      select.disabled = false;
+      select.blur();
+    }
   };
 
-  chooseButton.addEventListener('click', () => fileInput.click());
+  select.addEventListener('change', () => {
+    const font = SOUNDFONTS.find((candidate) => candidate.id === select.value);
+    whileSwitching(async () => {
+      await (font ? useShipped(font) : useOwn());
+      rememberShippedSoundFont(font?.id);
+    });
+  });
+  // A button, because a browser may refuse a file picker opened from a menu held open for long.
+  fileButton.addEventListener('click', () => {
+    fileInput.click();
+    fileButton.blur();
+  });
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     fileInput.value = '';
     if (!file) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
-    try {
+    await whileSwitching(async () => {
       showMessage('Loading soundfont...');
-      await use(file.name, bytes);
-    } catch {
-      showMessage(`${file.name} isn't a usable SoundFont 2 file.`, 'error');
-      return;
-    }
-    showMessage('');
-    if (!(await storeSoundFont(file.name, bytes)))
-      showMessage("This soundfont will work until you leave, but this browser couldn't keep it.", 'warning');
+      try {
+        await audio.setSoundFont(new SoundFont(bytes));
+      } catch {
+        showMessage(`${file.name} isn't a usable SoundFont 2 file.`, 'error');
+        return;
+      }
+      setOwn({ name: file.name, bytes });
+      show('own');
+      rememberShippedSoundFont(null);
+      showMessage('');
+      if (!(await storeSoundFont(file.name, bytes)))
+        showMessage("This soundfont will work until you leave, but this browser couldn't keep it.", 'warning');
+    });
   });
-  removeButton.addEventListener('click', async () => {
-    await audio.setSoundFont(null);
-    show(null);
-    await deleteStoredSoundFont();
-  });
+  removeButton.addEventListener('click', () =>
+    whileSwitching(async () => {
+      await useShipped(SOUNDFONTS[0]);
+      setOwn(null);
+      rememberShippedSoundFont(null);
+      await deleteStoredSoundFont();
+    }),
+  );
 
   const devName = new URLSearchParams(location.search).get('soundfont');
   if (devName) {
     const response = await fetch(`/dev-soundfont/${encodeURIComponent(devName)}`);
     if (response.ok) {
-      await use(devName, new Uint8Array(await response.arrayBuffer()));
+      setOwn({ name: devName, bytes: new Uint8Array(await response.arrayBuffer()) });
+      await useOwn();
       return;
     }
   }
   const stored = devName ? null : await loadStoredSoundFont();
+  if (stored) setOwn(stored);
+  let remembered = null;
   try {
-    if (stored) {
-      await use(stored.name, stored.bytes);
-      return;
-    }
+    remembered = window.localStorage.getItem(SOUNDFONT_PREFERENCE);
   } catch {
-    await deleteStoredSoundFont();
+    // Nothing was kept, so the player's own file or the default plays.
   }
-  await audio.setSoundFont(null);
+  const shipped = SOUNDFONTS.find((font) => font.id === remembered);
+  if (stored && !shipped) {
+    try {
+      await useOwn();
+      return;
+    } catch {
+      setOwn(null);
+      await deleteStoredSoundFont();
+    }
+  }
+  await useShipped(shipped ?? SOUNDFONTS[0]);
 }
 
 // Captures the mouse while the player aims, if the setting is on. A browser only allows
@@ -330,7 +423,7 @@ function run(game, renderer) {
     const direction = DIRECTIONS[event.code];
     const confirming = event.key === 'Enter' || event.key === ' ';
     // A page control that has the focus keeps these keys, as Tab's users expect.
-    if ((direction || confirming) && event.target.closest?.('button, a, input, label')) return;
+    if ((direction || confirming) && event.target.closest?.('button, a, input, label, select')) return;
     const inMenu = game.mainMenu || game.popups.length || game.menus.length;
     if (direction) {
       game.holdDirection(direction, true);

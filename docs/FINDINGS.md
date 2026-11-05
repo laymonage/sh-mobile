@@ -288,10 +288,11 @@ The startup, every menu, language switching, saving from the pause menu, leaving
 
 ### Sound
 
-Silent Hill has 13 very short MIDI files, 1,915 bytes in total, and plays only one at a time, so a new sound cuts off the last. Browsers can't play MIDI, so the port renders it with Web Audio. It has two sound sources:
+Silent Hill has 13 very short MIDI files, 1,915 bytes in total, and plays only one at a time, so a new sound cuts off the last. Browsers can't play MIDI, so the port renders it with Web Audio. It has three kinds of sound source:
 
-- **A SoundFont 2 file the player chooses.** The file stays in their browser, and the repo includes none. `web/engine/soundfont.mjs` reads it, covering zones, tuning, loops, the volume envelope, the initial filter, pan and tremolo. It doesn't apply the modulation envelope, vibrato, chorus or reverb.
-- **Built-in voices.** These are rough stand-ins, used without a soundfont or for an instrument the soundfont lacks.
+- **The shipped soundfonts**, the "BV" and "BSD" versions of [Symbiote](https://musical-artifacts.com/artifacts/7181), in `web/soundfonts/`. BV is the default. Every note in `sh1-2007-a31`, `sh2-2015-base` and `sh2-2008-a7` has an instrument in both. BV's licensing rests on its creator's account, because its listing says CC BY 4.0 while the file says "Bona Vacantia - Beatnik shut down 2011", and some of its samples come from code that its creator says was never cleared for release. BSD uses only samples from the BSD-licensed MiniBAE repository, by its creator's account. See their `NOTICE.md`.
+- **A SoundFont 2 file the player chooses.** The file stays in their browser. `web/engine/soundfont.mjs` reads it, covering zones, tuning, loops, the volume envelope, the initial filter, pan and tremolo. It doesn't apply the modulation envelope, vibrato, chorus or reverb.
+- **Built-in voices.** These are rough stand-ins, used if a shipped soundfont can't load, or for an instrument a soundfont lacks.
 
 The Series 40 5th Edition FP1 soundfont was tested. Its metadata says "Copyright © Nokia Corporation. All rights reserved", while its listing is reported as CC-BY 4.0. The listing page refuses automated requests, so the license hasn't been confirmed.
 
