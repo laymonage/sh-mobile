@@ -72,7 +72,7 @@ Mobile 2 plays from a new game to its ending, on the same engine, with what diff
 In both:
 
 - The rooms are 310x270, and some are 290 wide and sit centered in the frame.
-- The touch build's icons for the weapon, first aid and inventory are the page's buttons and keys. Its navigation icon isn't there, because the mouse and the walking keys already reach every exit.
+- The touch build's icons for the weapon, first aid and inventory are on the page's buttons, in the JAR's own art. The keypad version doesn't have them, so its buttons only have words. The navigation icon and turn arrows aren't there, because the mouse and the walking keys already reach every exit.
 - The tutorial and Help are reworded for a mouse and keyboard, in all six languages. Fan translations keep their original text, so they still describe a phone.
 
 The touch build vibrates as the original does, with its setting, on phones whose browser allows that. Safari on iPhones doesn't. The first game does too.

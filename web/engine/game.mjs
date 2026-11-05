@@ -2909,6 +2909,11 @@ export class Game {
     return index === 6 && this.currentRoom.toLowerCase() === '0';
   }
 
+  // The JAR's art for the page's item buttons, by key. Only Mobile 2's touch build has any.
+  itemIcons() {
+    return null;
+  }
+
   // A line of text over the room, for as long as this returns it. Only Mobile 2 has one.
   roomMessage() {
     return null;

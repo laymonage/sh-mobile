@@ -140,6 +140,33 @@ function showPanelArt(game) {
   document.getElementById('panel').style.backgroundImage = `url(${url})`;
 }
 
+// Mobile 2's touch build has art for the item buttons, which the original draws over the room.
+function setUpItemIcons(game) {
+  if (!game.itemIcons()) return () => {};
+  const images = [];
+  for (const [key, names] of Object.entries(game.constructor.ITEM_ICONS)) {
+    const button = document.querySelector(`#item-keys [data-key="${key}"]`);
+    for (const name of names.toReversed()) {
+      const png = game.data.entries.get(`${game.dataDir}/gfx/transform0/${name}.png`);
+      if (!png) continue;
+      // One image for each, all loaded ahead of time, so a button doesn't blink when its icon changes.
+      const image = Object.assign(new Image(), {
+        className: 'item-icon',
+        alt: '',
+        hidden: true,
+        src: URL.createObjectURL(new Blob([png], { type: 'image/png' })),
+      });
+      button.prepend(image);
+      images.push({ image, key, name });
+    }
+  }
+  document.body.classList.toggle('item-icons', images.length > 0);
+  return () => {
+    const icons = game.itemIcons();
+    for (const { image, key, name } of images) image.hidden = icons[key] !== name;
+  };
+}
+
 function setUpSaving(game) {
   saveButton.addEventListener('click', () => game.canSave() && game.saveGame());
 
@@ -365,6 +392,7 @@ function setUpMouseLock(game) {
 }
 
 function run(game, renderer) {
+  const updateItemIcons = setUpItemIcons(game);
   const toRoom = (event) => {
     const box = canvas.getBoundingClientRect();
     return [
@@ -488,6 +516,7 @@ function run(game, renderer) {
     }
     saveButton.disabled = !game.canSave();
     loadButton.disabled = !game.hasSave();
+    updateItemIcons();
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

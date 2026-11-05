@@ -657,6 +657,50 @@ function fightGame(roll = () => 0.99) {
 
 const shootable = (game) => game.objects.find(({ visible, script }) => visible && script?.hasEvent(EVENT.ATTACK1));
 
+test('the touch build’s item icons follow the gun and go grey as the original’s do', () => {
+  const game = fightGame();
+  assert.deepEqual(game.itemIcons()[1], 'iconEquipWeapon');
+  game.setRaw('sys_battleState', '1', 'I');
+  assert.deepEqual(game.itemIcons(), { 1: 'iconBattle1', 3: 'iconUseMedicine', inventory: 'iconInv' });
+  game.setRaw('sys_battleState', '0', 'I');
+
+  game.menus.push({ id: MENU.PAUSE });
+  assert.deepEqual(game.itemIcons(), {
+    1: 'iconEquipWeaponGrey',
+    3: 'iconUseMedicineGrey',
+    inventory: 'iconInvGrey',
+  });
+  game.menus[0] = { id: MENU.INVENTORY };
+  assert.equal(game.itemIcons().inventory, 'iconInv');
+  assert.equal(game.itemIcons()[3], 'iconUseMedicineGrey');
+  game.menus = [];
+
+  game.currentRoomId = 'puzzleDrawing';
+  assert.deepEqual(game.itemIcons(), {
+    1: 'iconEquipWeaponGrey',
+    3: 'iconUseMedicineGrey',
+    inventory: 'iconInvGrey',
+  });
+});
+
+test('in the touch build the inventory button also closes the inventory', () => {
+  const game = fightGame();
+  game.setRaw('sys_battleState', '0', 'I');
+  game.pressKey('inventory');
+  game.advance();
+  assert.equal(game.menus.at(-1)?.id, MENU.INVENTORY);
+  game.pressKey('inventory');
+  game.advance();
+  assert.equal(game.menus.length, 0);
+});
+
+test('every item icon is in the touch build, and other builds keep their words', () => {
+  for (const name of Object.values(Mobile2Game.ITEM_ICONS).flat())
+    assert.ok(data.entries.has(`a/gfx/transform0/${name}.png`), name);
+  assert.equal(newGame({ build: keypadData }).itemIcons(), null);
+  assert.equal(new Game(firstGameData, { language: 'en' }).itemIcons(), null);
+});
+
 test('the gun comes out with its key, and aims at a vulnerable zone', () => {
   const game = fightGame();
   assert.equal(game.getRaw('sys_battleState'), null);

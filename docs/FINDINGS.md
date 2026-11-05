@@ -367,7 +367,7 @@ The setting only appears on a touch screen whose browser has that call. Android 
 
 ### What the port leaves out
 
-- The touch build's icons along the top of the screen and its arrows for turning. The page's buttons and keys do the same, except for the navigation icon, which has no use with a mouse.
+- The touch build's navigation and pointer icons and its arrows for turning, which have no use with a mouse. Its other icons are on the page's buttons rather than over the room, where they'd cover art and clash with hotspots. As in `h.s`, the weapon icon becomes `iconBattle1` while the gun is out, and they go grey while a menu is open, except that an open inventory keeps its icon lit, because pressing it closes the inventory. `h.s` hides them in rooms whose names contain `control`, `start`, `light`, `dark` or `puzzle`, and the page's buttons stay there, so they go grey instead. The art comes from the player's JAR. The keypad version has none, so its buttons have only words.
 - The Mouse recoil setting is shared with the first game and hasn't been tried in Mobile 2.
 
 ### Help and the tutorial

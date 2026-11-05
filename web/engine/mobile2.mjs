@@ -91,6 +91,7 @@ const ENEMY_ATTACK_TICKS = 20;
 const ENEMY_RECOVER_TICKS = 60;
 const ENEMY_MOVE_TICKS = 12;
 const ENEMY_MOVE_MARGIN = 105;
+const ROOMS_WITHOUT_ICONS = ['control', 'start', 'light', 'dark', 'puzzle'];
 const ZONE_TICKS = 20;
 const RECOIL_VERTICAL = 15;
 const RECOIL_HORIZONTAL = 3;
@@ -145,6 +146,11 @@ export class Mobile2Game extends Game {
   static FLOOR_ROWS = ['floor2', 'floor1', 'basement'];
   static MENU_MUSIC = 'sh_bgtheme';
   static FRAME_VIBRATION = false;
+  static ITEM_ICONS = {
+    1: ['iconEquipWeapon', 'iconEquipWeaponGrey', 'iconBattle1', 'iconBattle1Grey'],
+    3: ['iconUseMedicine', 'iconUseMedicineGrey'],
+    inventory: ['iconInv', 'iconInvGrey'],
+  };
   static WHEEL_ARMS = { [VERB.LOOK]: [1, -16], [VERB.HAND]: [20, 12], [VERB.INVENTORY]: [-17, 12] };
   static WHEEL_SYMBOLS_X = 2;
   // e.b centers the splash art, and draws the logo over it.
@@ -462,6 +468,29 @@ export class Mobile2Game extends Game {
       default:
         return ['cursorPoint'];
     }
+  }
+
+  // In e.a's touch handling, the inventory icon also closes the inventory.
+  handleInventoryInput(menu, clicked, keys) {
+    if (this.isTouchBuild && keys.includes('inventory')) this.handleEscape(menu);
+    else super.handleInventoryInput(menu, clicked, keys);
+  }
+
+  // h.s draws these over the room, and hides them in some rooms. The page puts them on its
+  // buttons, which stay, so they go grey there instead. An open inventory keeps its icon lit,
+  // because that icon closes it.
+  itemIcons() {
+    if (!this.isTouchBuild) return null;
+    const room = this.currentRoomId ?? '';
+    const absent = !this.objects || ROOMS_WITHOUT_ICONS.some((word) => room.includes(word));
+    const menu = this.menus.at(-1);
+    const blocked = absent || Boolean(menu) || this.popups.length > 0;
+    const named = (icon, grey) => (grey ? `${icon}Grey` : icon);
+    return {
+      1: named(toInt(this.getRaw('sys_battleState')) > 0 ? 'iconBattle1' : 'iconEquipWeapon', blocked),
+      3: named('iconUseMedicine', blocked),
+      inventory: named('iconInv', absent || (blocked && menu?.id !== MENU.INVENTORY)),
+    };
   }
 
   roomMessage() {

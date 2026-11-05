@@ -211,8 +211,30 @@ body.strip-panel #panel {
   min-width: 0;
 }
 /* These labels never change, so they can take the space they need. */
+#item-keys {
+  container: item-keys / inline-size;
+}
 #item-keys > * {
   flex-basis: auto;
+}
+/* As large as the largest icon, whose art stays at its own size, so nothing moves when one changes. */
+.item-icon {
+  width: 26px;
+  height: 24px;
+  margin-right: 2px;
+  object-fit: none;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+/* With no room for icon, word and key together, the word stays only for screen readers. */
+@container item-keys (max-width: 340px) {
+  body.item-icons .item-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 /* Wide enough for "Sound: off" in any font, so that the row doesn't move when it changes. */
 #panel #sound {
