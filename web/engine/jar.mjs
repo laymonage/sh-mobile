@@ -76,7 +76,7 @@ function inspectMobile3(files) {
       status: 'rejected',
       reason: 'mobile3-other-build',
       message:
-        "The port doesn't follow this build of Silent Hill Mobile 3 yet. It follows the v1.7.0 and v1.0.20 families.",
+        "The port doesn't follow this build of Silent Hill: Mobile 3 yet. It follows the v1.7.0 and v1.0.20 families.",
     };
   }
   return { status: 'ok', reason: 'ok', family: 'mobile3', data, message: '' };
@@ -111,7 +111,7 @@ export async function inspectJar(bytes) {
   }
   const fullWidth = FULL_ART_WIDTHS[data.dataDir];
   if (!fullWidth) {
-    return { status: 'rejected', reason: 'other-game', message: "This isn't a Silent Hill game the port knows." };
+    return { status: 'rejected', reason: 'other-game', message: "This isn't a Silent Hill: Mobile game the port knows." };
   }
 
   const art = [...data.entries].filter(([name]) => name.endsWith('.png')).map(([, value]) => pngInfo(value));

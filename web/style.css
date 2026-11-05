@@ -72,7 +72,7 @@ button:disabled:hover {
 #drop {
   width: min(480px, 100%);
   padding: 32px 24px;
-  text-align: center;
+  text-align: left;
   background: var(--surface);
   border: 2px dashed var(--border);
   border-radius: 8px;
@@ -82,7 +82,7 @@ button:disabled:hover {
 }
 h1 {
   margin: 0 0 8px;
-  font-size: 1.25rem;
+  font-size: 1.75rem;
   font-weight: 600;
 }
 #drop p {
@@ -113,23 +113,31 @@ h1 {
 #archive-sources {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
 }
 #drop #archive-intro {
   margin-top: 16px;
 }
+/* A list, one game under another, as wide as the box's text. */
 #archive-sources {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
+#archive-sources button {
+  text-align: left;
+}
 #message {
+  width: min(480px, 100%);
   margin: 0;
-  max-width: 480px;
-  text-align: center;
+  text-align: left;
 }
 /* During play, a message floats over the page instead of pushing the game down. */
 body.playing #message {
