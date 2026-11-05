@@ -111,7 +111,11 @@ export async function inspectJar(bytes) {
   }
   const fullWidth = FULL_ART_WIDTHS[data.dataDir];
   if (!fullWidth) {
-    return { status: 'rejected', reason: 'other-game', message: "This isn't a Silent Hill: Mobile game the port knows." };
+    return {
+      status: 'rejected',
+      reason: 'other-game',
+      message: "This isn't a Silent Hill: Mobile game the port knows.",
+    };
   }
 
   const art = [...data.entries].filter(([name]) => name.endsWith('.png')).map(([, value]) => pngInfo(value));
