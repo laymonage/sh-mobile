@@ -15,13 +15,11 @@ All three games can be played in the browser from a new game to the ending, and 
 
 ## What's here
 
-- **The port**, in `web/`. It loads the original game data from a JAR you provide and plays it in the browser, on reimplemented engines: one for the first two games, as ScummVM does for adventure games, and one for Mobile 3. It adds mouse and keyboard controls, saving to the browser, and MIDI music through a SoundFont.
-- **The analysis**, in `src/` and `scripts/`. It compares about 300 builds of the three games, decodes their scripts, rooms and art without running any Java, and recommends which builds a port should follow.
-- **Tests**, in `test/`, which pin each number in the findings and play routes through all three games.
+- The port lives in `web/`. You give it a JAR from one of the original games, and it plays that game's own data in your browser. Underneath are two engines rewritten from scratch, the way ScummVM does it for old adventure games: one for the first two games and one for Mobile 3. On top of that it adds mouse and keyboard controls, saves in the browser, and plays the MIDI music through a SoundFont.
+- The analysis is in `src/` and `scripts/`. It compares about 300 builds of the three games, reads their scripts, rooms and art without running any Java, and works out which builds are the best ones to port.
+- The tests are in `test/`. They check every number in the findings, and play all three games through to the end.
 
-## No game files
-
-This repo contains no game files. The JARs, decompiled code and rendered art are copyrighted, so you supply your own copy and the port reads it in your browser without uploading it. The page can also fetch the copies on the Internet Archive for you.
+There are no game files in this repo. The JARs, the decompiled code and the rendered art all belong to their owners, so you bring your own copy. The port reads it right in your browser and never uploads it. If you don't have one, the page can fetch the copies on the Internet Archive for you.
 
 ## Playing
 
