@@ -56,5 +56,5 @@ createServer((request, response) => {
     response.writeHead(404).end('Unknown build');
   }
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`http://localhost:${PORT}/?jar=sh1-2007-a31`);
+  console.log(`http://localhost:${PORT}/`);
 });
