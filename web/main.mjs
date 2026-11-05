@@ -112,6 +112,7 @@ async function start(bytes) {
   layOutPage(game);
   await renderer.loadImages(inspection.data);
   showPanelArt(game);
+  labelItemButtons(game);
   document.body.classList.add('playing');
   setUpSaving(game);
   setUpSound(audio);
@@ -141,6 +142,13 @@ function showPanelArt(game) {
   if (!art) return;
   const url = URL.createObjectURL(new Blob([art], { type: 'image/png' }));
   document.getElementById('panel').style.backgroundImage = `url(${url})`;
+}
+
+// The page's buttons say what the first two games' keys do, unless a game words them its own way.
+function labelItemButtons(game) {
+  for (const [key, label] of Object.entries(game.constructor.ITEM_LABELS ?? {})) {
+    document.querySelector(`#item-keys [data-key="${key}"] .item-label`).textContent = label;
+  }
 }
 
 // Mobile 2's touch build has art for the item buttons, which the original draws over the room.

@@ -377,6 +377,19 @@ test('the forward key takes the stairs or lift ahead, but not a door', () => {
   assert.deepEqual([game.mode, game.cell], [MODE.CORRIDOR, 30], 'a room door still needs a click');
 });
 
+test('1 changes to the next weapon carried, melee included, so its button says Weapon', () => {
+  assert.equal(Mobile3Game.ITEM_LABELS[1], 'Weapon');
+  const game = newGame();
+  game.items = game.items.filter((item) => ![118, 111, 120].includes(item));
+  game.addItem(118);
+  game.addItem(120);
+  game.weapon = 0;
+  game.pressKey('1');
+  assert.equal(game.weapon, 2, 'the shotgun, skipping the pistol that is not carried');
+  game.pressKey('1');
+  assert.equal(game.weapon, 0, 'and back to melee');
+});
+
 test('the map shows each floor, once the player has it', () => {
   const game = newGame();
   game.mode = 1;

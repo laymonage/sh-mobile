@@ -176,6 +176,9 @@ export class Mobile3Game {
   static PANEL_ART = null;
   static PANEL_ART_IS_STRIP = true;
   static ITEM_ICONS = {};
+  // The 1 key changes weapons here, since fights aim by themselves and there's no gun to draw.
+  // Melee counts, so the page's Gun button says Weapon instead.
+  static ITEM_LABELS = { 1: 'Weapon' };
   // The page sends this key as the left button under the screen, as Esc and a right click are
   // the right one. Puzzles need it to confirm.
   static LEFT_SOFT_KEY = 'c';
