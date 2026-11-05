@@ -242,7 +242,6 @@ function rememberShippedSoundFont(id) {
 async function setUpSoundFont(audio) {
   const select = document.getElementById('soundfont');
   const removeButton = document.getElementById('soundfont-remove');
-  const getLink = document.getElementById('soundfont-get');
   const fileButton = document.getElementById('soundfont-open');
   const fileInput = document.getElementById('soundfont-file');
   const ownOption = new Option('', 'own');
@@ -260,7 +259,6 @@ async function setUpSoundFont(audio) {
     const font = SOUNDFONTS.find((candidate) => candidate.id === value);
     select.title = `Soundfont: ${font?.credit ?? own.name}`;
     removeButton.hidden = !own || value !== 'own';
-    getLink.hidden = !removeButton.hidden;
   };
   const useShipped = async (font) => {
     await useShippedSoundFont(audio, font);

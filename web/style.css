@@ -39,7 +39,7 @@ body {
   align-items: center;
   justify-content: safe center;
   gap: 12px;
-  background: var(--background);
+  background: radial-gradient(ellipse 90% 60% at 50% 0%, rgba(150, 150, 140, 0.16), transparent 70%), var(--background);
   color: var(--text);
   font:
     16px / 1.5 system-ui,
@@ -69,39 +69,130 @@ button:disabled {
 button:disabled:hover {
   border-color: var(--border);
 }
-#drop {
-  width: min(480px, 100%);
-  padding: 32px 24px;
-  text-align: left;
-  background: var(--surface);
-  border: 2px dashed var(--border);
-  border-radius: 8px;
-}
-#drop.dragging {
-  border-color: var(--accent);
+/* The start page: a title over the dark, and a notepad page like the games' own menus,
+   drawn in CSS because the games' art only arrives with a JAR. */
+#title {
+  width: min(440px, 100%);
+  text-align: center;
 }
 h1 {
-  margin: 0 0 8px;
-  font-size: 1.75rem;
-  font-weight: 600;
+  margin: 0;
+  color: #f2f0eb;
+  font:
+    400 clamp(2.25rem, 11vw, 3.25rem) / 1 "Times New Roman",
+    Times,
+    serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 1px #fff,
+    0 0 18px rgba(255, 255, 255, 0.28),
+    0 2px 0 #000;
+}
+h1 span {
+  display: block;
+  margin-top: 6px;
+  /* Brighter than the blood red elsewhere, to read at 4.5:1 on the dark. */
+  color: #ec7468;
+  font-size: 0.36em;
+  letter-spacing: 0.6em;
+  /* The letter spacing also follows the last letter, so this keeps the word centered. */
+  margin-right: -0.6em;
+  text-shadow: 0 0 10px rgba(163, 35, 27, 0.8);
+}
+#drop {
+  --ink: #241d13;
+  /* At least 4.5:1 against the paper, even where its edges darken. */
+  --ink-muted: #54462d;
+  --rings: 28px;
+  position: relative;
+  width: min(440px, calc(100% - 12px));
+  margin: 16px 0 16px 12px;
+  padding: 22px 22px 18px calc(var(--rings) + 6px);
+  color: var(--ink);
+  text-align: left;
+  background: radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(120, 88, 38, 0.22)), var(--paper);
+  border: 1px solid #5e4d31;
+  border-radius: 3px 6px 6px 3px;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 250, 225, 0.5),
+    inset 0 0 0 4px rgba(140, 110, 62, 0.35),
+    0 10px 36px rgba(0, 0, 0, 0.85);
+  transition: box-shadow 120ms;
+}
+/* The spiral: a punched hole for each ring, and a wire loop around the paper's edge. */
+#drop::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: -12px;
+  width: calc(var(--rings) + 8px);
+  background:
+    radial-gradient(circle at 27px 50%, #1b150d 0 3.5px, rgba(60, 45, 25, 0.45) 4px, transparent 5px) 0 0 / 100% 24px
+    repeat-y,
+    radial-gradient(16px 6.5px at 15px 50%, transparent 58%, #8a8a86 63%, #2a2a2a 78%, #0d0d0d 86%, transparent 93%) 0 0
+    / 100% 24px repeat-y;
+  pointer-events: none;
+}
+#drop.dragging {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 250, 225, 0.5),
+    inset 0 0 0 4px var(--blood),
+    0 0 28px rgba(163, 35, 27, 0.55),
+    0 10px 36px rgba(0, 0, 0, 0.85);
+}
+#drop h2 {
+  margin: 0 0 6px;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 #drop p {
-  margin: 0 0 16px;
-  color: var(--muted);
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
 }
+/* Like the games' own delimiter between a menu's parts. */
+#drop hr {
+  height: 2px;
+  margin: 18px 0;
+  background: linear-gradient(to right, transparent, #8c7650 12%, #8c7650 88%, transparent);
+  border: 0;
+  box-shadow: 0 1px rgba(255, 250, 225, 0.6);
+}
+/* Menu rows, picked out with the grey bar the games use for the chosen row. */
+#archive-sources button,
 #choose {
-  display: inline-block;
-  padding: 10px 18px;
-  min-height: 44px;
-  color: #111;
-  background: var(--accent);
-  border-radius: 6px;
-  font-weight: 600;
+  display: block;
+  width: calc(100% + 20px);
+  margin: 0 -10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: 1.0625rem;
+  font-weight: 400;
   cursor: pointer;
 }
+#archive-sources button:hover:not(:disabled),
+#archive-sources button:focus-visible,
+#choose:hover,
 #choose:focus-within {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
+  color: #fff;
+  background: #66625b;
+  outline: none;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+#archive-sources button:disabled {
+  color: var(--ink-muted);
+}
+#choose::after {
+  content: " …";
 }
 #file {
   position: absolute;
@@ -109,33 +200,26 @@ h1 {
   width: 1px;
   height: 1px;
 }
-#sources,
 #archive-sources {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 8px;
-}
-#drop #archive-intro {
-  margin-top: 16px;
-}
-/* A list, one game under another, as wide as the box's text. */
-#archive-sources {
   flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: stretch;
   width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
-#archive-sources button {
-  text-align: left;
+#credits {
+  width: min(440px, 100%);
+  color: #96928b;
+  font-size: 0.75rem;
+  text-align: center;
+}
+#credits p {
+  margin: 0;
 }
 #message {
-  width: min(480px, 100%);
+  width: min(440px, 100%);
   margin: 0;
   text-align: left;
 }
@@ -248,15 +332,45 @@ body.strip-panel #panel {
 #panel #sound {
   flex: 0 0 calc(8.5ch + 14px);
 }
+/* Every part of this row has a width of its own rather than one from its contents, which
+   some browsers didn't update when the remove button came and went. The volume stays the
+   same width, and the soundfont menu takes what's left. */
 #soundfont-control {
-  flex: 0 0 auto;
+  flex: 1 1 250px;
+  /* Room for its name and "Symbiote BSD". */
+  min-width: 224px;
   display: flex;
   gap: 2px;
 }
-/* Wide enough for "Symbiote BSD", with the volume slider taking what's left. */
-#panel #soundfont {
-  flex: 0 0 108px;
+/* The menu's name is written on its plate, as the volume's is, and lets clicks through
+   to the menu, so that the whole plate opens it. */
+#soundfont-menu {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
   min-width: 0;
+}
+#soundfont-menu span {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  text-shadow: 0 1px 1px #000;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+#soundfont-menu:has(select:disabled) span {
+  color: var(--plate-dim);
+  text-shadow: none;
+}
+#panel #soundfont {
+  flex: 1 1 0;
+  min-width: 0;
+  /* Past the menu's name, measured in the same font. */
+  padding-left: calc(7px + 5.8em);
   padding-right: 16px;
   overflow: hidden;
   white-space: nowrap;
@@ -273,19 +387,8 @@ body.strip-panel #panel {
   background: var(--plate-bottom);
   text-shadow: none;
 }
-#soundfont-get {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-#soundfont-get[hidden] {
-  display: none;
-}
-/* The last two take turns in one slot, so the menu keeps its width. */
 #panel #soundfont-open,
-#panel #soundfont-remove,
-#panel #soundfont-get {
+#panel #soundfont-remove {
   flex: 0 0 max(34px, var(--plate-height));
   padding: 0;
 }
@@ -302,7 +405,6 @@ body.strip-panel #panel {
 }
 /* Bolted steel plates, one rivet in each corner, with text in the notepad's color. */
 #panel button,
-#panel a,
 #panel select,
 #volume-control {
   min-height: 0;
@@ -337,7 +439,6 @@ body.strip-panel #panel {
     600 0.6875rem ui-monospace,
     monospace;
 }
-#panel a:hover,
 #panel select:hover:not(:disabled),
 #panel button:hover:not(:disabled) {
   color: #fff;
@@ -352,7 +453,6 @@ body.strip-panel #panel {
   box-shadow: inset 0 2px 4px #000;
   transform: translateY(1px);
 }
-#panel a:focus-visible,
 #panel select:focus-visible,
 #panel button:focus-visible,
 #volume:focus-visible {
@@ -369,7 +469,7 @@ body.strip-panel #panel {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-grow: 1.2;
+  flex: 0 1 160px;
 }
 #volume {
   flex: 1;
@@ -428,7 +528,10 @@ body.strip-panel #panel {
   #controls {
     grid-area: 2 / 1 / 3 / -1;
   }
-  /* The soundfont menu and its buttons get a row of their own too, leaving room to slide the volume. */
+}
+/* Too narrow for the volume and the soundfont menu side by side, so the menu and its buttons
+   get a row of their own, leaving room to slide the volume. */
+@container panel (max-width: 680px) {
   .plate-row:has(#soundfont-control) {
     flex-wrap: wrap;
     grid-row: span 2;
@@ -436,11 +539,16 @@ body.strip-panel #panel {
   #soundfont-control {
     flex: 1 0 100%;
   }
+  #volume-control {
+    flex: 1 1 0;
+  }
   #panel #soundfont {
     flex: 1 1 0;
   }
 }
-body.playing #drop {
+body.playing #title,
+body.playing #drop,
+body.playing #credits {
   display: none;
 }
 body.playing #game {

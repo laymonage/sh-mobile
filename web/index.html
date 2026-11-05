@@ -8,20 +8,29 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header id="title">
+    <h1>Silent Hill <span>Mobile</span></h1>
+  </header>
   <div id="drop">
-    <h1>Silent Hill: Mobile</h1>
-    <p>Drop your own Silent Hill: Mobile J2ME JAR here. It's read in this browser and isn't uploaded anywhere.</p>
-    <div id="sources">
-      <label id="choose">Choose a JAR<input id="file" type="file" accept=".jar"></label>
-    </div>
-    <p id="archive-intro">Alternatively, load the game files from the Internet Archive by selecting a game below:</p>
-    <fieldset id="archive-sources" aria-labelledby="archive-intro">
+    <h2 id="archive-intro">Choose a game</h2>
+    <fieldset id="archive-sources" aria-labelledby="archive-intro" aria-describedby="archive-note">
       <button type="button" data-archive="sh1">Silent Hill: Mobile</button>
       <button type="button" data-archive="sh2">Silent Hill: Mobile 2</button>
       <button type="button" data-archive="sh3">Silent Hill: Mobile 3</button>
     </fieldset>
+    <p class="note" id="archive-note">Downloaded once from the Internet Archive, then kept in this browser.</p>
+    <hr>
+    <h2>Or use your own JAR</h2>
+    <div id="sources">
+      <label id="choose">Choose a JAR<input id="file" type="file" accept=".jar"></label>
+    </div>
+    <p class="note">Or drop it on this notepad. It's read in this browser and isn't uploaded anywhere.</p>
   </div>
   <p id="message" role="status"></p>
+  <footer id="credits">
+    <p>An unofficial fan port, contains no game files.</p>
+    <p>Silent Hill is a trademark of Konami.</p>
+  </footer>
   <canvas id="game" width="768" height="768" aria-label="Game screen"></canvas>
   <div id="panel">
     <div id="actions">
@@ -40,10 +49,12 @@
           <button type="button" id="sound" aria-pressed="true">Sound: on</button>
           <label id="volume-control">Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
           <div id="soundfont-control">
-            <select id="soundfont" aria-label="Soundfont"></select>
+            <div id="soundfont-menu">
+              <span aria-hidden="true">Soundfont</span>
+              <select id="soundfont" aria-label="Soundfont"></select>
+            </div>
             <button type="button" id="soundfont-open" aria-label="Choose a soundfont file" title="Choose a soundfont file">File</button>
             <button type="button" id="soundfont-remove" aria-label="Remove soundfont" title="Remove soundfont" hidden>×</button>
-            <a id="soundfont-get" href="https://www.musical-artifacts.com/artifacts/693" target="_blank" rel="noopener noreferrer" aria-label="Get the Nokia Series 40 soundfont from Musical Artifacts" title="Get the Nokia Series 40 soundfont from Musical Artifacts">Get</a>
           </div>
           <input id="soundfont-file" type="file" accept=".sf2" hidden>
         </div>
