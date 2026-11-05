@@ -22,6 +22,12 @@ export const ARCHIVE_JARS = {
     integrity: 'sha256-pIeFM8jy8L2iDmLM/heRKVNwYj++OFfK/4Sb7saqXxw=',
     storageKey: 'archive-sh2',
   },
+  // Mobile 3's keypad version, sh3-2010-v1.0.20-a, unlike the demos elsewhere on the Archive.
+  sh3: {
+    url: 'https://archive.org/download/j2me-game-connect2media-silenthillmobile3/connect2media-silenthillmobile3.zip/app.jar',
+    integrity: 'sha256-Hie/V7Tt50Ihx5hTgTU9vWc1wwpW1Nj5W1QWgibW8sg=',
+    storageKey: 'archive-sh3',
+  },
 };
 
 // The width of a full-resolution build's art, by the folder its data is in.
@@ -57,7 +63,7 @@ export function loadGameData(files) {
   return { dataDir, entries, files };
 }
 
-// Mobile 3 is only partly ported, and only for the family of builds it follows so far.
+// Mobile 3 has builds the port doesn't follow, whose numbers its code can't read.
 function inspectMobile3(files) {
   let data = null;
   try {
@@ -69,16 +75,11 @@ function inspectMobile3(files) {
     return {
       status: 'rejected',
       reason: 'mobile3-other-build',
-      message: "The port doesn't follow this build of Silent Hill Mobile 3 yet. It follows v1.7.0 and its twins.",
+      message:
+        "The port doesn't follow this build of Silent Hill Mobile 3 yet. It follows the v1.7.0 and v1.0.20 families.",
     };
   }
-  return {
-    status: 'warning',
-    reason: 'mobile3-partial',
-    family: 'mobile3',
-    data,
-    message: 'Silent Hill Mobile 3 is only partly ported: you can walk around and look at things.',
-  };
+  return { status: 'ok', reason: 'ok', family: 'mobile3', data, message: '' };
 }
 
 // What the port can do with a JAR, judged only from its data.

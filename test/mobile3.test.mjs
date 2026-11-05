@@ -4,17 +4,38 @@ import { buildsOf, readInput, recommended } from '../src/inputs.mjs';
 import { inspectJar, readJar } from '../web/engine/jar.mjs';
 import { readStaticTables } from '../web/engine/mobile3/class-tables.mjs';
 import { animationSize, loadMobile3, parseLanguage } from '../web/engine/mobile3/data.mjs';
-import { createGame, FACING, LIFT_CELLS, LIFTS, STAIRS, STEP, VERB, VERB_WHEEL } from '../web/engine/mobile3/game.mjs';
+import {
+  createGame,
+  FACING,
+  LIFT_CELLS,
+  LIFTS,
+  MODE,
+  SCREEN_X,
+  STAIRS,
+  STEP,
+  VERB,
+} from '../web/engine/mobile3/game.mjs';
+import { BUILD_RESOURCES } from '../web/engine/mobile3/resources.mjs';
 import { actionsOf, conditionsHold, TRIGGER } from '../web/engine/mobile3/rules.mjs';
 
 const files = await readJar(readInput(recommended.sh3.gameData));
 const data = loadMobile3(files);
-const newGame = () => {
-  const game = createGame(data);
-  game.textQueue.length = 0;
+const keypadFiles = await readJar(readInput('sh3-2010-v1.0.20-a'));
+const keypadData = loadMobile3(keypadFiles);
+const clear = (game) => {
+  while (game.box) game.pressKey('Escape');
+};
+const newGame = (options = {}, build = data) => {
+  const game = createGame(build, { startInGame: true, ...options });
+  clear(game);
   return game;
 };
+const memoryStorage = () => {
+  const values = new Map();
+  return { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+};
 const EXPECTED_UNUSED = [35];
+const EXPECTED_FOLLOWED = 41;
 const settle = (game) => {
   while (game.fade) game.tick();
 };
@@ -51,11 +72,58 @@ test('reads all six languages, with every line each game uses', () => {
   for (const language of data.languages) assert.equal(data.text(language).length, 620);
   assert.equal(data.text(data.languages[0])[69], 'The door is locked.');
   assert.equal(parseLanguage(files.get('TRAD_english.loc')).length, 620);
+  for (const language of keypadData.languages) assert.equal(keypadData.text(language).length, 618);
 });
 
-test('offers its sound under the names the sound player looks up', () => {
+test('offers its sound under the names the sound player looks up, wherever a build keeps it', () => {
   assert.equal(data.entries.size, 10);
   assert.ok(data.entries.has('sh3/sfx/mid/music.mid'));
+  assert.equal(keypadData.entries.size, 10);
+  for (const [name, bytes] of data.entries) assert.deepEqual(keypadData.entries.get(name), bytes, name);
+});
+
+test('every number written into the code is the right kind of resource, in both kinds of build', () => {
+  for (const build of [data, keypadData]) {
+    const { hardCoded } = build;
+    const sprites = [
+      ...Object.values(hardCoded.walls).flatMap((world) =>
+        Object.values(world).flatMap(({ sheet, left, right }) => [
+          { sheet, animation: left },
+          { sheet, animation: right },
+        ]),
+      ),
+      ...Object.values(hardCoded.hud).filter((value) => typeof value === 'object'),
+      hardCoded.fade,
+      hardCoded.bloodOverlay,
+      hardCoded.inventory,
+    ];
+    for (const { sheet, animation } of sprites) {
+      assert.equal(build.resource(build.sheet(sheet).image)[0], 0x89, `sheet ${sheet}`);
+      for (const { parts } of build.animation(animation).frames) {
+        for (const part of parts) assert.ok(build.sheet(sheet).modules[part.module], `animation ${animation}`);
+      }
+    }
+  }
+  assert.equal(data.kind, 'touch');
+  assert.equal(keypadData.kind, 'keypad');
+  assert.notEqual(BUILD_RESOURCES.touch.mapSheet, BUILD_RESOURCES.keypad.mapSheet);
+});
+
+test('the fonts have the letters the text uses', () => {
+  for (const build of [data, keypadData]) {
+    assert.equal(build.fonts.length, 4);
+    const missing = new Set();
+    for (const language of build.languages) {
+      for (const line of build.text(language)) {
+        for (const character of line) {
+          if (character > ' ' && character !== '|' && !build.fonts[2].glyphs.has(character.charCodeAt(0))) {
+            missing.add(character);
+          }
+        }
+      }
+    }
+    assert.ok(missing.size < 20, `only a few rare characters are missing: ${[...missing].join('')}`);
+  }
 });
 
 test('every rule uses exactly the arguments its counts say', () => {
@@ -131,53 +199,46 @@ test('every corridor cell and direction can be drawn on every floor', () => {
 });
 
 test('a new game opens in the first room with Gary and Vincent talking', () => {
-  const game = createGame(data);
+  const game = createGame(data, { startInGame: true });
   assert.equal(game.room, 0);
   assert.equal(game.chapter, 1);
-  assert.equal(game.currentText.speaker, 'Gary');
-  assert.equal(game.currentText.text, "C'mon Chicken-hearted! Show me that you're a man.");
-  const lines = [];
-  while (game.currentText) {
-    lines.push(game.currentText.speaker);
-    game.click();
-  }
-  assert.equal(lines.length, 3);
+  assert.equal(game.box.speaker, 'Gary');
+  assert.equal(game.box.text, "C'mon Chicken-hearted! Show me that you're a man.");
+  assert.ok(game.hasItem(118), 'Vincent starts with his metal stick');
+  game.pressKey('Escape');
+  assert.equal(game.box.kind, 'dialogue', 'the next dialogue follows from the first');
 });
 
-test('looking at the curtains describes them, through the verb wheel', () => {
-  const game = newGame();
-  game.moveCursor(220, 180);
-  game.click();
-  assert.deepEqual([game.verbs.hotspot.kind, game.verbs.hotspot.id], ['object', 14]);
-  const size = animationSize(
-    data.sheet(data.tables.cursorSprites[1][0]),
-    data.animation(data.tables.cursorSprites[1][1]),
-  );
-  assert.equal(game.verbs.x, Math.round(220 - size.width / 2));
-  const arm = VERB_WHEEL.arms.find(({ verb }) => verb === VERB.LOOK);
-  game.moveCursor(game.verbs.x + arm.dx + 1, game.verbs.y + arm.dy + 1);
-  game.click();
-  assert.equal(game.verbs, null);
-  assert.equal(game.currentText.text, 'The curtains are closed... we cannot see the light of the sun.');
-});
+for (const build of [data, keypadData]) {
+  test(`looking at the curtains describes them, through the verb wheel, on the ${build.kind} art`, () => {
+    const game = newGame({}, build);
+    game.moveCursor(220, 180);
+    game.click();
+    assert.deepEqual([game.verbs.hotspot.kind, game.verbs.hotspot.id], ['object', 14]);
+    const size = animationSize(
+      build.sheet(build.tables.cursorSprites[1][0]),
+      build.animation(build.tables.cursorSprites[1][1]),
+    );
+    assert.equal(game.verbs.x, Math.round(220 - size.width / 2));
+    const arm = game.verbArms().find(({ verb }) => verb === VERB.LOOK);
+    game.moveCursor(game.verbs.x + arm.dx + 1, game.verbs.y + arm.dy + 1);
+    game.click();
+    assert.equal(game.verbs, null);
+    assert.equal(game.currentText.text, 'The curtains are closed... we cannot see the light of the sun.');
+  });
+}
 
 test('using something that can be carried picks it up, and it leaves the room', () => {
   const game = newGame();
-  const { roomObjects, objectStates } = data.tables;
-  const room = roomObjects.findIndex((objects, index) =>
-    objects.some(([id, , , x0, , , , chapter, world]) => {
-      game.room = index;
-      return x0 !== -1 && objectStates[id][2] === 0 && chapter !== 2 && chapter !== 3 && world !== 2;
-    }),
-  );
-  game.enterRoom(room);
-  const spot = game.hotspots().find(({ id }) => objectStates[id][2] === 0);
-  assert.ok(spot, `an object to carry in room ${room}`);
+  game.enterRoom(20);
+  game.world = 1;
+  const spot = game.hotspots().find(({ id }) => id === 110);
+  assert.ok(spot, 'the lighter on the table');
   game.useOn(spot);
-  assert.ok(game.hasItem(spot.id));
+  assert.ok(game.hasItem(110));
   assert.match(game.currentText.text, /^You have received /);
   assert.equal(
-    game.hotspots().some(({ id }) => id === spot.id),
+    game.hotspots().some(({ id }) => id === 110),
     false,
   );
 });
@@ -193,10 +254,21 @@ test('clicking away from the verb wheel closes it', () => {
 });
 
 test('text blocks everything else until it is dismissed', () => {
-  const game = createGame(data);
+  const game = createGame(data, { startInGame: true });
   game.pressKey('move-back');
   settle(game);
   assert.equal(game.mode, 0);
+});
+
+test('long text scrolls to its end before a click moves on', () => {
+  const game = newGame();
+  game.showSpeech('Someone', 'word '.repeat(80));
+  const { pageLines, lines } = game.box;
+  assert.ok(lines.length > pageLines);
+  game.click();
+  assert.equal(game.box.scroll, pageLines);
+  while (game.box) game.click();
+  assert.equal(game.box, null);
 });
 
 test('leaving the first room puts you in the corridor, facing away from its door', () => {
@@ -250,10 +322,327 @@ test('a door opens onto its room if the chapter allows it, and comes back to the
 
 test('a locked door says so', () => {
   const game = newGame();
+  game.placeInCorridor(30, FACING.NORTH);
   game.doorStates[0][0] = 2;
   game.mode = 1;
   game.useDoor(game.hotspots()[0].id);
   assert.equal(game.currentText.text, 'The door is locked.');
+});
+
+test('the lift goes to the floor chosen from its list', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.floor = 1;
+  game.placeInCorridor(36, FACING.EAST);
+  const door = game.hotspots().find(({ kind }) => kind === 'door');
+  assert.ok(LIFTS.has(door.id));
+  assert.equal(game.action((door.x0 + door.x1) >> 1, (door.y0 + door.y1) >> 1).kind, 'stairs');
+  game.useDoor(door.id);
+  assert.equal(game.box.selected, 2, 'it starts on the floor you are on');
+  game.pressKey('ArrowUp');
+  game.pressKey('ArrowUp');
+  game.pressKey('Enter');
+  settle(game);
+  assert.deepEqual([game.floor, game.cell], [3, 55]);
+});
+
+test('the map shows each floor, once the player has it', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.pressKey('map');
+  assert.equal(game.map, null);
+  game.addItem(121);
+  assert.equal(game.softKeys().left.action, 'map');
+  game.pressKey('map');
+  assert.equal(game.map.floor, 1);
+  game.pressKey('ArrowRight');
+  assert.equal(game.map.floor, 2);
+  assert.ok(game.drawList().length > 10);
+  game.pressKey('Escape');
+  assert.equal(game.map, null);
+});
+
+test('the inventory uses items on what the verb wheel was opened on', () => {
+  const game = newGame();
+  game.enterRoom(10);
+  game.addItem(105);
+  game.moveCursor(
+    ...(({ x0, x1, y0, y1 }) => [(x0 + x1) >> 1, (y0 + y1) >> 1])(game.hotspots().find(({ id }) => id === 37)),
+  );
+  game.click();
+  game.chooseVerb(VERB.INVENTORY);
+  assert.ok(game.inventory.isOpen);
+  while (game.inventory.item !== 105) game.pressKey('ArrowRight');
+  game.pressKey('Enter');
+  assert.ok(game.hasItem(106), 'the ice melted into the gold key');
+  assert.equal(game.hasItem(105), false);
+  assert.equal(game.inventory.isOpen, false);
+});
+
+test('looking at an item comes back to the inventory', () => {
+  const game = newGame();
+  game.pressKey('inventory');
+  assert.equal(game.inventory.item, 118);
+  game.pressKey('ArrowDown');
+  game.pressKey('Enter');
+  assert.ok(game.currentText);
+  assert.equal(game.inventory.isOpen, false);
+  game.click();
+  assert.equal(game.inventory.isOpen, true);
+});
+
+test('saving and loading bring the same game back', () => {
+  const storage = memoryStorage();
+  const game = newGame({ storage });
+  game.addItem(106);
+  game.setHealth(55);
+  game.mode = 1;
+  game.floor = 2;
+  game.placeInCorridor(50, FACING.WEST);
+  assert.ok(game.canSave());
+  game.saveGame();
+  assert.ok(game.hasSave());
+  assert.equal(game.currentText.text, 'Game saved!');
+
+  const later = newGame({ storage });
+  assert.ok(later.hasSave());
+  assert.ok(later.loadGame());
+  assert.ok(later.hasItem(106));
+  assert.deepEqual([later.health, later.floor, later.cell, later.facing, later.mode], [55, 2, 50, FACING.WEST, 1]);
+});
+
+test('settings and the chosen language last', () => {
+  const storage = memoryStorage();
+  const game = createGame(data, { storage });
+  for (let i = 0; i < 200 && game.frontEnd.stage === 'logo'; i++) game.tick();
+  assert.equal(game.frontEnd.stage, 'languages');
+  game.pressKey('ArrowDown');
+  game.pressKey('Enter');
+  assert.equal(game.language, 'fr');
+  const again = createGame(data, { storage });
+  assert.equal(again.language, 'fr');
+  for (let i = 0; i < 200 && again.frontEnd.stage === 'logo'; i++) again.tick();
+  assert.equal(again.frontEnd.stage, 'first-settings', 'the question comes once');
+});
+
+test('the main menu starts a game, and continues one if there is a save', () => {
+  const storage = memoryStorage();
+  const game = createGame(data, { storage });
+  game.frontEnd.showMainMenu();
+  game.pressKey('Enter');
+  assert.equal(game.frontEnd, null);
+  assert.equal(game.room, 0);
+  clear(game);
+  game.saveGame({ quietly: true });
+  game.quitToFrontEnd();
+  assert.equal(game.frontEnd.stage, 'main');
+  game.pressKey('Enter');
+  assert.equal(game.frontEnd.stage, 'play');
+  game.pressKey('Enter');
+  assert.equal(game.frontEnd, null);
+});
+
+test('pausing stops the world, and its rows work', () => {
+  const game = newGame({ storage: memoryStorage() });
+  game.pressSoftKey('right');
+  assert.ok(game.pause);
+  const { time } = game;
+  game.tick();
+  assert.equal(game.time, time + 60);
+  game.pressKey('ArrowDown');
+  game.pressKey('Enter');
+  assert.ok(game.hasSave());
+  game.pressKey('Escape');
+  game.pressKey('Escape');
+  assert.equal(game.pause, null);
+});
+
+function solveClockButtons(game) {
+  const { puzzle } = game;
+  game.moveCursor(SCREEN_X + puzzle.forwardX + 2, puzzle.buttonY + 2);
+}
+
+test('the clock has to show a quarter to four', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.ruleFired[35] = true;
+  game.startPuzzle(3);
+  clear(game);
+  solveClockButtons(game);
+  assert.equal(game.puzzle.isSolved(), false);
+  for (let i = 0; i < 45; i++) game.click();
+  assert.equal(game.puzzle.isSolved(), true);
+  game.pressSoftKey('left');
+  assert.ok(game.ruleFired[53], 'the rule for solving it ran');
+});
+
+test('holding the clock button keeps its hands turning', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.startPuzzle(3);
+  clear(game);
+  solveClockButtons(game);
+  assert.ok(game.wantsStroke());
+  game.startStroke(game.cursorX, game.cursorY);
+  for (let i = 0; i < 50; i++) game.tick();
+  game.endStroke();
+  const reached = game.puzzle.minute + game.puzzle.hourBase * 4;
+  assert.ok(reached > 10, `it reached ${reached}`);
+  game.tick();
+  assert.equal(game.puzzle.minute + game.puzzle.hourBase * 4, reached);
+});
+
+test('a wrong number on the phone clears, and the right one opens the door', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.startPuzzle(1);
+  clear(game);
+  for (const digit of '111111') game.pressKey(digit);
+  for (let i = 0; i < 20; i++) game.tick();
+  assert.deepEqual(game.puzzle.entered, []);
+  const { keyAt } = game.puzzle;
+  assert.equal(typeof keyAt, 'function');
+  for (const digit of '426463') game.pressKey(digit);
+  for (let i = 0; i < 20; i++) game.tick();
+  assert.equal(game.puzzle, null);
+  assert.equal(game.room, 13);
+  assert.equal(game.phoneSolved, true);
+});
+
+for (const build of [data, keypadData]) {
+  test(`a wrong number on the ${build.kind} build's safe costs health and returns to the room`, () => {
+    const game = newGame({}, build);
+    game.chapter = 3;
+    game.enterRoom(15);
+    game.startPuzzle(4);
+    game.pressKey('9');
+    game.pressSoftKey('left');
+    assert.equal(game.health, 75);
+    assert.equal(game.puzzle, null);
+    assert.equal(game.mode, MODE.ROOM);
+  });
+
+  test(`the ${build.kind} build's safe opens to 001, with the mouse alone`, () => {
+    const game = newGame({}, build);
+    game.chapter = 3;
+    game.enterRoom(15);
+    game.startPuzzle(4);
+    const { puzzle } = game;
+    const click = (x, y) => {
+      game.moveCursor(SCREEN_X + x, y);
+      game.click();
+    };
+    if (puzzle.art.kind === 'dial') {
+      const center = ({ x, y, width, height }) => [x + (width >> 1), y + (height >> 1)];
+      click(...center(puzzle.dialPlace));
+      click(...center(puzzle.dialPlace));
+      click(...center(puzzle.buttonPlaces[2]));
+    } else {
+      const right = puzzle.keysX + puzzle.keysSize.width - 3;
+      const knobY = puzzle.keysY + 3;
+      const panel = [puzzle.panelX + 3, puzzle.panelY + 3];
+      click(right, knobY);
+      click(...panel);
+      click(right, knobY);
+      click(...panel);
+      click(right, knobY);
+      click(right, knobY);
+    }
+    assert.equal(puzzle.digits.join(''), '001');
+    game.pressSoftKey('left');
+    assert.equal(game.objectHidden[54], 0, 'the opened safe shows');
+  });
+}
+
+test('a pearl in the wrong cavity goes back into the inventory', () => {
+  const game = newGame();
+  game.chapter = 3;
+  game.mode = 1;
+  for (const pearl of [68, 69, 70, 71]) game.addItem(pearl);
+  game.startPuzzle(6);
+  clear(game);
+  game.moveCursor(SCREEN_X + 120, 141);
+  game.click();
+  while (game.inventory.item !== 68) game.pressKey('ArrowRight');
+  game.pressKey('Enter');
+  assert.equal(game.hasItem(68), false);
+  assert.ok(game.puzzle.holdsPearl(68));
+  game.pressSoftKey('left');
+  assert.equal(game.puzzle, null);
+  assert.ok(game.hasItem(68));
+});
+
+test('a fight hurts the player, and dying offers to go back', () => {
+  const game = newGame({ storage: memoryStorage(), random: () => 0.2 });
+  game.mode = 1;
+  game.room = 20;
+  game.world = 2;
+  game.floor = 2;
+  game.placeInCorridor(50, FACING.SOUTH);
+  game.startFight(1, false);
+  clear(game);
+  let limit = 5000;
+  while (!game.gameOver && limit-- > 0) {
+    game.tick();
+    if (!game.gameOver) clear(game);
+  }
+  assert.ok(limit > 0, 'the monster got through');
+  assert.equal(game.health <= 0, true);
+  assert.equal(game.softKeys().left.label, 'Retry');
+  assert.equal(game.currentText.text, 'You are dead...');
+  game.pressKey('Enter');
+  assert.equal(game.gameOver, false);
+  assert.equal(game.room, 0, 'without a save, the game starts again');
+});
+
+test('a shot lands only on the monster, and using the pistol spends a bullet', () => {
+  const game = newGame();
+  game.mode = 1;
+  game.bullets[1] = 15;
+  game.addItem(111);
+  game.reload(1);
+  game.equip(1);
+  game.startFight(1, false);
+  clear(game);
+  while (game.fight.intro) game.tick();
+  game.moveCursor(0, 0);
+  game.click();
+  assert.equal(game.fight.health, 100);
+  assert.equal(game.loaded[1], 14);
+  const { fight } = game;
+  const box = fight.hitBox();
+  game.moveCursor(SCREEN_X + fight.x + box.left + 2, fight.y + box.top + 2);
+  assert.ok(fight.isOnTarget(game.screenX, game.cursorY));
+  game.click();
+  assert.equal(fight.health, 82, 'the pistol, less a tenth for the armor');
+});
+
+test('everything that can be drawn in a fight or puzzle can be, in both kinds of build', () => {
+  for (const build of [data, keypadData]) {
+    const game = newGame({}, build);
+    game.mode = 1;
+    for (const number of [1, 2, 3, 4, 5, 6]) {
+      game.startPuzzle(number);
+      assert.ok(game.drawList().length > 0);
+      clear(game);
+      assert.ok(game.drawList().length > 0);
+      game.puzzle = null;
+      game.mode = 1;
+    }
+    for (const monster of [1, 2, 3, 4]) {
+      game.startFight(monster, monster === 4);
+      for (let i = 0; i < 300 && game.fight; i++) {
+        game.tick();
+        clear(game);
+        game.drawList();
+      }
+      game.fight = null;
+      game.fade = null;
+      game.mode = 1;
+      game.setHealth(100);
+      game.gameOver = false;
+    }
+  }
 });
 
 test('stairs lead where GameMidlet.F() says', () => {
@@ -300,14 +689,6 @@ test('every corridor cell can be reached, on foot and by stairs and lifts', () =
   assert.equal(seen.size, 31);
 });
 
-test('what is not ported yet says so, rather than doing nothing', () => {
-  const game = newGame();
-  game.runActions([[4, 1]]);
-  assert.equal(game.notPorted, 'Not ported yet: Puzzle 1');
-  game.click();
-  assert.equal(game.notPorted, null);
-});
-
 test('a rule fires once, and only when its conditions hold', () => {
   const game = newGame();
   // The rule for object 41 needs room 8 in the second chapter.
@@ -319,7 +700,7 @@ test('a rule fires once, and only when its conditions hold', () => {
   assert.ok(game.hasItem(73) || game.bullets[2] > 0);
 });
 
-test('the port follows v1.7.0 and its twins, and explains what it does with the rest', async () => {
+test('the port follows the v1.7.0 and v1.0.20 families, and explains what it does with the rest', async () => {
   const results = {};
   for (const { id } of buildsOf('sh3')) {
     const { status, reason } = await inspectJar(readInput(id));
@@ -327,10 +708,8 @@ test('the port follows v1.7.0 and its twins, and explains what it does with the 
     results[key] = [...(results[key] ?? []), id];
   }
   const counts = Object.fromEntries(Object.entries(results).map(([key, ids]) => [key, ids.length]));
-  assert.deepEqual(counts, {
-    'warning mobile3-partial': 17,
-    'rejected mobile3-other-build': 69,
-  });
-  assert.ok(results['warning mobile3-partial'].includes('sh3-en-v170'));
-  assert.ok(results['rejected mobile3-other-build'].includes('sh3-en-v180'));
+  assert.deepEqual(counts, { 'ok ok': EXPECTED_FOLLOWED, 'rejected mobile3-other-build': 86 - EXPECTED_FOLLOWED });
+  assert.ok(results['ok ok'].includes('sh3-en-v170'));
+  assert.ok(results['ok ok'].includes('sh3-2010-v1.0.20-a'));
+  assert.ok(results['rejected mobile3-other-build'].includes('sh3-2010-v1.0.17-a10'), 'a demo');
 });

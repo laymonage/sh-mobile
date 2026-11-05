@@ -1,14 +1,20 @@
-import { animationSize } from './data.mjs';
+import { Fight } from './battle.mjs';
+import { animationSize, ONCE, Playing } from './data.mjs';
+import { Inventory } from './inventory.mjs';
+import { FrontEnd, MapScreen, PauseMenu } from './menus.mjs';
+import { createPuzzle } from './puzzles.mjs';
 import { fireItemTrigger, fireTrigger, TRIGGER } from './rules.mjs';
+import { BOX, BoxMaker, SCREEN_WIDTH } from './ui.mjs';
 
 // Rooms and corridors are drawn in a scene this size. A phone pans a 240-pixel view over it,
-// and the port shows it all, as it does the other games' rooms.
+// and the port shows it all, with what the phone draws on its screen in the middle.
 const SCENE_WIDTH = 360;
 const SCENE_HEIGHT = 320;
+export const SCREEN_X = (SCENE_WIDTH - SCREEN_WIDTH) >> 1;
 const MILLISECONDS_PER_TICK = 60;
 const FADE_TICKS = 5;
 
-const MODE = { ROOM: 0, CORRIDOR: 1 };
+export const MODE = { ROOM: 0, CORRIDOR: 1, PUZZLE: 3, FIGHT: 4 };
 export const FACING = { WEST: 0, NORTH: 1, EAST: 2, SOUTH: 3 };
 export const STEP = [
   [0, -1],
@@ -29,36 +35,24 @@ export const STAIRS = {
   161: { floor: 3, cell: 53, facing: FACING.WEST },
   203: { floor: 2, cell: 47, facing: FACING.WEST },
 };
-// Lifts open a menu of floors in the original, which comes with the other menus. Each floor
-// has one, which arrives at this cell, also from GameMidlet.F().
+const STAIRS_GOING_UP = new Set([98, 161]);
+// Each floor has a lift, which arrives at this cell, also from GameMidlet.F().
 export const LIFTS = new Set([210, 217, 224]);
 export const LIFT_CELLS = [36, 49, 55];
 const NO_DOOR = -1;
 const BLOCKED = -2;
 const NO_SPRITE = -1;
-
-// Wall pieces, written directly into GameMidlet.u(int) rather than into a table, for the
-// normal world and the dark one. Each sheet has a left and a right piece.
-const WALL_PIECES = {
-  1: {
-    far: { sheet: 16777644, left: 16777347, right: 16777523 },
-    middleSide: { sheet: 16777646, left: 16777349, right: 16777525 },
-    middleEnd: { sheet: 16777665, left: 16777351, right: 16777527 },
-    nearSide: { sheet: 16777667, left: 16777353, right: 16777529 },
-    nearEnd: { sheet: 16777606, left: 16777341, right: 16777514 },
-    closeOpening: { sheet: 16777608, left: 16777353, right: 16777529 },
-    closeWall: { sheet: 16777789, left: 16777359, right: 16777537 },
-  },
-  2: {
-    far: { sheet: 16777645, left: 16777348, right: 16777524 },
-    middleSide: { sheet: 16777647, left: 16777350, right: 16777526 },
-    middleEnd: { sheet: 16777666, left: 16777352, right: 16777528 },
-    nearSide: { sheet: 16777668, left: 16777354, right: 16777530 },
-    nearEnd: { sheet: 16777607, left: 16777342, right: 16777515 },
-    closeOpening: { sheet: 16777609, left: 16777354, right: 16777530 },
-    closeWall: { sheet: 16777790, left: 16777360, right: 16777538 },
-  },
-};
+const FIRST_PROP = 145;
+const PROP_STEP = 7;
+const PICKED_UP_PROP = 166;
+const FLOOR_SIGNS = new Set([180, 182, 183]);
+// Rooms where a monster fights you facing north, whichever way you came.
+const NORTH_FIGHT_ROOMS = new Set([15, 22]);
+const COLD_ROOM = 10;
+const NOISY_DOOR_ROOM = 13;
+const FINAL_MONSTER = 4;
+const TIMED_DIALOGUE = 8;
+const TIMED_DIALOGUE_LENGTH = 4000;
 
 // Where each piece sits, as indexes into the table of positions, in the original's order.
 const PLACE = {
@@ -90,9 +84,75 @@ const TEXT = {
   DOOR_LOOK: 447,
   DOOR_LOCKED: 69,
   DOOR_BARRED: 489,
+  BULLETS_PISTOL: 388,
+  BULLETS_SHOTGUN: 389,
+  RELOADING: 480,
+  DEAD: 479,
+  SAVED: 473,
+  NO_SAVING: 481,
+  FLOORS: [492, 491, 490],
 };
 
-const SOUND = { whisper: 'whisper', fridge: 'fridge', door: 'door_opening' };
+// The cursor's frames, from GameMidlet.i(int) and m().
+const CURSOR = {
+  NORMAL: 0,
+  INTERACT: 1,
+  FORWARD: 2,
+  LEAVE: 3,
+  TURN_LEFT: 4,
+  TURN_RIGHT: 5,
+  TURN_BACK: 6,
+  DOWNSTAIRS_RIGHT: 7,
+  DOWNSTAIRS_LEFT: 8,
+  UPSTAIRS_RIGHT: 9,
+  UPSTAIRS_LEFT: 10,
+  AIM_ON: 12,
+  AIM_OFF: 13,
+  LIFT: 14,
+};
+// Indexes into the table of soft key words.
+export const KEY = {
+  SELECT: 0,
+  CONFIRM: 5,
+  RETRY: 6,
+  BACK: 9,
+  CONTINUE: 10,
+  PAUSE: 11,
+  MAIN_MENU: 13,
+  CLOSE: 15,
+  MAP: 16,
+  SKIP: 17,
+};
+
+const ITEM = {
+  MAP: 121,
+  MELEE: 118,
+  PISTOL: 111,
+  SHOTGUN: 120,
+  PISTOL_BULLETS: 72,
+  SHOTGUN_BULLETS: 73,
+  HEALTH_PACK: 6,
+  MEDIPACK: 114,
+};
+const USED_UP_BY_CHAPTER_THREE = [110, 113];
+const CLIP_SIZE = [-1, 15, 5];
+const SAVE_KEY = 'silent-hill-mobile3:save';
+const SETTINGS_KEY = 'silent-hill-mobile3:settings';
+const WEAK_HEALTH = 70;
+const SAFE_DAMAGE = 25;
+const FLASH_TIME = 1000;
+const SHAKE_TIME = 2000;
+const HOLD_START = 2;
+const HOLD_FASTEST = 10;
+const HOLD_STEP_TIME = 300;
+const LANGUAGE_CODES = {
+  English: 'en',
+  Français: 'fr',
+  Deutsch: 'de',
+  Italiano: 'it',
+  Español: 'es',
+  Português: 'pt',
+};
 
 export const VERB = { LOOK: 0, USE: 1, INVENTORY: 2 };
 
@@ -101,37 +161,61 @@ export class Mobile3Game {
   static PANEL_ART_IS_STRIP = true;
   static ITEM_ICONS = {};
 
-  constructor(data, { audio = null, now = () => 0, onQuit = () => {} } = {}) {
+  constructor(
+    data,
+    {
+      audio = null,
+      now = () => 0,
+      onQuit = () => {},
+      storage = null,
+      vibrate = null,
+      random = Math.random,
+      startInGame = false,
+    } = {},
+  ) {
     this.data = data;
     this.tables = data.tables;
     this.dataDir = data.dataDir;
     this.audio = audio;
     this.now = now;
     this.onQuit = onQuit;
+    this.storage = storage;
+    this.vibrator = vibrate;
+    this.random = random;
     this.frameWidth = SCENE_WIDTH;
     this.frameHeight = SCENE_HEIGHT;
     this.viewOffsetX = 0;
     this.viewOffsetY = 0;
     this.cursorX = SCENE_WIDTH / 2;
     this.cursorY = SCENE_HEIGHT / 2;
-    this.language = 'en';
+    this.boxes = new BoxMaker(data);
+    this.languageName = data.languages[0].name;
+    this.language = LANGUAGE_CODES[this.languageName];
     this.lines = data.text(data.languages[0]);
+    this.vibrationOn = Boolean(vibrate);
+    this.chosenLanguage = false;
+    this.loadSettings();
 
-    // The page's other games have these, and it looks at them.
-    this.mainMenu = null;
+    // The page looks at these, as it does on the other games.
     this.popups = [];
-    this.menus = [];
     this.pointerLocked = false;
     this.wantsMouseLock = false;
     this.stroke = null;
-
-    this.startNewGame();
+    this.frontEnd = null;
+    this.time = 0;
+    this.held = new Set();
+    this.holdSpeed = HOLD_START;
+    this.holdTimer = 0;
+    this.savedExists = this.readSave() !== null;
+    this.inventory = new Inventory(this);
+    this.resetRun();
+    if (startInGame) this.startNewGame();
+    else this.frontEnd = new FrontEnd(this);
   }
 
-  // State as GameMidlet.v() sets it up.
-  startNewGame() {
+  // The fields a new game starts from. As GameMidlet.v() sets them up.
+  resetRun() {
     const { objectStates, chapterStates } = this.tables;
-    this.time = 0;
     this.chapter = 1;
     this.world = 1;
     this.floor = 1;
@@ -144,21 +228,67 @@ export class Mobile3Game {
     this.roomCleared = new Array(26).fill(false);
     this.ruleFired = new Array(this.tables.rules.length).fill(false);
     this.items = [];
+    this.vincentItems = [];
     this.health = 100;
+    this.weakened = false;
+    this.healthLevel = 0;
+    this.weapon = 0;
     this.bullets = [0, 0, 0];
+    this.loaded = [CLIP_SIZE[0], 0, 0];
+    this.reloading = false;
+    this.reloadWait = 0;
+    this.phoneSolved = false;
     this.flagL = false;
     this.flagM = false;
     this.verbs = null;
-    this.textQueue = [];
+    this.box = null;
+    this.boxClosed = null;
+    this.dialogue = null;
+    this.blackBehindDialogue = false;
+    this.timedDialogue = 0;
     this.fade = null;
-    this.notPorted = null;
+    this.fight = null;
+    this.puzzle = null;
+    this.pause = null;
+    this.map = null;
+    this.liftMenu = false;
+    this.gameOver = false;
+    this.shake = 0;
+    this.redFlash = 0;
+    this.drift = { x: 0, y: 0 };
+    this.bloodOverlay = null;
+    const { hud } = this.data.hardCoded;
+    this.damageFlash = new Playing(this.data.animation(hud.damage.animation), ONCE);
+    this.healFlash = new Playing(this.data.animation(hud.healed.animation), ONCE);
+    this.damageFlash.running = false;
+    this.healFlash.running = false;
+    this.inventory.reset();
+    this.room = 0;
+  }
+
+  // As GameMidlet.q().
+  startNewGame() {
+    this.frontEnd = null;
+    this.stopSound();
+    this.resetRun();
+    this.addItem(ITEM.MELEE);
     this.placeInCorridor(30, FACING.NORTH);
     this.enterRoom(0);
-    this.showDialogue(4);
+    this.showDialogue(4, { black: true });
   }
 
   showStartup() {
-    // Menus aren't ported yet, so this goes straight to a new game.
+    this.frontEnd?.start();
+  }
+
+  get mainMenu() {
+    return this.frontEnd;
+  }
+
+  // The page sends arrow keys rather than walking keys while one of these is up.
+  get menus() {
+    const { frontEnd, box, pause, verbs, map, inventory } = this;
+    return !frontEnd && (box || pause || verbs || map || inventory.isOpen) ? [{}] : [];
   }
 
   // What the rules ask about.
@@ -210,15 +340,17 @@ export class Mobile3Game {
     return this.doorsAt(this.grid[row][column])[FACING.WEST] === NO_DOOR;
   }
 
-  // GameMidlet.z() and A() together come to the same test as the view's.
+  // GameMidlet.z() and A() together come to the same test as the view's, except that stairs
+  // on the south of a cell also stop the walk.
   canWalkForward() {
-    return this.canSeeAhead(this.row, this.column);
+    if (!this.canSeeAhead(this.row, this.column)) return false;
+    return !(this.facing === FACING.SOUTH && this.doorsAt(this.cell)[FACING.SOUTH] in STAIRS);
   }
 
   // The wall pieces in view, in drawing order, as in GameMidlet.E().
   corridorPieces() {
     const { facing, row, column } = this;
-    const pieces = WALL_PIECES[this.world];
+    const pieces = this.data.hardCoded.walls[this.world];
     const positions = this.tables.corridorLayerPositions;
     const [stepRow, stepColumn] = STEP[facing];
     const toLeft = left(facing);
@@ -291,17 +423,22 @@ export class Mobile3Game {
 
     const addDoor = (id, place) => {
       const [sheet, animation] = this.tables.corridorDoorSprites[id];
+      if (sheet === NO_SPRITE) return;
       const [x, y, x0, x1, y0, y1] = this.tables.doorPlaces[place];
-      if (sheet !== NO_SPRITE) sprites.push({ sheet, animation, x, y });
+      sprites.push({ sheet, animation, x, y });
       if (door !== NO_DOOR && door !== BLOCKED) hotspots.push({ kind: 'door', id: door, x0, x1, y0, y1 });
     };
     const addProp = (id, place) => {
       if (id >= 159 && id <= 165 && this.chapter !== 3) return;
-      const index = Math.floor((id - 145) / 7);
+      const index = Math.floor((id - FIRST_PROP) / PROP_STEP);
       if (this.propTaken[index]) return;
-      const [sheet, animation] = this.tables.propSprites[id - 145];
+      const [sheet, animation] = this.tables.propSprites[id - FIRST_PROP];
       const [x, y, x0, x1, y0, y1] = this.tables.propPlaces[index][place];
-      if (sheet !== NO_SPRITE) sprites.push({ sheet, animation, x, y });
+      if (sheet !== NO_SPRITE) {
+        const sprite = { sheet, animation, x, y };
+        if (FLOOR_SIGNS.has(id)) sprite.frame = this.floor - 1;
+        sprites.push(sprite);
+      }
       if (prop !== NO_DOOR) hotspots.push({ kind: 'prop', id: prop, x0, x1, y0, y1 });
     };
 
@@ -376,19 +513,26 @@ export class Mobile3Game {
       .map((row) => ({ kind: 'object', id: row[0], x0: row[3], x1: row[4], y0: row[5], y1: row[6] }));
   }
 
-  // What to draw this frame.
+  // What to draw this frame, behind any puzzle or monster.
   scene() {
     if (this.mode === MODE.ROOM) return this.roomSprites();
+    if (this.mode === MODE.FIGHT && this.fight?.inRoom) return this.roomSprites();
     return [...this.corridorPieces(), ...this.corridorFixtures().sprites];
   }
 
   hotspots() {
-    return this.mode === MODE.ROOM ? this.roomHotspots() : this.corridorFixtures().hotspots;
+    if (this.mode === MODE.ROOM) return this.roomHotspots();
+    return this.mode === MODE.CORRIDOR ? this.corridorFixtures().hotspots : [];
   }
 
   // The last one listed wins, as the original searches from the end.
   hotspotAt(x, y) {
     return this.hotspots().findLast((spot) => x >= spot.x0 && x <= spot.x1 && y >= spot.y0 && y <= spot.y1) ?? null;
+  }
+
+  // Where the cursor is on the phone's screen, which is what puzzles and fights use.
+  get screenX() {
+    return this.cursorX - SCREEN_X;
   }
 
   // What a click at the cursor would do, which also picks the cursor's shape.
@@ -399,6 +543,7 @@ export class Mobile3Game {
       if (y >= SCENE_HEIGHT - LEAVE_ZONE) return { kind: 'leave' };
       return null;
     }
+    if (this.mode !== MODE.CORRIDOR) return null;
     if (hotspot) {
       if (hotspot.kind === 'door' && (hotspot.id in STAIRS || LIFTS.has(hotspot.id))) {
         return { kind: 'stairs', hotspot };
@@ -411,9 +556,41 @@ export class Mobile3Game {
     return this.canWalkForward() ? { kind: 'forward' } : null;
   }
 
-  // After the screen has gone black, as GameMidlet's aB() and d() arrange.
+  // Which of the cursor's pictures shows, from GameMidlet.m().
+  cursorFrame() {
+    if (this.fight) return this.fight.isOnTarget(this.screenX, this.cursorY) ? CURSOR.AIM_ON : CURSOR.AIM_OFF;
+    if (this.puzzle) return this.puzzle.isHot(this.screenX, this.cursorY) ? CURSOR.INTERACT : CURSOR.NORMAL;
+    const action = this.action();
+    if (!action) return CURSOR.NORMAL;
+    if (action.kind === 'stairs') {
+      const { id } = action.hotspot;
+      if (LIFTS.has(id)) return CURSOR.LIFT;
+      const onLeft = this.cursorX < SCENE_WIDTH / 2;
+      if (STAIRS_GOING_UP.has(id)) return onLeft ? CURSOR.UPSTAIRS_LEFT : CURSOR.UPSTAIRS_RIGHT;
+      return onLeft ? CURSOR.DOWNSTAIRS_LEFT : CURSOR.DOWNSTAIRS_RIGHT;
+    }
+    return {
+      verbs: CURSOR.INTERACT,
+      leave: CURSOR.LEAVE,
+      forward: CURSOR.FORWARD,
+      'turn-left': CURSOR.TURN_LEFT,
+      'turn-right': CURSOR.TURN_RIGHT,
+      'turn-back': CURSOR.TURN_BACK,
+    }[action.kind];
+  }
+
+  // After the screen has gone black, as GameMidlet's aB() and d() arrange. It can stay black
+  // for a while, as a monster's moves do.
+  startFade(atBlack, holdMilliseconds = 0) {
+    if (!this.fade) this.fade = { ticks: 0, atBlack, hold: holdMilliseconds };
+  }
+
   fadeThen(atBlack) {
-    if (!this.fade) this.fade = { ticks: 0, atBlack };
+    this.startFade(atBlack);
+  }
+
+  get fadeIsBlack() {
+    return Boolean(this.fade) && this.fade.ticks >= FADE_TICKS && this.fade.hold >= 0;
   }
 
   walkForward() {
@@ -436,11 +613,37 @@ export class Mobile3Game {
     });
   }
 
+  // The lift's list of floors, as in GameMidlet.f(int) and F().
+  openLift() {
+    this.liftMenu = true;
+    const rows = TEXT.FLOORS.map((line) => this.lines[line]);
+    this.showBox(this.boxes.rows(rows, { width: Math.trunc((SCREEN_WIDTH * 75) / 100), selected: 3 - this.floor }));
+  }
+
+  chooseLiftFloor(row) {
+    this.liftMenu = false;
+    this.closeBox();
+    const floor = 3 - row;
+    if (floor === this.floor) return;
+    this.fadeThen(() => {
+      this.floor = floor;
+      this.placeInCorridor(LIFT_CELLS[floor - 1], FACING.WEST);
+    });
+  }
+
   enterRoom(room) {
     this.room = room;
     this.mode = MODE.ROOM;
-    if (room === 10) this.audio?.play(SOUND.fridge, -1);
-    if (this.hasMonster(room)) this.audio?.play(SOUND.whisper, -1);
+    this.drift = { x: 0, y: 0 };
+    if (!this.roomCleared[room] && this.tables.roomEncounters[room][0] === FINAL_MONSTER) {
+      const [, chapter] = this.tables.roomEncounters[room];
+      if (chapter === this.chapter) {
+        this.startFight(FINAL_MONSTER, true);
+        return;
+      }
+    }
+    if (room === COLD_ROOM) this.playSound('fridge', -1);
+    if (this.hasMonster(room) && !this.flagM && !this.timedDialogue) this.playSound('whisper', -1);
   }
 
   hasMonster(room) {
@@ -453,16 +656,170 @@ export class Mobile3Game {
     );
   }
 
+  // Leaving a room, as in GameMidlet.t() and the update's handling of what it starts.
   leaveRoom() {
     const { room } = this;
     const fight = this.hasMonster(room);
-    if (Math.random() < 0.5 && !fight && room !== 10) this.audio?.play(SOUND.door, 1);
+    if (room === COLD_ROOM) this.stopSound();
+    if (fight) this.stopSound();
+    if ((this.randomBit() === 1 && !fight && room !== COLD_ROOM) || room === NOISY_DOOR_ROOM) {
+      this.playSound('door_opening');
+    }
     this.fadeThen(() => {
-      if (fight) this.markNotPorted('A fight would start here');
-      this.mode = MODE.CORRIDOR;
-      this.facing = behind(this.facing);
+      if (fight) {
+        if (NORTH_FIGHT_ROOMS.has(room)) this.facing = FACING.NORTH;
+        this.facing = behind(this.facing);
+        const [monster] = this.tables.roomEncounters[room];
+        this.startFight(monster, false);
+      } else {
+        this.mode = MODE.CORRIDOR;
+        this.facing = behind(this.facing);
+      }
       this.fire(TRIGGER.LEFT_ROOM, room);
     });
+  }
+
+  startFight(monster, inRoom) {
+    this.mode = MODE.FIGHT;
+    this.verbs = null;
+    this.fight = new Fight(this, monster, inRoom);
+    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+    this.shake = 500;
+    const weapon = this.weapon;
+    if (this.loaded[weapon] === 0) {
+      if (this.bullets[weapon] > 0) this.startReload();
+      else this.changeWeaponIfEmpty();
+    } else {
+      this.reloading = false;
+      this.reloadWait = 0;
+    }
+    this.fire(TRIGGER.FIGHT_STARTED, 0);
+  }
+
+  // A monster has finished dying, as in the update.
+  fightWon(fight) {
+    this.roomCleared[this.room] = true;
+    if (fight.inRoom) {
+      this.fight = null;
+      this.mode = MODE.ROOM;
+      this.fire(TRIGGER.FIGHT_WON, FINAL_MONSTER);
+      return;
+    }
+    this.fadeThen(() => {
+      this.fight = null;
+      this.mode = MODE.CORRIDOR;
+      this.fire(TRIGGER.FIGHT_WON, -1);
+    });
+  }
+
+  changeWeaponIfEmpty() {
+    const { weapon, loaded, bullets } = this;
+    if (loaded[weapon] !== 0 || bullets[weapon] !== 0) return;
+    const usable = (item, index) => this.hasItem(item) && (bullets[index] > 0 || loaded[index] > 0);
+    if (usable(ITEM.SHOTGUN, 2)) this.weapon = 2;
+    else if (usable(ITEM.PISTOL, 1)) this.weapon = 1;
+    else this.weapon = 0;
+  }
+
+  startReload() {
+    this.reloading = true;
+    this.reloadWait = this.tables.reloadTime[this.weapon];
+  }
+
+  // Filling the weapon's clip from what's left, as in GameMidlet.c(int).
+  reload(weapon) {
+    const { bullets, loaded } = this;
+    const amount = Math.min(CLIP_SIZE[weapon] - loaded[weapon], bullets[weapon] - loaded[weapon]);
+    loaded[weapon] += amount;
+    if (bullets[weapon] <= 0) {
+      if (weapon === 1) this.removeItem(ITEM.PISTOL_BULLETS);
+      if (weapon === 2) this.removeItem(ITEM.SHOTGUN_BULLETS);
+    }
+  }
+
+  equip(weapon) {
+    this.weapon = weapon;
+  }
+
+  // Health, and the level its picture shows, as in GameMidlet.r(int). It reports when a level
+  // is crossed, which is when a monster's blow makes the phone shake.
+  setHealth(value) {
+    this.health = this.weakened ? Math.min(value, WEAK_HEALTH) : value;
+    const { health, healthLevel } = this;
+    let crossed = false;
+    if (health >= WEAK_HEALTH) this.healthLevel = 0;
+    else if (health >= 35) {
+      crossed = healthLevel === 0;
+      this.healthLevel = 1;
+    } else if (health >= 1) {
+      crossed = healthLevel <= 1;
+      this.healthLevel = 2;
+    } else {
+      crossed = healthLevel !== 3;
+      this.healthLevel = 3;
+    }
+    return crossed;
+  }
+
+  // Emilie is weaker than Vincent, until a rule has decided otherwise.
+  setWeakened(weakened) {
+    this.weakened = this.ruleFired[46] ? false : weakened;
+    if (this.weakened && this.health > WEAK_HEALTH) this.health = WEAK_HEALTH;
+  }
+
+  healFully() {
+    this.health = this.weakened ? WEAK_HEALTH : 100;
+    this.healFlash.restart();
+  }
+
+  healSome() {
+    this.health = Math.min(this.health + (this.weakened ? 30 : 50), this.weakened ? WEAK_HEALTH : 100);
+    this.healFlash.restart();
+  }
+
+  damagePlayer(amount) {
+    if (this.setHealth(this.health - amount)) {
+      this.shake = SHAKE_TIME;
+      this.vibrateFor(2);
+    }
+    this.damageFlash.restart();
+    if (this.health <= 0) this.die();
+  }
+
+  showBloodOverlay() {
+    const { animation, sheet } = this.data.hardCoded.bloodOverlay;
+    this.bloodOverlay = { sheet, playing: new Playing(this.data.animation(animation), ONCE) };
+  }
+
+  die() {
+    this.fight = null;
+    this.puzzle = null;
+    this.gameOver = true;
+    this.verbs = null;
+    this.inventory.close();
+    this.reloading = false;
+    this.redFlash = 0;
+    this.shake = 0;
+    this.dialogue = null;
+    this.showMessage(this.lines[TEXT.DEAD], { wide: false });
+    this.vibrateFor(2);
+  }
+
+  // After "Retry" a saved game comes back, and without one the game starts again.
+  retry() {
+    this.gameOver = false;
+    this.closeBox();
+    if (!this.loadGame()) this.startNewGame();
+  }
+
+  quitToFrontEnd() {
+    this.gameOver = false;
+    this.pause = null;
+    this.box = null;
+    this.stopSound();
+    this.frontEnd = new FrontEnd(this);
+    this.frontEnd.showMainMenu();
+    this.playSound('music');
   }
 
   // Opening a door, as i.c(int, int).
@@ -472,7 +829,7 @@ export class Mobile3Game {
       return;
     }
     if (LIFTS.has(door)) {
-      this.markNotPorted('The lift');
+      this.openLift();
       return;
     }
     const [stepRow, stepColumn] = STEP[this.facing];
@@ -482,12 +839,12 @@ export class Mobile3Game {
     if (state === 1) {
       this.fadeThen(() => {
         this.enterRoom(room);
-        this.fire(TRIGGER.ENTERED_ROOM, room);
+        if (this.mode === MODE.ROOM || this.fight) this.fire(TRIGGER.ENTERED_ROOM, room);
       });
       return;
     }
     if (state === 3) this.showText(TEXT.DOOR_BARRED);
-    if (!this.fire(TRIGGER.DOOR, door)) this.showText(TEXT.DOOR_LOCKED);
+    else if (!this.fire(TRIGGER.DOOR, door)) this.showText(TEXT.DOOR_LOCKED);
   }
 
   lookAt(hotspot) {
@@ -496,7 +853,7 @@ export class Mobile3Game {
       return;
     }
     if (hotspot.kind === 'prop') {
-      const index = Math.floor((hotspot.id - 145) / 7);
+      const index = Math.floor((hotspot.id - FIRST_PROP) / PROP_STEP);
       this.showText((this.world === 1 ? this.tables.propLooks : this.tables.propLooksDark)[index]);
       return;
     }
@@ -518,8 +875,12 @@ export class Mobile3Game {
       return;
     }
     if (hotspot.kind === 'prop') {
-      if (!this.fire(TRIGGER.USE_OBJECT, hotspot.id)) {
-        this.showText(this.tables.propRefusals[Math.floor((hotspot.id - 145) / 7)]);
+      if (this.fire(TRIGGER.USE_OBJECT, hotspot.id)) {
+        if (hotspot.id === PICKED_UP_PROP) {
+          this.propTaken[Math.floor((hotspot.id - FIRST_PROP) / PROP_STEP)] = true;
+        }
+      } else {
+        this.showText(this.tables.propRefusals[Math.floor((hotspot.id - FIRST_PROP) / PROP_STEP)]);
       }
       return;
     }
@@ -527,17 +888,29 @@ export class Mobile3Game {
     if (this.tables.objectStates[id][2] === 0) {
       this.addItem(id);
       this.objectTaken[id] = true;
-      this.showLine(`${this.lines[TEXT.TOOK]}${this.lines[this.tables.objectNames[id]]}`);
+      this.showMessage(`${this.lines[TEXT.TOOK]}${this.lines[this.tables.objectNames[id]]}`, { icon: id });
       return;
     }
     if (!this.fire(TRIGGER.USE_OBJECT, id)) this.showText(this.tables.objectTakeRefusals[id]);
   }
 
-  // Kept sorted, as d.a(int) keeps it.
+  // Kept sorted, as d.a(int) keeps it. Vincent's list is kept aside for his return.
   addItem(item) {
-    if (this.items.includes(item) && (item === 72 || item === 73)) return;
+    if (this.items.includes(item) && (item === ITEM.PISTOL_BULLETS || item === ITEM.SHOTGUN_BULLETS)) return;
     this.items.push(item);
     this.items.sort((a, b) => a - b);
+    if (this.chapter === 1) this.vincentItems.push(item);
+    this.inventory.itemsChanged();
+  }
+
+  removeItem(item) {
+    const at = this.items.indexOf(item);
+    if (at > -1) this.items.splice(at, 1);
+    if (this.chapter === 1) {
+      const kept = this.vincentItems.indexOf(item);
+      if (kept > -1) this.vincentItems.splice(kept, 1);
+    }
+    this.inventory.itemsChanged();
   }
 
   fire(kind, id) {
@@ -548,7 +921,7 @@ export class Mobile3Game {
     return fireItemTrigger(this.tables, this, target, item, (actions) => this.runActions(actions));
   }
 
-  // As GameMidlet.t(int). What isn't ported yet says so, rather than doing nothing.
+  // As GameMidlet.t(int).
   runActions(actions) {
     for (const [kind, first, second] of actions) {
       switch (kind) {
@@ -556,8 +929,11 @@ export class Mobile3Game {
           this.showText(first);
           break;
         case 1:
-        case 13:
+          if (first === TIMED_DIALOGUE) this.timedDialogue = TIMED_DIALOGUE_LENGTH;
           this.showDialogue(first);
+          break;
+        case 13:
+          this.showDialogue(first, { black: true });
           break;
         case 2:
           this.objectValue[first] = second;
@@ -565,95 +941,369 @@ export class Mobile3Game {
         case 3:
           this.objectHidden[first] = second;
           break;
+        case 4:
+          this.startPuzzle(first);
+          break;
         case 5:
+          this.fight = null;
           this.enterRoom(first);
           break;
         case 7:
           this.addItem(first);
           this.objectTaken[first] = true;
-          this.showLine(`${this.lines[TEXT.TOOK]}${this.lines[this.tables.objectNames[first]]}`);
+          if (this.box?.kind !== BOX.DIALOGUE) {
+            this.showMessage(`${this.lines[TEXT.TOOK]}${this.lines[this.tables.objectNames[first]]}`, {
+              icon: first,
+            });
+          }
           break;
         case 8:
-          this.items = this.items.filter((item) => item !== first);
+          this.removeItem(first);
+          break;
+        case 10:
+          this.startChapter(first + 1);
+          break;
+        case 11:
+          this.setWorld(this.world === 1 ? 2 : 1);
+          this.vibrateFor(0);
+          this.playSound('alarm');
           break;
         case 14:
-          this.bullets[first] += second;
+          this.gainBullets(first, second);
           break;
         case 15: {
           // The higher numbers are the same doors' views from further away.
           let door = first;
-          if (Math.floor(door / 7) > 20) door -= 21;
-          else if (Math.floor(door / 7) > 13) door -= 7;
-          this.doorStates[Math.floor(door / 7)][this.chapter - 1] = 1;
+          if (Math.floor(door / PROP_STEP) > 20) door -= 21;
+          else if (Math.floor(door / PROP_STEP) > 13) door -= PROP_STEP;
+          this.doorStates[Math.floor(door / PROP_STEP)][this.chapter - 1] = 1;
           break;
         }
-        case 17:
-          this.health = first;
-          break;
-        case 6:
-        case 9:
-        case 12:
         case 16:
+          this.setWeakened(first !== 0);
+          break;
+        case 17:
+          this.setHealth(first);
+          break;
         case 18:
-        case 20:
-        case 21:
-          break;
-        case 4:
-          this.markNotPorted(`Puzzle ${first}`);
-          break;
-        case 10:
-          this.markNotPorted(`Chapter ${first + 1}`);
-          break;
-        case 11:
-          this.world = this.world === 1 ? 2 : 1;
+          this.vibrateFor(first);
           break;
         case 19:
-          this.markNotPorted('The ending');
+          this.quitToFrontEnd();
+          break;
+        case 20:
+          this.shake = first;
+          break;
+        case 21:
+          this.playSoundNumber(first);
           break;
         default:
-          this.markNotPorted(`Rule action ${kind}`);
       }
     }
   }
 
-  markNotPorted(what) {
-    this.notPorted = `Not ported yet: ${what}`;
-  }
-
-  // Text in a box, one page at a time.
-  showText(line) {
-    this.showLine(this.lines[line]);
-  }
-
-  showLine(text) {
-    this.textQueue.push({ text });
-  }
-
-  showDialogue(number) {
-    for (const [speaker, line] of this.tables.dialogues[number] ?? []) {
-      this.textQueue.push({ speaker: this.lines[speaker], text: this.lines[line] });
+  gainBullets(weapon, amount) {
+    this.bullets[weapon] += amount;
+    if (this.box?.kind !== BOX.DIALOGUE) {
+      const [line, icon] =
+        weapon === 1 ? [TEXT.BULLETS_PISTOL, ITEM.PISTOL_BULLETS] : [TEXT.BULLETS_SHOTGUN, ITEM.SHOTGUN_BULLETS];
+      this.showMessage(`${this.lines[TEXT.TOOK]}${this.lines[line]}`, { icon });
+    }
+    if (weapon === 1 && this.hasItem(ITEM.PISTOL)) {
+      this.weapon = 1;
+      this.reload(1);
+    }
+    if (weapon === 2 && this.hasItem(ITEM.SHOTGUN)) {
+      this.weapon = 2;
+      this.reload(2);
     }
   }
 
-  get currentText() {
-    return this.textQueue[0] ?? null;
+  setWorld(world) {
+    this.world = world;
+    this.fire(TRIGGER.WORLD, world);
   }
 
-  // Centered on the cursor and kept on the screen, as in GameMidlet.h(int).
-  openVerbs(hotspot) {
+  // A new chapter changes who's being played, as in GameMidlet.a(int, boolean) and the rule
+  // action that calls it.
+  startChapter(chapter) {
+    this.chapter = chapter;
+    this.fire(TRIGGER.CHAPTER, chapter);
+    this.setHealth(100);
+    if (chapter === 2) {
+      this.setWeakened(false);
+      this.items = [];
+      for (const item of [ITEM.MAP, ITEM.MELEE, ITEM.PISTOL, ITEM.PISTOL_BULLETS]) this.addItem(item);
+      this.bullets[1] = 5;
+      this.weapon = 1;
+      this.loaded[1] = 0;
+      this.reload(1);
+    } else if (chapter === 3) {
+      this.setWeakened(true);
+      this.items = [...this.vincentItems].sort((a, b) => a - b);
+      for (const item of USED_UP_BY_CHAPTER_THREE) this.removeItem(item);
+      if (this.hasItem(ITEM.SHOTGUN)) {
+        this.weapon = 2;
+        this.reload(2);
+      } else if (this.hasItem(ITEM.PISTOL)) {
+        this.weapon = 1;
+        this.reload(1);
+      } else {
+        this.weapon = 0;
+      }
+    }
+    this.inventory.itemsChanged();
+    this.roomCleared.fill(false);
+    this.doorStates = this.tables.chapterStates.map((row) => [...row]);
+    if (chapter === 2) {
+      this.setWorld(2);
+      this.floor = 1;
+      this.placeInCorridor(40, 3);
+      this.objectHidden[144] = 1;
+      this.fight = null;
+      this.enterRoom(COLD_ROOM);
+    } else if (chapter === 3) {
+      this.floor = 1;
+      this.placeInCorridor(37, 2);
+      this.objectHidden[144] = 0;
+      this.fight = null;
+      this.enterRoom(7);
+    }
+    this.saveGame({ quietly: true });
+  }
+
+  startPuzzle(number) {
+    this.mode = MODE.PUZZLE;
+    this.verbs = null;
+    this.roomBeforePuzzle = this.room;
+    this.puzzleFrom = this.mode;
+    this.puzzle = createPuzzle(this, number);
+    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+  }
+
+  // Where a finished puzzle returns to, from GameMidlet.af() and ag().
+  finishPuzzle(puzzle, solved) {
+    const { number } = puzzle;
+    this.puzzle = null;
+    const toRoom = number === 2 || number === 4;
+    if (solved) {
+      if (number === 1) this.phoneSolved = true;
+      if (number === 2) this.flagL = true;
+      if (number === 6) this.flagM = true;
+    }
+    this.mode = toRoom ? MODE.ROOM : MODE.CORRIDOR;
+    this.fire(solved ? TRIGGER.PUZZLE_SOLVED : TRIGGER.PUZZLE_FAILED, number);
+    if (this.health <= 0 && !this.gameOver) this.die();
+    this.moveCursor(SCENE_WIDTH / 2, SCENE_HEIGHT / 2);
+  }
+
+  safeWasWrong() {
+    this.setHealth(this.health - SAFE_DAMAGE);
+    this.redFlash = FLASH_TIME;
+    this.shake = SHAKE_TIME;
+    this.damageFlash.restart();
+    this.showBloodOverlay();
+  }
+
+  // Sound. The original plays one thing at a time, as the port's player does.
+  playSound(name, loops = 1) {
+    this.loopingSound = loops === -1 ? name : null;
+    this.audio?.play(name, loops);
+  }
+
+  stopSound() {
+    this.loopingSound = null;
+    this.audio?.stop?.();
+  }
+
+  // The numbers in the rules, from GameMidlet.f(int, int).
+  playSoundNumber(number) {
+    const names = [
+      'alarm',
+      'firing_pistol',
+      'firing_shotgun',
+      'fridge',
+      'hit_claw',
+      'interference',
+      'monster_movement',
+      'whisper',
+      'music',
+      'door_opening',
+    ];
+    if (names[number]) this.playSound(names[number]);
+  }
+
+  // The phone's vibration patterns, from the end of the update. The page's vibration takes
+  // one length, so each is the length of its first buzz.
+  vibrateFor(pattern) {
+    if (!this.vibrationOn || !this.vibrator) return;
+    this.vibrator([500, 100, 2000, 100][pattern] ?? 100);
+  }
+
+  randomBit() {
+    return this.random() < 0.5 ? 1 : 0;
+  }
+
+  randomBetween(low, high) {
+    return low + Math.floor(this.random() * (high - low + 1));
+  }
+
+  // Text in a box. As in the original there's one at a time, and a new one replaces it.
+  showBox(box, onClosed = null) {
+    this.box = box;
+    this.boxClosed = onClosed;
+  }
+
+  showText(line) {
+    this.showMessage(this.lines[line]);
+  }
+
+  showLine(text) {
+    this.showMessage(text);
+  }
+
+  showMessage(text, { wide = false, icon = null } = {}) {
+    this.showBox(this.boxes.message(text, { wide: wide || icon !== null, icon: this.iconFor(icon) }));
+  }
+
+  // An item's picture and its size, as in GameMidlet.a(String, int, int, boolean, int).
+  iconFor(item) {
+    if (item === null) return null;
+    const frame = this.tables.inventoryIcons.indexOf(item);
+    if (frame < 0) return null;
+    const { sheet, animation } = this.data.hardCoded.inventory;
+    const parsed = this.data.animation(animation);
+    const parts = { ...parsed, frames: [parsed.frames[frame]] };
+    const { height } = animationSize(this.data.sheet(sheet), parts);
+    return { item, frame, height };
+  }
+
+  showSpeech(speaker, text, onClosed = null) {
+    this.showBox(this.boxes.dialogue(speaker, text), onClosed);
+  }
+
+  showDialogue(number, { black = false } = {}) {
+    this.dialogue = { number, index: 0 };
+    this.blackBehindDialogue = black;
+    this.showDialogueLine();
+  }
+
+  showDialogueLine() {
+    const { number, index } = this.dialogue;
+    const [speaker, line] = this.tables.dialogues[number][index];
+    this.showBox(this.boxes.dialogue(this.lines[speaker], this.lines[line]));
+  }
+
+  // When the last line ends, a rule may be waiting for it.
+  advanceDialogue() {
+    const { number } = this.dialogue;
+    this.dialogue.index++;
+    if (this.dialogue.index < this.tables.dialogues[number].length) {
+      this.showDialogueLine();
+      return;
+    }
+    this.endDialogue();
+  }
+
+  endDialogue() {
+    const { number } = this.dialogue;
+    this.dialogue = null;
+    this.blackBehindDialogue = false;
+    this.box = null;
+    this.fire(TRIGGER.DIALOGUE_ENDED, number);
+  }
+
+  closeBox() {
+    const closed = this.boxClosed;
+    this.box = null;
+    this.boxClosed = null;
+    closed?.();
+    if (!this.box) this.inventory.reopenIfWaiting();
+  }
+
+  get currentText() {
+    if (!this.box) return null;
+    const { kind, speaker, text } = this.box;
+    return kind === BOX.DIALOGUE || kind === BOX.MESSAGE ? { speaker, text } : null;
+  }
+
+  // Clicking a box, or pressing its button. Long words scroll before they end.
+  confirmBox() {
+    const { box } = this;
+    if (this.gameOver) {
+      this.retry();
+      return;
+    }
+    if (box.rows) {
+      if (this.liftMenu) this.chooseLiftFloor(box.selected);
+      return;
+    }
+    if (box.lines && box.pageLines && box.scroll + box.pageLines < box.lines.length) {
+      box.scroll += box.pageLines;
+      return;
+    }
+    if (this.dialogue) this.advanceDialogue();
+    else this.closeBox();
+  }
+
+  skipBox() {
+    if (this.gameOver) {
+      this.quitToFrontEnd();
+      return;
+    }
+    if (this.liftMenu) {
+      this.liftMenu = false;
+      this.closeBox();
+      return;
+    }
+    if (this.dialogue) this.endDialogue();
+    else this.closeBox();
+  }
+
+  scrollBox(direction) {
+    const { box } = this;
+    if (box.rows) {
+      box.selected = (box.selected + direction + box.rows.length) % box.rows.length;
+    } else if (box.pageLines) {
+      const last = Math.max(0, box.lines.length - box.pageLines);
+      box.scroll = Math.max(0, Math.min(last, box.scroll + direction * box.pageLines));
+    }
+  }
+
+  // The wheel of verbs is centered on the cursor and kept on the screen, as in GameMidlet.h(int).
+  verbArt() {
     const [sheet, animation] = this.tables.cursorSprites[1];
-    const { width, height } = animationSize(this.data.sheet(sheet), this.data.animation(animation));
+    return { sheet, animation, ...animationSize(this.data.sheet(sheet), this.data.animation(animation)) };
+  }
+
+  openVerbs(hotspot) {
+    const { width, height } = this.verbArt();
     const x = Math.max(0, Math.min(SCENE_WIDTH - width, Math.round(this.cursorX - width / 2)));
     const y = Math.max(0, Math.min(SCENE_HEIGHT - height, Math.round(this.cursorY - height / 2)));
-    this.verbs = { hotspot, x, y };
+    this.verbs = { hotspot, x, y, selected: VERB.LOOK };
+  }
+
+  // Each arm of the wheel is a module of its art: the second to fourth in all builds' art,
+  // as look, use and inventory. Keypad builds show one per frame, and touch builds all three.
+  verbArms() {
+    const { sheet, animation } = this.verbArt();
+    const parts = this.data.animation(animation).frames.flatMap((frame) => frame.parts);
+    return [
+      { verb: VERB.LOOK, module: 1 },
+      { verb: VERB.USE, module: 2 },
+      { verb: VERB.INVENTORY, module: 3 },
+    ].map(({ verb, module }) => {
+      const part = parts.find((candidate) => candidate.module === module);
+      return { verb, dx: -part.x, dy: -part.y, ...this.data.moduleSize(sheet, module) };
+    });
   }
 
   verbAt(px, py) {
     if (!this.verbs) return null;
     const { x, y } = this.verbs;
     return (
-      VERB_WHEEL.arms.find(
-        ({ dx, dy }) => px >= x + dx && px < x + dx + VERB_WHEEL.size && py >= y + dy && py < y + dy + VERB_WHEEL.size,
+      this.verbArms().find(
+        ({ dx, dy, width, height }) => px >= x + dx && px < x + dx + width && py >= y + dy && py < y + dy + height,
       )?.verb ?? null
     );
   }
@@ -663,7 +1313,7 @@ export class Mobile3Game {
     this.verbs = null;
     if (verb === VERB.LOOK) this.lookAt(hotspot);
     else if (verb === VERB.USE) this.useOn(hotspot);
-    else this.markNotPorted('The inventory');
+    else this.inventory.open(hotspot);
   }
 
   isBusy() {
@@ -673,12 +1323,94 @@ export class Mobile3Game {
   // The page's methods.
   tick() {
     this.time += MILLISECONDS_PER_TICK;
-    if (this.fade && ++this.fade.ticks === FADE_TICKS) {
-      this.fade.atBlack();
-      this.fade.atBlack = null;
-    } else if (this.fade && this.fade.ticks >= FADE_TICKS * 2) {
-      this.fade = null;
+    if (this.frontEnd) {
+      this.frontEnd.tick(MILLISECONDS_PER_TICK);
+      return;
     }
+    if (this.pause) return;
+    this.tickFade();
+    this.tickHeld();
+    this.tickHud();
+    if (this.timedDialogue > 0) {
+      this.timedDialogue -= MILLISECONDS_PER_TICK;
+      if (this.timedDialogue <= 0) this.playSound('whisper', -1);
+    }
+    if (this.reloading) {
+      this.reloadWait -= MILLISECONDS_PER_TICK;
+      if (this.reloadWait < 0) {
+        this.reloading = false;
+        if (this.bullets[this.weapon] >= 0) this.reload(this.weapon);
+      }
+    }
+    if (this.fade && !this.fight) return;
+    if (this.puzzle && !this.box) this.puzzle.tick(MILLISECONDS_PER_TICK);
+    if (this.fight) {
+      this.tickAimDrift();
+      this.fight?.tick(MILLISECONDS_PER_TICK);
+    }
+  }
+
+  tickFade() {
+    const { fade } = this;
+    if (!fade) return;
+    if (fade.ticks < FADE_TICKS) {
+      fade.ticks++;
+      if (fade.ticks === FADE_TICKS) {
+        const { atBlack } = fade;
+        fade.atBlack = null;
+        atBlack();
+      }
+      return;
+    }
+    if (fade.hold > 0) {
+      fade.hold -= MILLISECONDS_PER_TICK;
+      return;
+    }
+    fade.hold = -1;
+    fade.ticks++;
+    if (fade.ticks >= FADE_TICKS * 2) this.fade = null;
+  }
+
+  tickHud() {
+    this.damageFlash.advance(MILLISECONDS_PER_TICK);
+    this.healFlash.advance(MILLISECONDS_PER_TICK);
+    if (this.shake > 0) this.shake -= MILLISECONDS_PER_TICK;
+    if (this.redFlash > 0) this.redFlash -= MILLISECONDS_PER_TICK;
+    if (this.bloodOverlay) {
+      this.bloodOverlay.playing.advance(MILLISECONDS_PER_TICK);
+      if (!this.bloodOverlay.playing.running) this.bloodOverlay = null;
+    }
+  }
+
+  // A weapon's aim wanders, as in GameMidlet.U().
+  tickAimDrift() {
+    if (this.box || this.inventory.isOpen) return;
+    if (this.randomBit() !== 1 && this.weapon !== 0) return;
+    const limit = this.tables.aimDrift[this.weapon];
+    const wander = (value) => Math.max(-limit, Math.min(limit, value + (this.randomBit() === 1 ? 1 : -1)));
+    this.drift.x = wander(this.drift.x);
+    this.drift.y = wander(this.drift.y);
+    this.moveCursor(this.cursorX + this.drift.x, this.cursorY + this.drift.y);
+  }
+
+  // Keys held in a fight or puzzle move the cursor, faster the longer they're down.
+  tickHeld() {
+    if (!this.held.size || !(this.fight || this.puzzle) || this.box || this.inventory.isOpen) {
+      this.holdSpeed = HOLD_START;
+      this.holdTimer = 0;
+      return;
+    }
+    this.holdTimer += MILLISECONDS_PER_TICK;
+    if (this.holdTimer >= HOLD_STEP_TIME) {
+      this.holdTimer = 0;
+      this.holdSpeed = Math.min(HOLD_FASTEST, this.holdSpeed + 1);
+    }
+    let { cursorX: x, cursorY: y } = this;
+    if (this.held.has('up')) y -= this.holdSpeed;
+    if (this.held.has('down')) y += this.holdSpeed;
+    if (this.held.has('left')) x -= this.holdSpeed;
+    if (this.held.has('right')) x += this.holdSpeed;
+    this.moveCursor(x, y);
   }
 
   // How dark the fade makes the screen, from 0 to 1.
@@ -691,13 +1423,59 @@ export class Mobile3Game {
   moveCursor(x, y) {
     this.cursorX = Math.max(0, Math.min(SCENE_WIDTH - 1, x));
     this.cursorY = Math.max(0, Math.min(SCENE_HEIGHT - 1, y));
+    if (this.frontEnd) {
+      this.frontEnd.hover(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.pause) {
+      this.pause.hover(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.inventory.isOpen) {
+      this.inventory.hover(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.box?.rows) {
+      const row = this.boxes.rowAt(this.box, this.screenX, this.cursorY);
+      if (row > -1) this.box.selected = row;
+    }
+    if (this.verbs) {
+      const verb = this.verbAt(this.cursorX, this.cursorY);
+      if (verb !== null) this.verbs.selected = verb;
+    }
   }
 
+  // A click at the cursor, on whatever's on top.
   click() {
-    this.notPorted = null;
-    if (this.isBusy()) return;
-    if (this.currentText) {
-      this.textQueue.shift();
+    if (this.frontEnd) {
+      this.frontEnd.click(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.pause) {
+      this.pause.click(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.isBusy() && !this.fight) return;
+    if (this.map) {
+      this.map.click(this.screenX);
+      return;
+    }
+    if (this.box) {
+      if (this.timedDialogue > 0) return;
+      if (this.box.rows && this.boxes.rowAt(this.box, this.screenX, this.cursorY) < 0) return;
+      this.confirmBox();
+      return;
+    }
+    if (this.inventory.isOpen) {
+      this.inventory.click(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.puzzle) {
+      this.puzzle.click(this.screenX, this.cursorY);
+      return;
+    }
+    if (this.fight) {
+      this.fight.fire(this.fight.isOnTarget(this.screenX, this.cursorY));
       return;
     }
     if (this.verbs) {
@@ -707,8 +1485,7 @@ export class Mobile3Game {
       return;
     }
     const action = this.action();
-    if (!action) return;
-    this.doAction(action);
+    if (action) this.doAction(action);
   }
 
   doAction(action) {
@@ -737,21 +1514,75 @@ export class Mobile3Game {
     }
   }
 
+  // Keys. The arrow keys arrive as these while a menu is up, and as moves otherwise.
   pressKey(key) {
-    this.notPorted = null;
-    if (this.isBusy()) return;
+    if (this.frontEnd) {
+      this.frontEnd.pressKey(key);
+      return;
+    }
+    if (this.pause) {
+      this.pause.pressKey(key);
+      return;
+    }
+    if (this.isBusy() && !this.fight) return;
+    if (this.map) {
+      this.map.pressKey(key);
+      return;
+    }
+    if (this.box) {
+      if (this.timedDialogue > 0) return;
+      if (key === 'Enter') this.confirmBox();
+      else if (key === 'Escape') this.skipBox();
+      else if (key === 'ArrowUp' || key === 'ArrowLeft') this.scrollBox(-1);
+      else if (key === 'ArrowDown' || key === 'ArrowRight') this.scrollBox(1);
+      return;
+    }
+    if (this.inventory.isOpen) {
+      this.inventory.pressKey(key);
+      return;
+    }
+    if (this.verbs) {
+      if (key === 'Enter') this.chooseVerb(this.verbs.selected);
+      else if (key === 'Escape') this.verbs = null;
+      else if (key === 'ArrowRight' || key === 'ArrowDown') this.verbs.selected = (this.verbs.selected + 1) % 3;
+      else if (key === 'ArrowLeft' || key === 'ArrowUp') this.verbs.selected = (this.verbs.selected + 2) % 3;
+      return;
+    }
     if (key === 'Enter') {
       this.click();
       return;
     }
     if (key === 'Escape') {
-      if (this.currentText) this.textQueue.shift();
-      else this.verbs = null;
+      this.pressSoftKey('right');
       return;
     }
-    if (this.currentText || this.verbs) return;
-    if (key === 'inventory') this.markNotPorted('The inventory');
-    else if (key === 'move-forward') {
+    if (key === 'inventory') {
+      if (!this.puzzle) this.inventory.open();
+      return;
+    }
+    if (key === 'map') {
+      if (this.hasItem(ITEM.MAP) && !this.fight && !this.puzzle) this.map = new MapScreen(this, this.floor);
+      return;
+    }
+    if (this.puzzle) {
+      if (/^[0-9]$/.test(key)) this.puzzle.pressDigit(Number(key));
+      else if (key === 'hotspot-next' || key === 'hotspot-previous') this.puzzle.softLeft();
+      return;
+    }
+    if (key === '1') {
+      this.nextWeapon();
+      return;
+    }
+    if (key === '3') {
+      this.quickHeal();
+      return;
+    }
+    if (key === 'hotspot-next' || key === 'hotspot-previous') {
+      this.jumpToHotspot(key === 'hotspot-next' ? 1 : -1);
+      return;
+    }
+    if (this.fight) return;
+    if (key === 'move-forward') {
       if (this.mode === MODE.CORRIDOR && this.canWalkForward()) this.walkForward();
     } else if (key === 'move-back') {
       if (this.mode === MODE.ROOM) this.leaveRoom();
@@ -763,50 +1594,412 @@ export class Mobile3Game {
     }
   }
 
+  // The page's Gun button: the original only changes weapons from the inventory.
+  nextWeapon() {
+    const carried = [ITEM.MELEE, ITEM.PISTOL, ITEM.SHOTGUN];
+    for (let step = 1; step <= 3; step++) {
+      const weapon = (this.weapon + step) % 3;
+      if (this.hasItem(carried[weapon])) {
+        this.equip(weapon);
+        return;
+      }
+    }
+  }
+
+  // The original's key for using a health pack, from its update.
+  quickHeal() {
+    if (this.hasItem(ITEM.HEALTH_PACK)) {
+      this.healFully();
+      this.removeItem(ITEM.HEALTH_PACK);
+    } else if (this.hasItem(ITEM.MEDIPACK)) {
+      this.healSome();
+      this.removeItem(ITEM.MEDIPACK);
+    }
+  }
+
+  // For players without a mouse, E and Q move between what can be clicked.
+  jumpToHotspot(direction) {
+    const spots = this.hotspots();
+    if (!spots.length) return;
+    const middle = ({ x0, x1, y0, y1 }) => [(x0 + x1) >> 1, (y0 + y1) >> 1];
+    const here = spots.findIndex(({ x0, x1, y0, y1 }) => {
+      return this.cursorX >= x0 && this.cursorX <= x1 && this.cursorY >= y0 && this.cursorY <= y1;
+    });
+    const next = (here + direction + spots.length) % spots.length;
+    this.moveCursor(...middle(spots[here === -1 ? 0 : next]));
+  }
+
   pressSoftKey(side) {
-    if (side === 'right') this.pressKey('Escape');
+    if (this.frontEnd) {
+      this.frontEnd.pressKey(side === 'left' ? 'Enter' : 'Escape');
+      return;
+    }
+    if (this.pause) {
+      this.pause.pressKey(side === 'left' ? 'Enter' : 'Escape');
+      return;
+    }
+    if (this.isBusy() && !this.fight) return;
+    if (this.map) {
+      this.map = null;
+      return;
+    }
+    if (this.box) {
+      if (this.timedDialogue > 0) return;
+      if (side === 'left') this.confirmBox();
+      else this.skipBox();
+      return;
+    }
+    if (this.inventory.isOpen) {
+      this.inventory.pressKey(side === 'left' ? 'Enter' : 'Escape');
+      return;
+    }
+    if (this.verbs) {
+      if (side === 'left') this.chooseVerb(this.verbs.selected);
+      else this.verbs = null;
+      return;
+    }
+    if (this.puzzle) {
+      if (side === 'left') this.puzzle.softLeft();
+      else this.puzzle.softRight();
+      return;
+    }
+    if (side === 'left') this.pressKey('map');
+    else if (!this.fight || this.health > 0) this.openPause();
+  }
+
+  openPause() {
+    if (this.puzzle?.number === 4) return;
+    this.pause = new PauseMenu(this);
+    this.audio?.stop?.();
+  }
+
+  closePause() {
+    this.pause = null;
+    if (this.loopingSound) this.audio?.play(this.loopingSound, -1);
   }
 
   softKeys() {
-    return { left: null, right: this.currentText || this.verbs ? { label: 'Back' } : null };
+    const { softKeyLines } = this.tables;
+    const label = (index) => (index === null ? null : { label: this.lines[softKeyLines[index]] });
+    if (this.frontEnd) return this.frontEnd.softKeys(label);
+    if (this.pause) return { left: label(KEY.SELECT), right: label(KEY.BACK) };
+    if (this.map) return { left: null, right: label(KEY.BACK) };
+    if (this.gameOver) return { left: label(KEY.RETRY), right: label(KEY.MAIN_MENU) };
+    if (this.box) {
+      if (this.timedDialogue > 0) return { left: null, right: null };
+      if (this.dialogue || this.box.kind === BOX.DIALOGUE) return { left: label(KEY.CONTINUE), right: label(KEY.SKIP) };
+      if (this.box.rows) return { left: label(KEY.SELECT), right: label(KEY.BACK) };
+      return { left: null, right: label(KEY.BACK) };
+    }
+    if (this.inventory.isOpen) return { left: label(KEY.SELECT), right: label(KEY.BACK) };
+    if (this.verbs) return { left: label(KEY.SELECT), right: label(KEY.BACK) };
+    if (this.puzzle) {
+      const { left: leftKey, right: rightKey } = this.puzzle.softKeyLabels();
+      return { left: label(leftKey), right: label(rightKey) };
+    }
+    const map = !this.fight && this.hasItem(ITEM.MAP);
+    return {
+      left: map ? { ...label(KEY.MAP), action: 'map' } : null,
+      right: label(KEY.PAUSE),
+    };
   }
 
-  holdDirection() {}
-  releaseDirections() {}
-  isAiming() {
-    return false;
+  holdDirection(direction, down) {
+    if (down) this.held.add(direction);
+    else this.held.delete(direction);
+    this.puzzle?.holdDirection(direction, down);
   }
+
+  releaseDirections() {
+    this.held.clear();
+    this.puzzle?.holdDirection('left', false);
+  }
+
+  // In a fight or puzzle, the direction keys move the cursor rather than walk.
+  isAiming() {
+    return Boolean(this.fight || this.puzzle);
+  }
+
   aimWithMouse() {}
   movePointerBy() {}
+
+  // Holding the mouse on the clock's buttons keeps its hands turning.
   wantsStroke() {
-    return false;
+    return (
+      !this.frontEnd &&
+      !this.pause &&
+      !this.box &&
+      !this.inventory.isOpen &&
+      Boolean(this.puzzle?.wantsHold(this.screenX, this.cursorY))
+    );
   }
-  startStroke() {}
+
+  startStroke() {
+    this.stroke = {};
+    this.puzzle?.startHold(this.screenX, this.cursorY);
+  }
+
   continueStroke() {}
-  endStroke() {}
+
+  endStroke() {
+    this.stroke = null;
+    this.puzzle?.endHold();
+  }
+
   itemIcons() {
     return null;
   }
+
+  // Saving, as in GameMidlet.az() and p(). The original's are one slot, which this also is.
   canSave() {
-    return false;
+    return !this.frontEnd && !this.fight && !this.gameOver && !this.puzzle && !this.dialogue && !this.isBusy();
   }
+
   hasSave() {
-    return false;
+    return this.savedExists;
   }
-  saveGame() {}
-  loadGame() {}
+
+  saveGame({ quietly = false } = {}) {
+    const state = {
+      chapter: this.chapter,
+      world: this.world,
+      floor: this.floor,
+      mode: this.mode === MODE.ROOM ? MODE.ROOM : MODE.CORRIDOR,
+      room: this.room,
+      cell: this.cell,
+      facing: this.facing,
+      objectValue: this.objectValue,
+      objectHidden: this.objectHidden,
+      objectTaken: this.objectTaken,
+      propTaken: this.propTaken,
+      doorStates: this.doorStates,
+      roomCleared: this.roomCleared,
+      ruleFired: this.ruleFired,
+      items: this.items,
+      vincentItems: this.vincentItems,
+      health: this.health,
+      weakened: this.weakened,
+      weapon: this.weapon,
+      bullets: this.bullets,
+      loaded: this.loaded,
+      phoneSolved: this.phoneSolved,
+      flagL: this.flagL,
+      flagM: this.flagM,
+    };
+    try {
+      this.storage?.setItem(SAVE_KEY, JSON.stringify(state));
+      this.savedExists = Boolean(this.storage);
+      if (!quietly) this.showText(TEXT.SAVED);
+    } catch {
+      if (!quietly) this.showText(474);
+    }
+  }
+
+  readSave() {
+    try {
+      return JSON.parse(this.storage?.getItem(SAVE_KEY) ?? 'null');
+    } catch {
+      return null;
+    }
+  }
+
+  loadGame() {
+    const state = this.readSave();
+    if (!state) return false;
+    this.frontEnd = null;
+    this.stopSound();
+    this.resetRun();
+    const { mode, room, cell, facing, ...fields } = state;
+    Object.assign(this, fields);
+    this.setHealth(state.health);
+    this.placeInCorridor(cell, facing);
+    if (mode === MODE.ROOM) {
+      this.room = room;
+      this.mode = MODE.ROOM;
+      if (room === COLD_ROOM) this.playSound('fridge', -1);
+    } else {
+      this.room = room;
+      this.mode = MODE.CORRIDOR;
+    }
+    return true;
+  }
+
+  // Settings, which last between games.
+  loadSettings() {
+    try {
+      const settings = JSON.parse(this.storage?.getItem(SETTINGS_KEY) ?? 'null');
+      if (!settings) return;
+      this.vibrationOn = settings.vibration && Boolean(this.vibrator);
+      if (settings.language) this.setLanguage(settings.language);
+    } catch {
+      // The defaults will do.
+    }
+  }
+
+  saveSettings() {
+    try {
+      this.storage?.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({ vibration: this.vibrationOn, language: this.chosenLanguage ? this.languageName : null }),
+      );
+    } catch {
+      // They just won't last beyond this visit.
+    }
+  }
+
+  setLanguage(name) {
+    const language = this.data.languages.find((candidate) => candidate.name === name);
+    if (!language) return;
+    this.languageName = name;
+    this.language = LANGUAGE_CODES[name];
+    this.lines = this.data.text(language);
+    this.chosenLanguage = true;
+  }
+
+  // Everything to draw, in order, for the renderer: sprites and modules from sheets, text
+  // in the JAR's fonts, and plain rectangles. All are in the scene's coordinates.
+  drawList() {
+    return [...this.drawScreen(), ...this.drawCursor()];
+  }
+
+  drawScreen() {
+    if (this.frontEnd) return onPhone(this.frontEnd.draw());
+    const list = [];
+    const shaking = this.shake > 0 && !this.pause;
+    const shakeX = shaking ? this.randomBetween(-2, 2) : 0;
+    const shakeY = shaking ? this.randomBetween(-2, 2) : 0;
+    const shifted = (items) => items.map((item) => ({ ...item, x: item.x + shakeX, y: item.y + shakeY }));
+    if (this.map) return onPhone(this.map.draw());
+    if (this.blackBehindDialogue) {
+      list.push(...onPhone(this.drawBox()));
+      return list;
+    }
+    list.push(...this.drawWorld(shifted));
+    if (this.fade)
+      list.push({ fill: '#000000', opacity: this.fadeLevel, x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
+    if (this.pause) {
+      list.push(...onPhone(this.pause.draw()));
+      return list;
+    }
+    list.push(...this.drawHud());
+    if (this.verbs) {
+      const { sheet, animation } = this.verbArt();
+      list.push({
+        sheet,
+        animation,
+        frame: this.data.kind === 'keypad' ? this.verbs.selected : 0,
+        x: this.verbs.x,
+        y: this.verbs.y,
+      });
+    }
+    if (this.inventory.isOpen) list.push(...onPhone(this.inventory.draw()));
+    list.push(...onPhone(this.drawBox()));
+    return list;
+  }
+
+  drawWorld(shifted) {
+    const list = [];
+    const { fight, puzzle } = this;
+    if (puzzle) {
+      if (puzzle.background() === 'corridor') list.push(...shifted(this.scene()));
+      else list.push({ fill: '#000000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
+      list.push(...shifted(onPhone(puzzle.draw())));
+      if (this.redFlash > 0) list.push({ fill: '#aa0000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT });
+      return list;
+    }
+    if (fight?.intro) {
+      if (fight.intro.dark) return [{ fill: '#000000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT }];
+      if (fight.intro.showMonster) return onPhone([fight.monsterSprite()]);
+      return shifted(this.scene());
+    }
+    list.push(...shifted(this.scene()));
+    if (fight) list.push(...shifted(onPhone(fight.sprites())));
+    if (this.bloodOverlay) {
+      const { sheet, playing } = this.bloodOverlay;
+      list.push({ sheet, animation: playing.animation, frame: playing.frame, x: SCREEN_X, y: 0 });
+    }
+    return list;
+  }
+
+  // Health and weapon, as in GameMidlet.S(). They stay at the corners of the whole scene.
+  drawHud() {
+    if (this.mode === MODE.PUZZLE || this.gameOver) return [];
+    const { hud } = this.data.hardCoded;
+    const list = [];
+    const level = [hud.fine, hud.hurt, hud.dying][this.healthLevel];
+    if (level) list.push({ sheet: level.sheet, animation: level.animation, x: 5, y: 1 });
+    if (this.damageFlash.frame !== 0) {
+      list.push({
+        sheet: hud.damage.sheet,
+        animation: hud.damage.animation,
+        frame: this.damageFlash.frame,
+        x: 5,
+        y: 1,
+      });
+    }
+    if (this.healFlash.frame !== 0) {
+      list.push({ sheet: hud.healed.sheet, animation: hud.healed.animation, frame: this.healFlash.frame, x: 5, y: 1 });
+    }
+    const font = 1;
+    const fineWidth = this.data.moduleSize(hud.fine.sheet, 0).width;
+    const weaponHeight = this.data.moduleSize(hud.weaponSheet, 0).height;
+    const textY = 9 + (weaponHeight >> 1) - (this.data.fonts[font].lineHeight >> 1);
+    list.push({ text: `${this.health}%`, font, x: 5 + fineWidth + 10, y: textY });
+    const { weapon, loaded } = this;
+    if (loaded[weapon] >= 0 || weapon === 0) {
+      if (this.reloading) {
+        list.push({ text: this.lines[TEXT.RELOADING], font, x: SCENE_WIDTH - 2, y: textY, align: 'right' });
+        return list;
+      }
+      const animations = [hud.melee, hud.pistol, hud.shotgun];
+      const animation = animations[weapon];
+      const { width } = animationSize(this.data.sheet(hud.weaponSheet), this.data.animation(animation));
+      const x = SCENE_WIDTH - width - 5;
+      list.push({ sheet: hud.weaponSheet, animation, x, y: weapon === 0 ? 9 : 11 });
+      if (weapon !== 0) list.push({ text: String(loaded[weapon]), font, x, y: textY, align: 'right' });
+    }
+    return list;
+  }
+
+  drawBox() {
+    return this.box ? [{ box: this.box }] : [];
+  }
+
+  // The cursor and its words, as the keypad builds draw them in GameMidlet.R().
+  drawCursor() {
+    if (this.frontEnd?.stage === 'logo') return [];
+    const [sheet, animation] = this.tables.cursorSprites[0];
+    const covered = this.frontEnd || this.pause || this.map || this.box || this.verbs || this.inventory.isOpen;
+    const frame = covered ? CURSOR.NORMAL : this.cursorFrame();
+    const { width, height } = this.cursorSize(sheet, animation, frame);
+    const centered = frame === CURSOR.AIM_ON || frame === CURSOR.AIM_OFF;
+    const x = centered ? this.cursorX - (width >> 1) : this.cursorX;
+    const y = centered ? this.cursorY - (height >> 1) : this.cursorY;
+    const list = [{ sheet, animation, frame, x, y }];
+    if (frame > 1 && !centered) {
+      const text = this.lines[this.tables.cursorLabels[frame]];
+      if (text?.trim()) {
+        const textY = y >= 20 ? y - 16 : y + height;
+        const textX = Math.max(30, Math.min(SCENE_WIDTH - 30, this.cursorX + (width >> 1)));
+        list.push({ text, font: 0, x: textX, y: textY, align: 'center' });
+      }
+    }
+    return list;
+  }
+
+  cursorSize(sheet, animation, frame) {
+    const parsed = this.data.animation(animation);
+    return animationSize(this.data.sheet(sheet), { ...parsed, frames: [parsed.frames[frame]] });
+  }
 }
 
-// Where the verb wheel's arms can be clicked, from GameMidlet.R() and the touch handling in
-// a(int, int, int, int, int), relative to its top left.
-export const VERB_WHEEL = {
-  size: 30,
-  arms: [
-    { verb: VERB.USE, dx: 5, dy: 10 },
-    { verb: VERB.LOOK, dx: 37, dy: 20 },
-    { verb: VERB.INVENTORY, dx: 74, dy: 36 },
-  ],
-};
+// What's laid out for the phone's screen, placed in the middle of the scene.
+function onPhone(list) {
+  return list.map((item) => {
+    if (item.box) return { ...item, offsetX: SCREEN_X };
+    return { ...item, x: item.x + SCREEN_X };
+  });
+}
 
 export function createGame(data, options) {
   return new Mobile3Game(data, options);

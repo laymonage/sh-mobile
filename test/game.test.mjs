@@ -53,6 +53,7 @@ function hover(game, x, y) {
 for (const [game, buildId] of [
   ['sh1', 'sh1-2014-base'],
   ['sh2', 'sh2-2015-a1'],
+  ['sh3', 'sh3-2010-v1.0.20-a'],
 ]) {
   test(`the Internet Archive's ${game} download is pinned to a build the port accepts`, async () => {
     const build = input(buildId);
@@ -64,6 +65,8 @@ for (const [game, buildId] of [
 test('each Internet Archive download is kept apart, and copies already kept still count', () => {
   assert.equal(ARCHIVE_JARS.sh1.storageKey, 'archive');
   assert.notEqual(ARCHIVE_JARS.sh2.storageKey, ARCHIVE_JARS.sh1.storageKey);
+  assert.notEqual(ARCHIVE_JARS.sh3.storageKey, ARCHIVE_JARS.sh1.storageKey);
+  assert.notEqual(ARCHIVE_JARS.sh3.storageKey, ARCHIVE_JARS.sh2.storageKey);
 });
 
 test("help describes the mouse and keyboard in every language, in the JAR's own headings", () => {

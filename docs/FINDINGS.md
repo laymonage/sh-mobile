@@ -14,7 +14,7 @@ The numbers and build comparisons below are checked by `npm test`. Statements th
 | Mobile 2 | Game data and touch reference | `sh2-2015-base` | Built for pointer input |
 | Mobile 2 | Keypad reference | `sh2-2008-a7` | Looks untouched, and 24 other builds share its data |
 | Mobile 3 | Game data and code reference | `sh3-en-v170` | Newest build with top-tier art that's labelled for touch |
-| Mobile 3 | Keypad reference | `sh3-en-v180` | Newest build overall |
+| Mobile 3 | Keypad reference | `sh3-en-v180` | Newest build overall. The port's keypad build is `sh3-2010-v1.0.20-a` instead |
 | Mobile 3 | Asset names | `sh3-en-v160` | Loose files with real names, but smaller art |
 
 For the two INK games, the best route to a port is to reimplement the engine in JavaScript and load the original game data, as ScummVM does. Most of those games are data rather than Java code. Mobile 3 has a different engine, and more of its logic is in Java.
@@ -197,7 +197,7 @@ From reading the code: `GameMidlet` has a 78-row table of trigger, condition and
 
 Rule 35 lists four actions but its count says three, so the original never runs the last, which unlocks a door. The port does the same.
 
-The game's rooms, floors, dialogue order and items are arrays built by static initializers, which can be read from the class files without running them. 17 builds have these arrays with the numbers `sh3-en-v170` has, including all of v1.5.0.
+The game's rooms, floors, dialogue order and items are arrays built by static initializers, which can be read from the class files without running them. 17 builds have these arrays with the numbers `sh3-en-v170` has, including all of v1.5.0, and 24 more have them with the numbers `sh3-2010-v1.0.20-a` has.
 
 `sh3-en-v160` stores its assets as 215 loose PNGs with real names, such as `b_enigma1_telephone.png`, including 97 objects and 22 puzzle images. Its art differs from the top tier, so these names haven't been mapped to the archive entries.
 
@@ -390,20 +390,40 @@ Playing the route also found a freeze in the engine shared with the first game: 
 
 ## The Mobile 3 port
 
-Mobile 3's port has just been started. `web/engine/mobile3/` runs on its own engine, reading the game's tables out of the player's JAR, and shares only the page and sound with the other two games. Their code hasn't changed.
+`web/engine/mobile3/` runs on its own engine, reading the game's tables out of the player's JAR, and shares only the page and sound with the other two games. Their code hasn't changed.
 
-A new game opens on the original's first dialogue, in the first room. You can look at and pick up things through the verb wheel, leave the room, walk and turn in corridors drawn from their wall pieces, and go through unlocked doors and up and down stairs. In the browser, it was tried with real clicks and keys from the first room, through the corridor outside it and back through its door. The rest has only been run in Node.
+`test/mobile3-route.test.mjs` plays from a new game to the ending in Node, through the page's own methods, following [the walkthrough at Silent Hill Memories](https://www.silenthillmemories.net/sh_mobile3/walkthrough_en.htm). It does this on one build of each of the 12 different programs the port accepts. Its fights use a seeded random number generator and perfect aim, so surviving them says nothing about how hard they are.
 
-The tests check that every room in both worlds and all chapters, and every corridor view, has art that exists, and that all 31 corridor cells can be reached. They don't check that the pictures look right. That was looked at by eye for the first room and three corridor views.
+In the browser, `sh3-2010-v1.0.20-a` was started from the Internet Archive button and clicked by hand from its logos to the opening dialogue. Screens were looked at by eye on it and `sh3-en-v170`: the menus, the inventory, the map, the verb wheel, a corridor, all six puzzles on the keypad build, three of them on the touch build, and all four monsters on the keypad build. There were no console errors. The rest of the route has only been run in Node, and sound has been parsed, not listened to.
 
-Instead of the original, the port has browser text and black fades, and words beside the cursor rather than its art. Those are stand-ins until the text and menus are done. What isn't ported shows a red line naming it, including the fight that starts on leaving a room with a monster in it, which is skipped.
+### Which builds
 
-The areas for turning and turning back in a corridor are the port's own, because the original's are measured from the edges of a 240-pixel screen.
+The port follows two kinds of build. They have the same game and tables, and differ in the resource numbers written into their methods, which `web/engine/mobile3/resources.mjs` lists. Touch builds, like `sh3-en-v170`, have extra art for on-screen buttons. Keypad builds, like `sh3-2010-v1.0.20-a`, keep their MIDI files in `b.mbf`, and those are byte-identical to the touch builds' loose files.
+
+The Internet Archive button loads `sh3-2010-v1.0.20-a`, which has the key that makes the code a full game. Another copy on the Archive, in `SHMobileGames.zip`, is the same as `sh3-2010-v1.0.17-a10`. It lacks that key, so its code would end it after 3 minutes, and it's from a family with smaller art and different class names, which the port doesn't follow.
+
+### What the port changes
+
+- Scenes are shown whole, with what a phone draws on its 240-pixel screen in the middle. So the fights, puzzles and boxes are laid out as on a phone, and the areas for turning in a corridor are the port's own.
+- The door to the last room's words are wrapped to fit their paper. The original wraps them 100 pixels wider than the paper, which hides the end of each line.
+- Keypad builds have no way to enter the safe's number with a mouse, so the port adds one.
+- Long text scrolls by a click before moving on, rather than needing the up and down keys.
+- Fights have no critical hits, as the keypad builds don't. Touch builds add on-screen targets for them, and the port doesn't draw those.
+- The demo's 3-minute limit isn't included, as for the other games' checks.
+
+### Original behavior that looks like a bug
+
+These are kept:
+
+- Rule 35 lists an action its count skips, and two rules have a condition that's never true, so their dialogues never show.
+- Pouring from the largest bottle into the smallest, or from the middle one into a partly full smallest, doesn't conserve sand. The walkthrough's order isn't affected.
+- The last monster reads its two position tables crosswise, as the bytecode confirms.
+- Picking the Beretta up again in the last chapter gives you a second one.
 
 ## What hasn't been checked
 
 - The first game has been played through once by a person in the browser, who reported that it seemed okay. That wasn't a side-by-side comparison with the original on a phone, and the route in `test/playthrough.test.mjs` hasn't been compared with one either.
-- Only Mobile 3's rooms and corridors have been run, so the rest of its behavior is only known from reading the code.
+- Mobile 3 hasn't been played by hand to its end, or compared with a phone. How often its monsters attack depends on the same assumed 60 ms tick as the other games.
 - Mobile 2 hasn't been compared with a phone, and how often its monsters attack depends on the same assumed 60 ms tick as the first game's.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.

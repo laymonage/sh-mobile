@@ -6,11 +6,15 @@ export const TRIGGER = {
   LOOK: 5,
   USE_ITEM: 6,
   ITEM_LOOKED_AT: 7,
+  PUZZLE_SOLVED: 8,
+  DIALOGUE_ENDED: 9,
   LEFT_ROOM: 10,
   ENTERED_ROOM: 11,
   WORLD: 12,
   FIGHT_WON: 13,
   DOOR: 14,
+  PUZZLE_FAILED: 15,
+  FIGHT_STARTED: 16,
 };
 
 // Rules that can fire again and again. Using an item has a shorter list.

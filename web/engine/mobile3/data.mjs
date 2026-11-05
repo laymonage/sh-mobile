@@ -1,4 +1,5 @@
 import { readStaticTables } from './class-tables.mjs';
+import { BUILD_RESOURCES } from './resources.mjs';
 
 // audio.mjs finds a game's sounds in data.entries, under this path.
 export const SOUND_PATH = 'sh3/sfx/mid';
@@ -41,11 +42,73 @@ const TABLES = {
   cursorSprites: 'GameMidlet.c:[[I',
   archiveNames: 'e.a:[Ljava/lang/String;',
   looseFiles: 'e.b:[Ljava/lang/String;',
+  languageNames: 'GameMidlet.a:[Ljava/lang/String;',
+  logos: 'GameMidlet.b:[[I',
+  frontArt: 'GameMidlet.a:[[I',
+  mainMenuLines: 'GameMidlet.e:[I',
+  settingLabels: 'GameMidlet.i:[I',
+  helpLines: 'GameMidlet.j:[I',
+  playLines: 'GameMidlet.k:[I',
+  onOffLines: 'GameMidlet.l:[I',
+  cursorLabels: 'GameMidlet.c:[S',
+  softKeyLines: 'GameMidlet.h:[I',
+  inventoryIcons: 'GameMidlet.a:[I',
+  phoneCode: 'GameMidlet.aa:[I',
+  weaponDamage: 'GameMidlet.o:[I',
+  reloadTime: 'GameMidlet.p:[I',
+  monsterAttackGap: 'GameMidlet.q:[I',
+  monsterSheets: 'GameMidlet.r:[I',
+  aimDrift: 'GameMidlet.s:[I',
+  monster1HitX: 'GameMidlet.t:[I',
+  monster1HitY: 'GameMidlet.u:[I',
+  monster1Animations: 'GameMidlet.v:[I',
+  monster2Odds: 'GameMidlet.w:[I',
+  monster2HitLeft: 'GameMidlet.x:[I',
+  monster2HitTop: 'GameMidlet.y:[I',
+  monster2HitWidth: 'GameMidlet.z:[I',
+  monster2HitHeight: 'GameMidlet.A:[I',
+  monster2Animations: 'GameMidlet.D:[I',
+  monster3Extras: 'GameMidlet.E:[I',
+  monster3Animations: 'GameMidlet.F:[I',
+  monster3HitLeft: 'GameMidlet.G:[I',
+  monster3HitTop: 'GameMidlet.H:[I',
+  monster3HitWidth: 'GameMidlet.I:[I',
+  monster3HitHeight: 'GameMidlet.J:[I',
+  monster4Animations: 'GameMidlet.K:[I',
+  monster4HitLeft: 'GameMidlet.L:[I',
+  monster4HitTop: 'GameMidlet.M:[I',
+  monster4HitWidth: 'GameMidlet.N:[I',
+  monster4HitHeight: 'GameMidlet.O:[I',
+  firstFloorMap: 'GameMidlet.g:[[B',
+  secondFloorMap: 'GameMidlet.h:[[B',
+  thirdFloorMap: 'GameMidlet.i:[[B',
 };
 
-// The first room's first layer. Other families of builds number their resources differently,
-// which the numbers written directly into the code can't follow.
-const FIRST_ROOM_LAYER = 16777791;
+// The same tables, under the names each kind of build gives them.
+const BUILD_TABLES = {
+  touch: {
+    monsterArmor: 'GameMidlet.e:[[I',
+    boxSprites: 'GameMidlet.n:[[I',
+    puzzleSheets: 'GameMidlet.ac:[I',
+    puzzleLines: 'GameMidlet.ad:[I',
+    mapAnimations: 'GameMidlet.aw:[I',
+    fonts: 'GameMidlet.aC:[I',
+    yesNoLines: 'GameMidlet.aq:[I',
+  },
+  keypad: {
+    monsterArmor: 'GameMidlet.f:[[I',
+    boxSprites: 'GameMidlet.o:[[I',
+    puzzleSheets: 'GameMidlet.ab:[I',
+    puzzleLines: 'GameMidlet.ac:[I',
+    mapAnimations: 'GameMidlet.ar:[I',
+    fonts: 'GameMidlet.av:[I',
+    yesNoLines: 'GameMidlet.al:[I',
+  },
+};
+
+// A build is one of the two kinds this port follows if its first room's first layer and its
+// cursor's art are numbered as that kind's are. Others can't use the numbers in resources.mjs.
+const BUILD_CURSORS = { touch: 16777614, keypad: 16777597 };
 
 function parseArchive(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -67,6 +130,9 @@ class Reader {
   }
   u8() {
     return this.bytes[this.p++];
+  }
+  i8() {
+    return (this.bytes[this.p++] << 24) >> 24;
   }
   u16() {
     this.p += 2;
@@ -144,8 +210,7 @@ export function parseAnimation(bytes) {
   return { flags, frames, duration: total };
 }
 
-// Which frame a looping animation shows at a time in milliseconds. The class k also has
-// animations that stop or bounce, which only fights and puzzles use.
+// Which frame a looping animation shows at a time in milliseconds.
 export function frameAt(animation, time) {
   const { frames, duration } = animation;
   if (duration <= 0 || frames.length < 2) return frames[0];
@@ -153,25 +218,82 @@ export function frameAt(animation, time) {
   return frames.findLast((frame) => frame.start <= moment) ?? frames[0];
 }
 
-// The size of an animation's first frame, as in k.a(int, c, int, int[], int).
+// An animation being played, as the class k's packed numbers track one. It either loops,
+// or plays once and stops.
+export const LOOP = 1;
+export const ONCE = 0;
+export class Playing {
+  constructor(animation, mode) {
+    this.animation = animation;
+    this.mode = mode;
+    this.restart();
+  }
+
+  restart(frame = 0) {
+    this.frame = frame;
+    this.time = frame === 0 ? 0 : this.animation.frames[frame - 1].start + this.animation.frames[frame - 1].duration;
+    this.running = true;
+  }
+
+  advance(milliseconds) {
+    const { frames, duration } = this.animation;
+    if (this.running) this.time += milliseconds;
+    if (this.mode === ONCE) {
+      if (this.time >= duration || this.time <= 0) this.running = false;
+    } else if (this.time >= duration) {
+      this.time -= duration;
+      this.frame = 0;
+    }
+    if (this.running) {
+      while (this.frame < frames.length - 1 && this.time >= frames[this.frame].start + frames[this.frame].duration) {
+        this.frame++;
+      }
+    }
+  }
+}
+
+function moduleSize(sheet, index) {
+  const module = sheet.modules[index];
+  const rectangle = sheet.rectangles[module.rectangle];
+  // These transforms turn a rectangle on its side.
+  const sideways = (TRANSFORMS_ON_SIDE[module.transform] ?? 0) !== 0;
+  return sideways
+    ? { width: rectangle.height, height: rectangle.width }
+    : { width: rectangle.width, height: rectangle.height };
+}
+
+// An animation's bounds over all of its frames, as in k.a(c, int, int[], int).
 export function animationSize(sheet, animation) {
   let right = Number.NEGATIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
   let left = Number.POSITIVE_INFINITY;
   let top = Number.POSITIVE_INFINITY;
-  for (const part of animation.frames[0].parts) {
-    const module = sheet.modules[part.module];
-    const rectangle = sheet.rectangles[module.rectangle];
-    // These transforms turn a rectangle on its side.
-    const sideways = (TRANSFORMS_ON_SIDE[module.transform] ?? 0) !== 0;
-    const width = sideways ? rectangle.height : rectangle.width;
-    const height = sideways ? rectangle.width : rectangle.height;
-    left = Math.min(left, -part.x);
-    top = Math.min(top, -part.y);
-    right = Math.max(right, width - part.x);
-    bottom = Math.max(bottom, height - part.y);
+  for (const frame of animation.frames) {
+    for (const part of frame.parts) {
+      const { width, height } = moduleSize(sheet, part.module);
+      left = Math.min(left, -part.x);
+      top = Math.min(top, -part.y);
+      right = Math.max(right, width - part.x);
+      bottom = Math.max(bottom, height - part.y);
+    }
   }
   return { width: right - left, height: bottom - top };
+}
+
+// A bitmap font: glyphs that are a sheet's modules, as in GameMidlet.D(int).
+export function parseFont(bytes) {
+  const reader = new Reader(bytes);
+  const sheet = reader.resource();
+  const lineHeight = reader.u8();
+  const baseline = reader.u8();
+  const spacing = reader.u8();
+  const glyphs = new Map();
+  for (let remaining = reader.u8(); remaining > 0; remaining--) {
+    const character = reader.u16();
+    const module = reader.u8();
+    glyphs.set(character, { module, offset: reader.i8() });
+  }
+  return { sheet, lineHeight, baseline, spacing, glyphs };
 }
 
 // A language file: offsets the game doesn't use, then every line.
@@ -200,16 +322,33 @@ export function isMobile3(files) {
   return files.has('b.mbf');
 }
 
-// All of a build's data, or null if the build isn't one the port follows yet.
+// Which kind of build these tables are from, or null if it's neither that the port follows.
+function buildKind(all) {
+  for (const [kind, cursor] of Object.entries(BUILD_CURSORS)) {
+    if (
+      all.get('b.a:[[I')?.[0]?.[0] === BUILD_RESOURCES[kind].firstRoomLayer &&
+      all.get('GameMidlet.c:[[I')?.[0]?.[0] === cursor &&
+      all.get(BUILD_TABLES[kind].fonts)
+    ) {
+      return kind;
+    }
+  }
+  return null;
+}
+
+// All of a build's data, or null if the build isn't one the port follows.
 export function loadMobile3(files) {
   const all = readAllTables(files);
+  const kind = buildKind(all);
+  if (!kind) return null;
   const tables = {};
-  for (const [name, key] of Object.entries(TABLES)) {
+  for (const [name, key] of Object.entries({ ...TABLES, ...BUILD_TABLES[kind] })) {
     const table = all.get(key);
     if (!table) return null;
     tables[name] = table;
   }
-  if (tables.rules.length !== 78 || tables.roomLayers[0]?.[0] !== FIRST_ROOM_LAYER) return null;
+  if (tables.rules.length !== 78) return null;
+  const hardCoded = BUILD_RESOURCES[kind];
 
   // Resource numbers name an archive in the top byte and an entry below it. The first
   // archive is the JAR's own files, listed by number in the class e.
@@ -231,25 +370,37 @@ export function loadMobile3(files) {
   for (const name of tables.looseFiles) {
     if (name?.endsWith('.mid')) entries.set(`${SOUND_PATH}/${name}`, files.get(name));
   }
+  for (const [name, id] of Object.entries(hardCoded.sounds ?? {})) {
+    entries.set(`${SOUND_PATH}/${name}.mid`, resource(id));
+  }
+
+  const fontIds = [];
+  for (let i = 3; i < tables.fonts.length; i += 4) fontIds.push(tables.fonts[i]);
+  const fonts = fontIds.map((id) => parseFont(resource(id)));
 
   const sheets = new Map();
   const animations = new Map();
+  const loadSheet = (id) => {
+    if (!sheets.has(id)) sheets.set(id, parseSheet(resource(id)));
+    return sheets.get(id);
+  };
   return {
     dataDir: 'sh3',
+    kind,
     files,
     entries,
     tables,
+    hardCoded,
     languages,
+    fonts,
     resource,
     resourceCount: (archive) => archives[archive].length,
-    sheet(id) {
-      if (!sheets.has(id)) sheets.set(id, parseSheet(resource(id)));
-      return sheets.get(id);
-    },
+    sheet: loadSheet,
     animation(id) {
       if (!animations.has(id)) animations.set(id, parseAnimation(resource(id)));
       return animations.get(id);
     },
+    moduleSize: (sheet, index) => moduleSize(loadSheet(sheet), index),
     text(language) {
       return parseLanguage(resource(language.resource));
     },

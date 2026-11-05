@@ -81,9 +81,17 @@ Nobody has played Mobile 2 by hand yet.
 
 ### Silent Hill Mobile 3
 
-Mobile 3 has just been started, and has a different engine. You can walk around, look at things and pick them up, but not much else. It has no menus, puzzles, fights or saving yet, and says so when you reach something that isn't there.
+Mobile 3 has a different engine, and the port plays it from the logos to the ending: rooms, corridors, the lift and map, all six puzzles, all four monsters, both worlds, the three chapters, saving, and six languages.
 
-It only follows v1.7.0 and its twins so far. During development, <http://localhost:8123/?jar=sh3-en-v170> loads it, or you can drop in one of those JARs. It has no Internet Archive button yet.
+Its Internet Archive button loads `sh3-2010-v1.0.20-a`, a keypad build. During development, <http://localhost:8123/?jar=sh3-2010-v1.0.20-a> or <http://localhost:8123/?jar=sh3-en-v170> loads a build, or you can drop in one of the 41 JARs it follows, which are v1.0.20, v1.0.23, v1.0.24, and v1.1.0, v1.5.0 and v1.7.0 with touch art. It explains that it doesn't follow the others, which include the 3-minute demos of v1.0.17.
+
+Point and click. In a room or corridor, the cursor's words say what a click does, and clicking something opens a wheel of look, use and inventory. W, A, S and D walk and turn, E and Q move to the next thing that can be clicked, I opens the inventory, and M the map once you have it. Enter, Space and the two big buttons do what they're labelled with, and a right-click is the right one.
+
+In a puzzle or fight the direction keys move the cursor. For the safe, keypad builds take the number keys, and with a mouse the sides of the knob change a number and clicking the display moves to the next. The paper puzzle's Rotate is the left button, or E or Q.
+
+The JAR's own help mentions keys or touching, as it did on a phone, and hasn't been rewritten for a mouse.
+
+Nobody has played Mobile 3 by hand yet.
 
 ## Requirements
 
