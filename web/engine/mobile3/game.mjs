@@ -14,6 +14,8 @@ export const SCREEN_X = (SCENE_WIDTH - SCREEN_WIDTH) >> 1;
 const MILLISECONDS_PER_TICK = 60;
 // A fade's stages, as GameMidlet.eB, each lasting one update: stippled black from the JAR's art,
 // then black, then stippled again, and one more update before anything else can happen.
+// With the port's Transitions setting off, a room change's fade draws nothing and ends once
+// what waits for black has happened.
 const FADE = { DONE: 0, STIPPLED_IN: 1, BLACK: 2, STIPPLED_OUT: 3 };
 
 export const MODE = { ROOM: 0, CORRIDOR: 1, PUZZLE: 3, FIGHT: 4 };
@@ -140,7 +142,8 @@ const USED_UP_BY_CHAPTER_THREE = [110, 113];
 const CLIP_SIZE = [-1, 15, 5];
 const SAVE_KEY = 'silent-hill-mobile3:save';
 const SETTINGS_KEY = 'silent-hill-mobile3:settings';
-// Shared with the other two games, which have the same setting.
+// Shared with the other two games, which have the same settings.
+const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const MOUSE_RECOIL_PREFERENCE = 'silent-hill-mobile:mouse-recoil';
 const WEAK_HEALTH = 70;
 const SAFE_DAMAGE = 25;
@@ -222,6 +225,7 @@ export class Mobile3Game {
     // The page looks at these, as it does on the other games.
     this.popups = [];
     this.pointerLocked = false;
+    this.roomTransitions = this.readPreference(TRANSITIONS_PREFERENCE) !== 'off';
     this.mouseLock = this.readPreference(MOUSE_RECOIL_PREFERENCE) === 'on';
     this.stroke = null;
     this.frontEnd = null;
@@ -604,17 +608,22 @@ export class Mobile3Game {
 
   // After the screen has gone black, as GameMidlet's aB() and d() arrange. It can stay black
   // for a while, as a monster's moves do.
-  startFade(atBlack, holdMilliseconds = 0) {
-    if (!this.fade) this.fade = { stage: FADE.STIPPLED_IN, atBlack, hold: holdMilliseconds };
+  // A monster's fades are part of its fight, so they show whatever the Transitions setting says.
+  startFade(atBlack, holdMilliseconds = 0, hidden = false) {
+    if (!this.fade) this.fade = { stage: FADE.STIPPLED_IN, atBlack, hold: holdMilliseconds, hidden };
   }
 
   // aB() on its own, which sends a fade back to its start. What's waiting for black still happens.
+  // Without transitions, there's nothing left to show once it has.
   restartFade() {
-    this.fade = { stage: FADE.STIPPLED_IN, atBlack: this.fade?.atBlack ?? null, hold: 0 };
+    const atBlack = this.fade?.atBlack ?? null;
+    if (!this.roomTransitions && !atBlack) this.fade = null;
+    else this.fade = { stage: FADE.STIPPLED_IN, atBlack, hold: 0, hidden: !this.roomTransitions };
   }
 
+  // A room change, a step or a turn. Without transitions, it still happens when it would have.
   fadeThen(atBlack) {
-    this.startFade(atBlack);
+    this.startFade(atBlack, 0, !this.roomTransitions);
   }
 
   get fadeIsBlack() {
@@ -1430,6 +1439,7 @@ export class Mobile3Game {
     const { fade } = this;
     if (!fade) return;
     if (fade.stage === FADE.STIPPLED_IN) fade.stage = FADE.BLACK;
+    else if (fade.hidden && !fade.atBlack) this.fade = null;
     else if (fade.stage === FADE.BLACK) {
       if (fade.hold > 0) fade.hold -= MILLISECONDS_PER_TICK;
       else fade.stage = FADE.STIPPLED_OUT;
@@ -1842,10 +1852,19 @@ export class Mobile3Game {
     );
   }
 
+  toggleRoomTransitions() {
+    this.roomTransitions = !this.roomTransitions;
+    this.writePreference(TRANSITIONS_PREFERENCE, this.roomTransitions);
+  }
+
   toggleMouseLock() {
     this.mouseLock = !this.mouseLock;
+    this.writePreference(MOUSE_RECOIL_PREFERENCE, this.mouseLock);
+  }
+
+  writePreference(key, on) {
     try {
-      this.storage?.setItem(MOUSE_RECOIL_PREFERENCE, this.mouseLock ? 'on' : 'off');
+      this.storage?.setItem(key, on ? 'on' : 'off');
     } catch {
       // It still applies until the page is closed.
     }
@@ -2015,7 +2034,7 @@ export class Mobile3Game {
   // As GameMidlet.aD(): the JAR's stipple, tiled over the screen, or black.
   drawFade() {
     const { fade, frontEnd, map, blackBehindDialogue } = this;
-    if (!fade || fade.stage === FADE.DONE || frontEnd || map || blackBehindDialogue) return [];
+    if (!fade || fade.hidden || fade.stage === FADE.DONE || frontEnd || map || blackBehindDialogue) return [];
     if (fade.stage === FADE.BLACK) return [{ fill: '#000000', x: 0, y: 0, width: SCENE_WIDTH, height: SCENE_HEIGHT }];
     const { sheet, animation } = this.data.hardCoded.fade;
     const { width: tile } = this.data.moduleSize(sheet, 0);

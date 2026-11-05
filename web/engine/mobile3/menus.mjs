@@ -1,4 +1,4 @@
-import { controlsText, MOUSE_RECOIL_LABELS } from './help.mjs';
+import { controlsText, MOUSE_RECOIL_LABELS, TRANSITIONS_LABELS } from './help.mjs';
 import { measureText, wrapText } from './text.mjs';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from './ui.mjs';
 
@@ -15,9 +15,17 @@ const SOUND_LINES = { ON: 432, OFF: 433, VIBRATE_ON: 434, VIBRATE_OFF: 435 };
 const NO_SAVING_LINE = 481;
 const MAIN = { PLAY: 0, SETTINGS: 1, HELP: 2, ABOUT: 3, QUIT: 4 };
 
+function portSettingRow(game, labels, on) {
+  const label = labels[game.languageName] ?? labels.English;
+  return `${label}${game.lines[game.tables.onOffLines[on ? 0 : 1]]}`;
+}
+
+function transitionsRow(game) {
+  return portSettingRow(game, TRANSITIONS_LABELS, game.roomTransitions);
+}
+
 function mouseRecoilRow(game) {
-  const label = MOUSE_RECOIL_LABELS[game.languageName] ?? MOUSE_RECOIL_LABELS.English;
-  return `${label}${game.lines[game.tables.onOffLines[game.mouseLock ? 0 : 1]]}`;
+  return portSettingRow(game, MOUSE_RECOIL_LABELS, game.mouseLock);
 }
 
 export class FrontEnd {
@@ -109,7 +117,7 @@ export class FrontEnd {
   }
 
   settingIds() {
-    return ['sound', ...(this.game.vibrator ? ['vibration'] : []), 'mouseRecoil', 'language'];
+    return ['sound', ...(this.game.vibrator ? ['vibration'] : []), 'transitions', 'mouseRecoil', 'language'];
   }
 
   settingRows() {
@@ -119,6 +127,7 @@ export class FrontEnd {
     return this.settingIds().map((id) => {
       if (id === 'sound') return `${lines[tables.settingLabels[0]]}${onOff(game.audio?.enabled ?? true)}`;
       if (id === 'vibration') return `${lines[tables.settingLabels[1]]}${onOff(game.vibrationOn)}`;
+      if (id === 'transitions') return transitionsRow(game);
       if (id === 'mouseRecoil') return mouseRecoilRow(game);
       return `${lines[tables.settingLabels[2]]}${game.languageName}`;
     });
@@ -136,6 +145,8 @@ export class FrontEnd {
     if (id === 'sound') {
       game.audio?.setEnabled?.(!game.audio.enabled);
       if (game.audio?.enabled) game.playSound('music');
+    } else if (id === 'transitions') {
+      game.toggleRoomTransitions();
     } else if (id === 'mouseRecoil') {
       game.toggleMouseLock();
     } else if (id === 'language') {
@@ -431,18 +442,24 @@ export class PauseMenu {
     );
   }
 
-  soundRows() {
+  settingIds() {
+    return ['sound', ...(this.game.vibrator ? ['vibration'] : []), 'transitions', 'mouseRecoil'];
+  }
+
+  settingRows() {
     const { game } = this;
     const { lines } = game;
-    const rows = [lines[game.audio?.enabled === false ? SOUND_LINES.OFF : SOUND_LINES.ON]];
-    if (game.vibrator) rows.push(lines[game.vibrationOn ? SOUND_LINES.VIBRATE_ON : SOUND_LINES.VIBRATE_OFF]);
-    rows.push(mouseRecoilRow(game));
-    return rows;
+    return this.settingIds().map((id) => {
+      if (id === 'sound') return lines[game.audio?.enabled === false ? SOUND_LINES.OFF : SOUND_LINES.ON];
+      if (id === 'vibration') return lines[game.vibrationOn ? SOUND_LINES.VIBRATE_ON : SOUND_LINES.VIBRATE_OFF];
+      if (id === 'transitions') return transitionsRow(game);
+      return mouseRecoilRow(game);
+    });
   }
 
   showSettings(selected = 0) {
     this.stage = 'settings';
-    this.box = this.game.boxes.rows(this.soundRows(), { width: 128, selected });
+    this.box = this.game.boxes.rows(this.settingRows(), { width: 128, selected });
   }
 
   showHelp() {
@@ -479,8 +496,10 @@ export class PauseMenu {
         );
       }
     } else if (this.stage === 'settings') {
-      if (row === 0) game.audio?.setEnabled?.(!game.audio.enabled);
-      else if (row === this.soundRows().length - 1) game.toggleMouseLock();
+      const id = this.settingIds()[row];
+      if (id === 'sound') game.audio?.setEnabled?.(!game.audio.enabled);
+      else if (id === 'transitions') game.toggleRoomTransitions();
+      else if (id === 'mouseRecoil') game.toggleMouseLock();
       else {
         game.vibrationOn = !game.vibrationOn;
         game.saveSettings();

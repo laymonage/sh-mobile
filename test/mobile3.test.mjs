@@ -879,6 +879,42 @@ test("fades take the original's few updates, in the JAR's art", () => {
   assert.deepEqual(seen, ['black', 'black', 'stippled', 'clear', 'clear']);
 });
 
+test('with Transitions off, steps and turns happen as soon as they would, with nothing drawn', () => {
+  const storage = memoryStorage();
+  storage.setItem('silent-hill-mobile:transitions', 'off');
+  const game = newGame({ storage });
+  assert.equal(game.roomTransitions, false);
+  game.mode = MODE.CORRIDOR;
+  game.placeInCorridor(30, FACING.NORTH);
+  const { sheet } = data.hardCoded.fade;
+  const covered = () => game.drawList().some((item) => item.sheet === sheet || item.fill === '#000000');
+  game.turnTo(FACING.EAST);
+  assert.equal(covered(), false);
+  game.tick();
+  assert.equal(game.facing, FACING.NORTH, 'not before the update the original turns in');
+  game.tick();
+  assert.equal(game.facing, FACING.EAST);
+  assert.equal(game.fade, null, 'and nothing holds the game up after');
+  assert.equal(covered(), false);
+});
+
+test('Transitions is in both settings menus, and shared with the other games', () => {
+  const storage = memoryStorage();
+  const front = createGame(data, { storage });
+  const row = front.frontEnd.settingIds().indexOf('transitions');
+  assert.match(front.frontEnd.settingRows()[row], /^Transitions: /);
+  front.frontEnd.changeSetting(row);
+  assert.equal(storage.getItem('silent-hill-mobile:transitions'), 'off');
+  const later = createGame(data, { storage, startInGame: true });
+  clear(later);
+  assert.equal(later.roomTransitions, false);
+  later.openPause();
+  later.pause.choose(later.pause.rowActions.indexOf('settings'));
+  later.pause.choose(later.pause.settingIds().indexOf('transitions'));
+  assert.equal(later.roomTransitions, true);
+  assert.equal(storage.getItem('silent-hill-mobile:transitions'), 'on');
+});
+
 test('a rule changing the room it is in fades, and a box still answers meanwhile', () => {
   const game = newGame();
   game.room = 9;
@@ -1175,7 +1211,7 @@ test('the Mouse recoil setting is shared with the other games, and captures the 
   assert.equal(later.wantsMouseLock, false, 'not in the pause menu');
   const settings = later.pause.rowActions.indexOf('settings');
   later.pause.choose(settings);
-  later.pause.choose(later.pause.soundRows().length - 1);
+  later.pause.choose(later.pause.settingRows().length - 1);
   assert.equal(later.mouseLock, false);
   assert.equal(storage.getItem('silent-hill-mobile:mouse-recoil'), 'off');
   assert.equal(game.mouseLock, false);

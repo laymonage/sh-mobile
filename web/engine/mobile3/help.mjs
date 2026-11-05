@@ -7,7 +7,16 @@
 
 // By puzzle number. Keypad and touch builds take their instructions from different lines.
 const PUZZLES = [null, 'phone', 'papers', 'clock', 'safe', 'bottles', 'pearls'];
-// The port's own setting, as the other two games word it.
+// The port's own settings, as the other two games word them.
+export const TRANSITIONS_LABELS = {
+  English: 'Transitions: ',
+  Français: 'Transitions : ',
+  Deutsch: 'Übergänge: ',
+  Italiano: 'Transizioni: ',
+  Español: 'Transiciones: ',
+  Português: 'Transições: ',
+};
+
 export const MOUSE_RECOIL_LABELS = {
   English: 'Mouse recoil: ',
   Français: 'Recul souris : ',

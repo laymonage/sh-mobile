@@ -93,4 +93,6 @@ In a puzzle or fight the direction keys move the cursor. For the safe, keypad bu
 
 Each pistol or shotgun shot kicks the aim up, and the aim wanders while you hold a weapon. With a free mouse, both settle back to the mouse. With the keys they last until you steer back, as on a phone, and the Mouse recoil setting, shared with the other games, captures the mouse in fights so they last with it too. Esc lets it go.
 
+The Transitions setting, also shared with the other games, turns off the fades between rooms and corridor views.
+
 The Controls page and the puzzles' instructions are rewritten for a mouse and keyboard, in all six languages.
