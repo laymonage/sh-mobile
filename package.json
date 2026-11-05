@@ -1,8 +1,9 @@
 {
-  "name": "silent-hill-mobile-analysis",
+  "name": "silent-hill-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Reproducible analysis of the Silent Hill J2ME games, for a future JavaScript port. Contains no game files.",
+  "description": "A browser port of the three Silent Hill J2ME games, and the analysis of their builds behind it. AI-assisted with Claude Opus 5.5. Contains no game files.",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22"

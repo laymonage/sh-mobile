@@ -15,7 +15,7 @@ for (const { id, path, member, sha256: expected } of allInputs) {
 }
 
 if (problems) {
-  console.error(`${problems} of ${allInputs.length} inputs are missing or different. See README.md.`);
+  console.error(`${problems} of ${allInputs.length} inputs are missing or different. See docs/DEVELOPMENT.md.`);
   process.exit(1);
 }
 console.log(`All ${allInputs.length} inputs match inputs.json.`);

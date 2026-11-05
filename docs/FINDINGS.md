@@ -201,9 +201,9 @@ The game's rooms, floors, dialogue order and items are arrays built by static in
 
 `sh3-en-v160` stores its assets as 215 loose PNGs with real names, such as `b_enigma1_telephone.png`, including 97 objects and 22 puzzle images. Its art differs from the top tier, so these names haven't been mapped to the archive entries.
 
-## The prototype
+## The Silent Hill port
 
-`web/` runs Silent Hill's own scripts in a browser, following `sh1-2014-a7`'s decompiled engine. The game can be finished in the port. `test/playthrough.test.mjs` plays it from a new game through Ben, Moon and Karen to the ending and back to the main menu, using only the pointer, clicks and keys. It passes through 110 of the 112 rooms: `setup` is over within the first tick, and no script leads to `ben_backToLight`. The route also finishes with a save and load at each of its save points outside the puzzle rooms, which reset when they're entered.
+`web/` runs Silent Hill's own scripts in a browser, following `sh1-2014-a7`'s decompiled engine. The game can be finished in the port, and a person has played it by hand in the browser from start to finish. `test/playthrough.test.mjs` plays it from a new game through Ben, Moon and Karen to the ending and back to the main menu, using only the pointer, clicks and keys. It passes through 110 of the 112 rooms: `setup` is over within the first tick, and no script leads to `ben_backToLight`. The route also finishes with a save and load at each of its save points outside the puzzle rooms, which reset when they're entered.
 
 `scripts/find-route.mjs` found the route by trying everything a player could from each state, so the 527 steps include plenty of looking around and aren't a sensible way to play. It was given the answers to the three clocks, the gate and the blackboard, read from their scripts. Moon's clock and the blackboard's word agree with [this walkthrough](https://www.silenthillmemories.net/sh_orphan/walkthrough_en.htm), which doesn't cover Karen's clock or spell out the gate's answer. The safe was solved by the search alone.
 
@@ -380,7 +380,7 @@ The JAR's Help and tutorial describe a keypad, or the touch build's icons. `web/
 
 ### What was tried
 
-In the browser, with `sh2-2015-base`: the startup, the main menu, the tutorial, the first room, the verb wheel, a recolored corridor, a fight and two drawn puzzles, using real pointer events where it mattered. Those rooms were reached by setting the game's state rather than by walking there, and the rest of the route has only been run in Node. No one has played it by hand, and the music hasn't been listened to.
+In the browser, with `sh2-2015-base`: the startup, the main menu, the tutorial, the first room, the verb wheel, a recolored corridor, a fight and two drawn puzzles, using real pointer events where it mattered. Those rooms were reached by setting the game's state rather than by walking there. Since then, a person has played Mobile 2 by hand in the browser from start to finish.
 
 The Internet Archive's button was clicked in the browser: it downloaded the file, checked its hash, kept it, and a reload played from the kept copy without downloading again. The keypad version's painting was solved there with pointer events. The first game's button was clicked too, after it became one of two.
 
@@ -394,7 +394,7 @@ Playing the route also found a freeze in the engine shared with the first game: 
 
 `test/mobile3-route.test.mjs` plays from a new game to the ending in Node, through the page's own methods, following [the walkthrough at Silent Hill Memories](https://www.silenthillmemories.net/sh_mobile3/walkthrough_en.htm). It does this on one build of each of the 12 different programs the port accepts. Its fights use a seeded random number generator and perfect aim, so surviving them says nothing about how hard they are.
 
-In the browser, `sh3-2010-v1.0.20-a` was started from the Internet Archive button and clicked by hand from its logos to the opening dialogue. Screens were looked at by eye on it and `sh3-en-v170`: the menus, the inventory, the map, the verb wheel, a corridor, all six puzzles on the keypad build, three of them on the touch build, and all four monsters on the keypad build. There were no console errors. The rest of the route has only been run in Node, and sound has been parsed, not listened to.
+In the browser, `sh3-2010-v1.0.20-a` was started from the Internet Archive button and clicked by hand from its logos to the opening dialogue. Screens were looked at by eye on it and `sh3-en-v170`: the menus, the inventory, the map, the verb wheel, a corridor, all six puzzles on the keypad build, three of them on the touch build, and all four monsters on the keypad build. There were no console errors. Since then, a person has played Mobile 3 by hand in the browser from start to finish.
 
 An audit against the decompiled code found these gaps, which are now fixed, with tests. Nothing in the route had noticed them:
 
@@ -458,8 +458,7 @@ These aren't kept, so far. Neither has been decided on, and each is a difference
 
 ## What hasn't been checked
 
-- The first game has been played through once by a person in the browser, who reported that it seemed okay. That wasn't a side-by-side comparison with the original on a phone, and the route in `test/playthrough.test.mjs` hasn't been compared with one either.
-- Mobile 3 hasn't been played by hand to its end, or compared with a phone. How often its monsters attack depends on the same assumed 60 ms tick as the other games.
-- Mobile 2 hasn't been compared with a phone, and how often its monsters attack depends on the same assumed 60 ms tick as the first game's.
+- All three games have been played by hand in the browser from start to finish. None of those playthroughs was a side-by-side comparison with the original on a phone, and neither are the routes the tests play.
+- How often monsters attack, in all three games, depends on an assumed 60 ms tick rather than a measured frame rate.
 - The decompiled Java hasn't been recompiled.
 - Build dates come from ZIP metadata.

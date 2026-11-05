@@ -40,7 +40,7 @@ export function readInput(id) {
   const { path, member } = input(id);
   const fullPath = join(INPUT_ROOT, path);
   if (!existsSync(fullPath)) {
-    throw new Error(`Missing input "${id}": expected ${fullPath}. See README.md.`);
+    throw new Error(`Missing input "${id}": expected ${fullPath}. See docs/DEVELOPMENT.md.`);
   }
   return member ? readContainer(fullPath).read(member) : readFileSync(fullPath);
 }
