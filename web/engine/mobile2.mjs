@@ -1,5 +1,5 @@
 import { ROOM_OBJECT_ZONE_BATTLE } from './format.mjs';
-import { CHOICE_BACK, CHOICE_USE, EVENT, Game, MENU, verbWheelCenter, VERB } from './game.mjs';
+import { CHOICE_BACK, CHOICE_USE, EVENT, Game, MENU, SHOT_VIBRATION_MS, verbWheelCenter, VERB } from './game.mjs';
 import { adaptMobile2Texts, mobile2ControlsText, mobile2GameplayText, mobile2HelpFor } from './mobile2-help.mjs';
 import { MOBILE_2_TEXT } from './text-tables.mjs';
 import { toBoolean, toInt } from './vm.mjs';
@@ -144,6 +144,7 @@ export class Mobile2Game extends Game {
   static FLOOR_VARIABLE = 'varFloor';
   static FLOOR_ROWS = ['floor2', 'floor1', 'basement'];
   static MENU_MUSIC = 'sh_bgtheme';
+  static FRAME_VIBRATION = false;
   static WHEEL_ARMS = { [VERB.LOOK]: [1, -16], [VERB.HAND]: [20, 12], [VERB.INVENTORY]: [-17, 12] };
   static WHEEL_SYMBOLS_X = 2;
   // e.b centers the splash art, and draws the logo over it.
@@ -167,6 +168,15 @@ export class Mobile2Game extends Game {
   // Only the touch build has this room, and its puzzles are drawn.
   get isTouchBuild() {
     return this.data.entries.has(`${this.dataDir}/rom/puzzleBodyIncision.bin`);
+  }
+
+  // The keypad builds have no vibration setting, and run past the command for it.
+  get canVibrate() {
+    return this.isTouchBuild && Boolean(this.vibrator);
+  }
+
+  scriptMayVibrate() {
+    return true;
   }
 
   adaptGameTexts(texts) {
@@ -522,6 +532,7 @@ export class Mobile2Game extends Game {
     this.fightDraws = [];
     if (this.shot) {
       this.playSound(this.getRaw('soundShot'));
+      this.vibrate(SHOT_VIBRATION_MS);
       this.recoilVertical += RECOIL_VERTICAL;
       this.recoilHorizontal = this.randomInt(2) === 0 ? -RECOIL_HORIZONTAL : RECOIL_HORIZONTAL;
       if (!toBoolean(this.getRaw('sys_ammoUnlimited'))) this.ammoSet(this.ammo - 1, true, true);

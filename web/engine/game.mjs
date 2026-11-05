@@ -15,7 +15,15 @@ import {
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
 import { SILENT_HILL_TEXT } from './text-tables.mjs';
-import { MainMenu, mouseLockChoice, parseIni, pixelFontChoice, soundChoice, transitionsChoice } from './main-menu.mjs';
+import {
+  MainMenu,
+  mouseLockChoice,
+  parseIni,
+  pixelFontChoice,
+  soundChoice,
+  transitionsChoice,
+  vibrationChoices,
+} from './main-menu.mjs';
 
 export const EVENT = {
   GETNAME: 1,
@@ -139,14 +147,18 @@ const LOADED_GAME_TIME = 1000000;
 const TRANSITIONS_PREFERENCE = 'silent-hill-mobile:transitions';
 const PIXEL_FONT_PREFERENCE = 'silent-hill-mobile:pixel-font';
 const MOUSE_RECOIL_PREFERENCE = 'silent-hill-mobile:mouse-recoil';
+const VIBRATION_PREFERENCE = 'silent-hill-mobile:vibration';
+const VIBRATION_TOGGLE_MS = 250;
+const FRAME_VIBRATION_MS = 200;
+export const SHOT_VIBRATION_MS = 150;
 const POPUP_LIMIT = 4;
 const POPUP_NEXT_MS = 500;
 
 export const CHOICE_BACK = -3;
 export const CHOICE_USE = -2;
 
-// Commands this prototype runs past: chunk downloads, which a JAR doesn't need, and vibration.
-const NO_OP = new Set([47, 56]);
+// A command this prototype runs past: chunk downloads, which a JAR doesn't need.
+const NO_OP = new Set([47]);
 const LANGUAGE_ORDER = ['en', 'fr', 'de', 'it', 'es', 'pt'];
 
 // The text files write a line break as a backslash and an n, and a space that lines
@@ -398,8 +410,10 @@ class RoomObject {
   paintAnimationFrame(list, { parts }, elapsed) {
     let end = 0;
     for (let i = 0; i < parts.length; i += VALUES_PER_PART) {
-      end += Math.abs(toInt(parts[i + 1]));
+      const duration = toInt(parts[i + 1]);
+      end += Math.abs(duration);
       if (elapsed < end) {
+        if (duration < 0) this.game.vibrateForFrame();
         if (parts[i] === '') return;
         list.push({
           kind: 'image',
@@ -424,6 +438,7 @@ export class Game {
   static FLOOR_VARIABLE = 'var_floor';
   static FLOOR_ROWS = FLOOR_ROWS;
   static MENU_MUSIC = 'sh_bgmusic';
+  static FRAME_VIBRATION = true;
   static WHEEL_ARMS = {
     [VERB.LOOK]: [1, -20],
     [VERB.HAND]: [21, -1],
@@ -450,6 +465,7 @@ export class Game {
       audio = null,
       onQuit = null,
       credits = [],
+      vibrate = null,
     } = {},
   ) {
     this.data = data;
@@ -460,6 +476,7 @@ export class Game {
     this.audio = audio;
     this.onQuit = onQuit;
     this.credits = credits;
+    this.vibrator = vibrate;
     this.text = this.constructor.TEXT;
     this.mainMenu = null;
     this.languages = this.findLanguages();
@@ -532,6 +549,7 @@ export class Game {
     this.paintingTime = null;
     this.pixelFont = this.storedPixelFont();
     this.mouseLock = this.readPreference(MOUSE_RECOIL_PREFERENCE) === 'on';
+    this.vibration = this.readPreference(VIBRATION_PREFERENCE) !== 'off';
     this.pointerLocked = false;
 
     this.menus = [];
@@ -675,6 +693,34 @@ export class Game {
     this.writePreference(MOUSE_RECOIL_PREFERENCE, this.mouseLock);
   }
 
+  // sh1-en-v153 has no vibration, and its texts are numbered differently, so this isn't a label.
+  get canVibrate() {
+    return Boolean(this.vibrator) && /[:：]\s*$/.test(this.engineText(this.text.VIBRATION));
+  }
+
+  vibrate(ms) {
+    if (this.canVibrate && this.vibration) this.vibrator(ms);
+  }
+
+  // A frame with a negative length vibrates, once in a new game, as in RoomObject.animRoutine.
+  vibrateForFrame() {
+    if (!this.constructor.FRAME_VIBRATION || !this.frameVibrationPending) return;
+    this.frameVibrationPending = false;
+    this.vibrate(FRAME_VIBRATION_MS);
+  }
+
+  // As in ExtBase.executeCommand, coming back to the first room doesn't vibrate again.
+  scriptMayVibrate() {
+    return !this.backInFirstRoom || this.currentRoomId?.toLowerCase() !== '0';
+  }
+
+  // As in M.h, turning it on gives a taste of it.
+  toggleVibration() {
+    this.vibration = !this.vibration;
+    this.writePreference(VIBRATION_PREFERENCE, this.vibration);
+    this.vibrate(VIBRATION_TOGGLE_MS);
+  }
+
   get wantsMouseLock() {
     return (
       this.mouseLock && !this.mainMenu && !this.ended && !this.menus.length && !this.popups.length && this.isAiming()
@@ -690,7 +736,13 @@ export class Game {
   }
 
   pauseSettings() {
-    return [soundChoice(this), transitionsChoice(this), pixelFontChoice(this), mouseLockChoice(this)];
+    return [
+      soundChoice(this),
+      ...vibrationChoices(this),
+      transitionsChoice(this),
+      pixelFontChoice(this),
+      mouseLockChoice(this),
+    ];
   }
 
   // The game leaves it to the page to say what quitting means.
@@ -1038,6 +1090,9 @@ export class Game {
         this.startTextFade(args[0], args.slice(1).map(integerArgument));
         thread.status = STATUS.PAUSED;
         return null;
+      case 56:
+        if (this.scriptMayVibrate()) this.vibrate(integerArgument(args[0]));
+        return null;
       default:
         if (!NO_OP.has(op)) this.unsupportedCommands.add(op);
         return null;
@@ -1357,6 +1412,7 @@ export class Game {
   // Rooms.
   startNewGame() {
     this.resetRun();
+    this.frameVibrationPending = true;
     this.tickTime = 0;
     this.paintingTime = null;
     this.setupDone = false;
@@ -1364,6 +1420,9 @@ export class Game {
   }
 
   resetRun() {
+    this.frameVibrationPending = false;
+    this.visitedFirstRoom = false;
+    this.backInFirstRoom = false;
     this.mainMenu = null;
     this.vars.clear();
     this.actionKeys.clear();
@@ -1589,6 +1648,10 @@ export class Game {
     if (!bytes) throw new Error(`Missing room: ${room}`);
     const parsed = parseRoom(bytes, { wideZones: usesWideZones(this.dataDir) });
     this.currentRoomId = room;
+    if (room === '0') {
+      this.backInFirstRoom = this.visitedFirstRoom;
+      this.visitedFirstRoom = true;
+    }
     this.roomLoading();
     this.saveAllowedInRoom = parsed.strings.includes('savePoint');
     this.objects = parsed.objects.map((source) => new RoomObject(source, this));
@@ -1851,6 +1914,10 @@ export class Game {
         break;
       case 'sound':
         this.toggleSound();
+        menu.choices = this.pauseSettings();
+        break;
+      case 'vibration':
+        this.toggleVibration();
         menu.choices = this.pauseSettings();
         break;
       case 'transitions':
@@ -2447,6 +2514,7 @@ export class Game {
     if (this.shot) {
       this.shot = false;
       this.playSound(this.getRaw('sys_gunShotSound') ?? 'sh_shot');
+      this.vibrate(SHOT_VIBRATION_MS);
       this.ammoSet(this.ammo - 1, true, true);
       this.recoilVertical += RECOIL_VERTICAL;
       this.recoilHorizontal = this.randomInt(2) === 0 ? -RECOIL_HORIZONTAL : RECOIL_HORIZONTAL;

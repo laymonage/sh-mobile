@@ -55,6 +55,12 @@ const saveButton = document.getElementById('save');
 const loadButton = document.getElementById('load');
 const soundButton = document.getElementById('sound');
 
+// Desktop browsers can have this call with nothing to shake, so it's for touch screens only.
+function browserVibrator() {
+  if (!navigator.vibrate || !window.matchMedia('(pointer: coarse)').matches) return null;
+  return (ms) => navigator.vibrate(ms);
+}
+
 function browserStorage() {
   try {
     return window.localStorage;
@@ -96,6 +102,7 @@ async function start(bytes) {
     audio,
     now: () => clock.now(),
     onQuit: returnToStartPage,
+    vibrate: browserVibrator(),
     credits: SOUNDFONTS.map((font) => `Soundfont: ${font.credit}`),
   });
   const renderer = new Renderer(canvas, game);

@@ -310,6 +310,14 @@ There's no limiter. An earlier version had the browser's compressor on the outpu
 
 Every file was rendered in a browser through both sound sources and measured for silence, invalid samples and clipping. Nobody has compared the result with a real phone.
 
+### Vibration
+
+`sh1-2007-a40` and the recommended game data have the vibration code, with a setting that's on by default and whose text in the JAR is "Vibra:". Turning it on vibrates for 250 ms, and each shot for 150 ms. Its one script command, in `2w`, says 200 ms in the first room, and `ExtBase.executeCommand` skips it after coming back to that room. The route's only run of that command comes after coming back, so the route doesn't feel it. The painting in the first room reaches a frame marked with a negative length, -20000, after 12 seconds. `RoomObject.animRoutine` vibrates for 200 ms the first time a new game reaches a marked frame, but not in a loaded game. The startup's 2 ms call isn't copied, because a browser wouldn't allow it before a click.
+
+Some builds, such as `sh1-2014-a7`, don't have this code, but their text still has the setting's label, and the port gives every build with that label the same vibration. Of the 105 accepted builds, only `sh1-en-v153` doesn't, so it has no setting. Its text is numbered differently, and its Sound row in the port reads wrongly because of that, which is separate from vibration and hasn't been fixed.
+
+The setting only appears on a touch screen whose browser has `navigator.vibrate`. Android Chrome does and Safari on iPhones doesn't. Shots along the route, and the rules above, are tested in Node with a stand-in for the call. Nobody has felt them on a phone.
+
 ## The Mobile 2 port
 
 `web/engine/mobile2.mjs` runs Silent Hill Mobile 2 on the first game's engine, following `sh2-2015-base`'s decompiled code. Its script interpreter, the `c` class, was read against the port's: the commands mean the same, so the virtual machine is shared unchanged, and the difference between the games is in the engine around it. The tests for Silent Hill passed unchanged, apart from the count of accepted builds above.
@@ -346,6 +354,12 @@ The moving enemy compares its name with the word `Enemy`, as `h.s` does. That na
 ### The drawn puzzles
 
 `e.a`, `e.b` and `e.c` draw a line and check its position against regions measured from a mask image's corner. They don't read the mask's pixels. A stroke has to touch three checkpoints without leaving the regions, and only dragging counts, not the point it starts from. As in the original, nothing is drawn for the first 350 ms. The keypad builds have ordinary puzzles in rooms of the same names, and the port lets those be clicked.
+
+### Vibration
+
+The touch build vibrates for 150 ms on each shot, and whenever one of 17 script commands says to. It has a setting for this, on by default, whose text in the JAR is "Vibra:", and turning it on vibrates for 250 ms. The port does the same through the browser's `navigator.vibrate`. The keypad builds have the same 17 commands but ignore them, and have no such setting, so the keypad version doesn't vibrate in the port either. 
+
+The setting only appears on a touch screen whose browser has that call. Android Chrome does and Safari on iPhones doesn't. The route's vibrations are tested in Node, with a stand-in for the call. Nobody has felt them on a phone.
 
 ### What the port leaves out
 

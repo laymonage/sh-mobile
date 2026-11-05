@@ -255,6 +255,41 @@ test('a fan translation keeps its own text', async () => {
   assert.match(game.gameplayHelp(), /[А-я]/);
 });
 
+test('the touch build vibrates where the device can, unless the setting is off', () => {
+  const buzzes = [];
+  const storage = memoryStorage();
+  const game = newGame({ storage });
+  game.vibrator = (ms) => buzzes.push(ms);
+  const script = { status: 0 };
+  game.command(script, 56, ['40']);
+  assert.deepEqual(buzzes, [40]);
+
+  const row = () => game.pauseSettings().find((choice) => choice.id === 'vibration');
+  assert.equal(row().text, 'Vibra: On');
+  game.toggleVibration();
+  assert.equal(row().text, 'Vibra: Off');
+  assert.equal(storage.getItem('silent-hill-mobile:vibration'), 'off');
+  game.command(script, 56, ['40']);
+  assert.deepEqual(buzzes, [40]);
+  game.toggleVibration();
+  assert.deepEqual(buzzes, [40, 250]);
+  assert.equal(storage.getItem('silent-hill-mobile:vibration'), 'on');
+});
+
+test('there is no vibration setting without a device for it, or in the keypad builds', () => {
+  const withoutDevice = newGame();
+  withoutDevice.command({}, 56, ['40']);
+  assert.ok(!withoutDevice.pauseSettings().some((choice) => choice.id === 'vibration'));
+
+  const buzzes = [];
+  const keypad = newGame({ build: keypadData });
+  keypad.vibrator = (ms) => buzzes.push(ms);
+  keypad.command({}, 56, ['40']);
+  assert.ok(!keypad.pauseSettings().some((choice) => choice.id === 'vibration'));
+  assert.deepEqual(buzzes, []);
+  assert.deepEqual([...keypad.unsupportedCommands], []);
+});
+
 test('a menu’s border clears the logo, and short menus stay centered', () => {
   const top = (roomHeight, height, logoHeight) =>
     engineMenuTop({ roomHeight, height, logoHeight, borderTop: 7, borderBottom: 6 });
@@ -262,6 +297,10 @@ test('a menu’s border clears the logo, and short menus stay centered', () => {
   const settings = top(270, 102, 80);
   assert.ok(settings - 7 >= 2 + 80, `The border starts at ${settings - 7}`);
   assert.ok(settings + 102 + 6 <= 270);
+  // With the vibration row, on a phone.
+  const withVibration = top(270, 119, 80);
+  assert.ok(withVibration - 7 >= 2 + 80, `The border starts at ${withVibration - 7}`);
+  assert.ok(withVibration + 119 + 6 <= 270);
   // A short one, and every menu in the first game, whose logo is short, stay centered.
   assert.equal(top(270, 70, 80), 100);
   assert.equal(top(256, 102, 39), 77);

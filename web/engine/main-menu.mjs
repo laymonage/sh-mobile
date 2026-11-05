@@ -67,6 +67,20 @@ export function soundChoice(game) {
   };
 }
 
+// Only where the original has this setting and the device can do it.
+export function vibrationChoices(game) {
+  if (!game.canVibrate) return [];
+  const label = (on) => `${game.engineText(game.text.VIBRATION)} ${game.engineText(on ? game.text.ON : game.text.OFF)}`;
+  return [
+    {
+      id: 'vibration',
+      text: label(game.vibration),
+      softKey: game.text.CHANGE,
+      values: [label(true), label(false)],
+    },
+  ];
+}
+
 export function transitionsChoice(game) {
   return {
     id: 'transitions',
@@ -250,7 +264,13 @@ export class MainMenu {
 
   settingChoices() {
     const { game } = this;
-    const choices = [soundChoice(game), transitionsChoice(game), pixelFontChoice(game), mouseLockChoice(game)];
+    const choices = [
+      soundChoice(game),
+      ...vibrationChoices(game),
+      transitionsChoice(game),
+      pixelFontChoice(game),
+      mouseLockChoice(game),
+    ];
     if (game.languages.length > 1) choices.push(languageChoice(game));
     return choices;
   }
@@ -354,6 +374,8 @@ export class MainMenu {
     const { game } = this;
     if (id === 'sound') {
       game.toggleSound();
+    } else if (id === 'vibration') {
+      game.toggleVibration();
     } else if (id === 'transitions') {
       game.toggleRoomTransitions();
     } else if (id === 'pixelFont') {

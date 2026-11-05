@@ -2253,6 +2253,83 @@ test('recoil settles back with the mouse, and moving the mouse takes over from t
   assert.deepEqual([game.cursorX, game.cursorY], [100, 100]);
 });
 
+test('vibration has a setting in the pause menu where the device can do it', () => {
+  const buzzes = [];
+  const storage = memoryStorage();
+  const game = savableGame(storage, { vibrate: (ms) => buzzes.push(ms) });
+  game.pressKey('Escape');
+  game.advance();
+  pauseChoice(game, 'Settings');
+  pauseChoice(game, 'Vibra: On');
+  assert.equal(new Game(data, { storage }).vibration, false);
+  assert.deepEqual(buzzes, []);
+  pauseChoice(game, 'Vibra: Off');
+  assert.deepEqual(buzzes, [250]);
+  assert.equal(new Game(data, { storage }).vibration, true);
+
+  const withoutDevice = savableGame(memoryStorage());
+  assert.ok(!withoutDevice.pauseSettings().some((choice) => choice.id === 'vibration'));
+});
+
+test('a build with no vibration setting of its own has none in the port', async () => {
+  const touchBuild = loadGameData(await readJar(readInput(recommended.sh1.touchReference)));
+  const game = new Game(touchBuild, { language: 'en', vibrate: () => assert.fail('It vibrated') });
+  assert.equal(game.canVibrate, false);
+  game.command({}, 56, ['200']);
+});
+
+test('coming back to the first room does not repeat its vibration', () => {
+  const buzzes = [];
+  const game = savableGame(memoryStorage(), { language: 'en', vibrate: (ms) => buzzes.push(ms) });
+  const enter = (room) => {
+    game.roomInit(room, false);
+    game.advance();
+    assert.equal(game.currentRoomId, room);
+    buzzes.length = 0;
+  };
+  // A new run, which hasn't been to the first room yet.
+  game.resetRun();
+  enter('0');
+  game.command({}, 56, ['200']);
+  assert.deepEqual(buzzes, [200]);
+  enter('1');
+  game.command({}, 56, ['30']);
+  assert.deepEqual(buzzes, [30]);
+  enter('0');
+  game.command({}, 56, ['200']);
+  assert.deepEqual(buzzes, []);
+
+  game.resetRun();
+  enter('0');
+  game.command({}, 56, ['200']);
+  assert.deepEqual(buzzes, [200]);
+});
+
+test('the first room’s painting vibrates once in a new game, when it reaches its long frame', () => {
+  const buzzes = [];
+  const game = savableGame(memoryStorage(), { language: 'en', vibrate: (ms) => buzzes.push(ms) });
+  const reachLongFrame = () => {
+    game.roomInit('0', false);
+    game.advance();
+    const { parts } = game.objects[6].animations[6];
+    let start = 0;
+    for (let i = 1; Number(parts[i]) >= 0; i += 4) start += Number(parts[i]);
+    assert.equal(Number(parts[start === 0 ? 1 : parts.findIndex((value) => Number(value) < 0)]), -20000);
+    game.paintingTime = 1000;
+    game.tickTime = 1000 + start + 1;
+    game.drawList();
+    game.drawList();
+  };
+  reachLongFrame();
+  assert.deepEqual(buzzes, [200]);
+  reachLongFrame();
+  assert.deepEqual(buzzes, [200]);
+
+  game.resetRun();
+  reachLongFrame();
+  assert.deepEqual(buzzes, [200], 'A loaded game has been past it');
+});
+
 test('the mouse recoil setting is off unless turned on, and is only wanted while aiming with nothing open', () => {
   assert.equal(new Game(data).mouseLock, false);
   const storage = memoryStorage();

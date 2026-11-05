@@ -29,8 +29,10 @@ function play({
   betweenSteps = () => {},
   data = touchData,
   route = touchRoute,
+  vibrate = null,
 } = {}) {
   const game = newPlaythroughGame(data, { seed, storage });
+  game.vibrator = vibrate;
   const player = new Player(game, { keyboard });
   if (keyboard) game.click = () => assert.fail("A keyboard player can't click");
   const seen = { rooms: new Set(), speakers: new Set(), lowestHealth: Infinity, roomOrder: [] };
@@ -63,6 +65,19 @@ test('the route plays from a new game to the ending, and back to the main menu',
   assert.deepEqual([...game.unsupportedCommands], []);
   assert.deepEqual(seen.roomOrder.slice(-2), ['lightLastRoom', 'endGame']);
   for (const speaker of ['Lucas', 'Karen', 'Vincent']) assert.ok(seen.speakers.has(speaker), speaker);
+});
+
+test('the touch build vibrates for shots and for scripts along the route, and the keypad version never does', () => {
+  const touch = [];
+  play({ vibrate: (ms) => touch.push(ms) });
+  assert.ok(touch.includes(150), 'A shot');
+  assert.ok(
+    touch.some((ms) => ms !== 150),
+    'A script',
+  );
+  const keypad = [];
+  play({ data: keypadData, route: keypadRoute, vibrate: (ms) => keypad.push(ms) });
+  assert.deepEqual(keypad, []);
 });
 
 test('the route goes through the puzzles, the second character and the last fight', () => {
