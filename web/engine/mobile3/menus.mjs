@@ -499,8 +499,9 @@ export class PauseMenu {
     }
   }
 
+  // After saying it's saved, or that it can't save, the original goes back to the game.
   goBack() {
-    if (this.stage === 'main') this.game.closePause();
+    if (this.stage === 'main' || this.stage === 'said') this.game.closePause();
     else if (this.stage === 'pages') this.showHelp();
     else this.showMain();
   }
@@ -518,7 +519,7 @@ export class PauseMenu {
     } else if (this.stage === 'pages') {
       this.nextPageOrBack();
     } else {
-      this.showMain();
+      this.goBack();
     }
   }
 
@@ -539,7 +540,7 @@ export class PauseMenu {
       else if (key === 'Enter') this.choose(box.selected);
     } else if (key === 'Enter') {
       if (this.stage === 'pages') this.nextPageOrBack();
-      else this.showMain();
+      else this.goBack();
     }
   }
 

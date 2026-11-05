@@ -408,6 +408,9 @@ An audit against the decompiled code found these gaps, which are now fixed, with
 - The wrong number's red flash shows, for about a frame.
 - Vibrations keep their patterns, on phones that allow them.
 - Touch builds' fights have their green and red tap targets. See below.
+- The phone keeps the numbers typed so far when you leave it, as its static fields do in the original, and leaving while the right number shows still solves it.
+- The message after saving from the pause menu goes back to the game, as the original's does.
+- The inventory offers Use whenever the cursor was on something when it opened, as the class d does, and uses the item on that. So the inventory key works over an object as the verb wheel does, and every item offers Use in the pearl puzzle, where one that isn't a pearl can't be used.
 - Keypad builds show their own text where the two kinds of build name different lines: "Press any key" before the main menu rather than "Touch the screen", their keys in the Controls help rather than touching the screen, and their own copy of the pearl puzzle's instructions. Every build's language files hold the lines for both, so this is in `resources.mjs` with the other numbers written into the methods.
 
 ### Which builds

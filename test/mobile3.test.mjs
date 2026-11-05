@@ -460,9 +460,9 @@ test('pausing stops the world, and its rows work', () => {
   game.pressKey('ArrowDown');
   game.pressKey('Enter');
   assert.ok(game.hasSave());
+  // The message after saving goes back to the game, as the original's does.
   game.pressKey('Escape');
-  game.pressKey('Escape');
-  assert.equal(game.pause, null);
+  assert.equal(game.pause === null, true);
 });
 
 function solveClockButtons(game) {
@@ -512,7 +512,7 @@ test('a wrong number on the phone clears, and the right one opens the door', () 
   assert.equal(typeof keyAt, 'function');
   for (const digit of '426463') game.pressKey(digit);
   for (let i = 0; i < 20; i++) game.tick();
-  assert.equal(game.puzzle, null);
+  assert.equal(game.puzzle === null, true);
   assert.equal(game.room, 13);
   assert.equal(game.phoneSolved, true);
 });
@@ -527,7 +527,7 @@ for (const build of [data, keypadData]) {
     game.pressKey('9');
     game.pressSoftKey('left');
     assert.equal(game.health, 75);
-    assert.equal(game.puzzle, null);
+    assert.equal(game.puzzle === null, true);
     assert.equal(game.mode, MODE.ROOM);
   });
 
@@ -578,7 +578,7 @@ test('a pearl in the wrong cavity goes back into the inventory', () => {
   assert.equal(game.hasItem(68), false);
   assert.ok(game.puzzle.holdsPearl(68));
   game.pressSoftKey('left');
-  assert.equal(game.puzzle, null);
+  assert.equal(game.puzzle === null, true);
   assert.ok(game.hasItem(68));
 });
 
@@ -750,7 +750,7 @@ for (const build of [data, keypadData]) {
     game.startPuzzle(4);
     plays.length = 0;
     game.pressSoftKey('right');
-    assert.equal(game.puzzle, null);
+    assert.equal(game.puzzle === null, true);
     assert.equal(game.mode, MODE.ROOM);
     assert.equal(game.objectHidden[54], hidden);
     assert.equal(game.health, 100);
@@ -767,7 +767,7 @@ test('a wrong number flashes red for a moment, over the room it returns to', () 
   const red = () => game.drawList().some(({ fill }) => fill === '#aa0000');
   game.pressKey('9');
   game.pressSoftKey('left');
-  assert.equal(game.puzzle, null);
+  assert.equal(game.puzzle === null, true);
   assert.ok(red());
   game.tick();
   game.tick();
@@ -1086,7 +1086,7 @@ test('the puzzles show the new instructions, and C confirms them', () => {
   clear(game);
   assert.equal(Mobile3Game.LEFT_SOFT_KEY, 'c');
   game.pressSoftKey('left');
-  assert.equal(game.puzzle, null, 'the clock was confirmed');
+  assert.equal(game.puzzle === null, true, 'the clock was confirmed');
 });
 
 test('the Controls page shows from the main menu and the pause menu', () => {
@@ -1179,6 +1179,64 @@ test('the Mouse recoil setting is shared with the other games, and captures the 
   assert.equal(later.mouseLock, false);
   assert.equal(storage.getItem('silent-hill-mobile:mouse-recoil'), 'off');
   assert.equal(game.mouseLock, false);
+});
+
+test('the phone keeps the numbers typed so far, and the right number counts even if you leave', () => {
+  const game = newGame();
+  game.mode = MODE.CORRIDOR;
+  const code = game.tables.phoneCode;
+  game.startPuzzle(1);
+  clear(game);
+  game.pressKey(String(code[0]));
+  game.pressKey(String(code[1]));
+  game.pressSoftKey('right');
+  game.startPuzzle(1);
+  clear(game);
+  assert.deepEqual(game.puzzle.entered, code.slice(0, 2));
+  for (const digit of code.slice(2)) game.pressKey(String(digit));
+  game.pressSoftKey('right');
+  assert.equal(game.phoneSolved, true);
+});
+
+test('after saving from the pause menu, its message goes back to the game', () => {
+  const game = newGame({ storage: memoryStorage() });
+  game.openPause();
+  game.pause.choose(game.pause.rowActions.indexOf('save'));
+  assert.equal(game.pause.stage, 'said');
+  game.pressKey('Enter');
+  assert.equal(game.pause === null, true);
+});
+
+test('the inventory key on something offers Use, and uses the item on it', () => {
+  const game = newGame();
+  game.enterRoom(10);
+  settle(game);
+  game.addItem(105);
+  const ice = game.hotspots().find(({ id }) => id === 37);
+  game.moveCursor((ice.x0 + ice.x1) >> 1, (ice.y0 + ice.y1) >> 1);
+  game.pressKey('inventory');
+  assert.equal(game.inventory.hotspot.id, 37);
+  while (game.inventory.item !== 105) game.pressKey('ArrowRight');
+  assert.ok(game.inventory.canUse());
+  game.pressKey('Enter');
+  assert.ok(game.hasItem(106), 'the ice melted into the gold key');
+});
+
+test('every item offers Use in the pearl puzzle, and one that is not a pearl cannot be used there', () => {
+  const game = newGame();
+  game.chapter = 3;
+  game.mode = MODE.CORRIDOR;
+  game.startPuzzle(6);
+  clear(game);
+  game.addItem(106);
+  game.moveCursor(SCREEN_X + 120, 141);
+  game.click();
+  assert.ok(game.inventory.isOpen);
+  while (game.inventory.item !== 106) game.pressKey('ArrowRight');
+  assert.ok(game.inventory.canUse());
+  game.pressKey('Enter');
+  assert.equal(game.currentText.text, game.lines[415]);
+  assert.ok(game.hasItem(106));
 });
 
 test('the port follows the v1.7.0 and v1.0.20 families, and explains what it does with the rest', async () => {

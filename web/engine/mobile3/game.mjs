@@ -262,6 +262,7 @@ export class Mobile3Game {
     this.reloading = false;
     this.reloadWait = 0;
     this.phoneSolved = false;
+    this.phoneEntered = [];
     this.flagL = false;
     this.flagM = false;
     this.verbs = null;
@@ -1655,7 +1656,8 @@ export class Mobile3Game {
       return;
     }
     if (key === 'inventory') {
-      if (!this.puzzle) this.inventory.open();
+      // As the class d does, an item is used on whatever the cursor is on.
+      if (!this.puzzle) this.inventory.open(this.action()?.kind === 'verbs' ? this.action().hotspot : null);
       return;
     }
     if (key === 'map') {

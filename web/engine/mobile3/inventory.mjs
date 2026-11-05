@@ -50,9 +50,16 @@ export class Inventory {
     return this.items[this.selected];
   }
 
-  // Using an item needs something to use it on, or it has to be one that works on its own.
+  // Using an item needs something to use it on, or it has to be one that works on its own. As
+  // in the class d, that's whenever the cursor showed it was on something.
   canUse() {
-    return this.hotspot !== null || this.game.puzzle?.acceptsItem?.(this.item) || ALWAYS_USABLE.has(this.item);
+    const { puzzle } = this.game;
+    return (
+      this.hotspot !== null ||
+      Boolean(puzzle?.takesAnyItem?.()) ||
+      Boolean(puzzle?.acceptsItem?.(this.item)) ||
+      ALWAYS_USABLE.has(this.item)
+    );
   }
 
   open(hotspot = null) {

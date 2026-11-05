@@ -84,7 +84,6 @@ class Phone extends Puzzle {
     this.textX = this.displayX + 14;
     this.textY = this.displayY + 9;
     this.textStep = Math.trunc((size.width - 14) / this.tables.phoneCode.length);
-    this.entered = [];
     this.verdictTime = 0;
     this.correct = false;
     if (game.phoneSolved) {
@@ -92,7 +91,10 @@ class Phone extends Puzzle {
       this.correct = true;
       this.verdictTime = 1000;
     } else {
+      // The numbers typed so far are the original's static fields, so they're still there.
+      this.entered = [...game.phoneEntered];
       this.showIntro();
+      if (this.entered.length === this.tables.phoneCode.length) this.judge();
     }
   }
 
@@ -114,10 +116,14 @@ class Phone extends Puzzle {
     const { phoneCode } = this.tables;
     if (this.verdictTime > 0 || this.entered.length >= phoneCode.length) return;
     this.entered.push(key);
-    if (this.entered.length === phoneCode.length) {
-      this.correct = this.entered.every((value, index) => value === phoneCode[index]);
-      this.verdictTime = 1000;
-    }
+    this.game.phoneEntered = [...this.entered];
+    if (this.entered.length === phoneCode.length) this.judge();
+  }
+
+  judge() {
+    const { phoneCode } = this.tables;
+    this.correct = this.entered.every((value, index) => value === phoneCode[index]);
+    this.verdictTime = 1000;
   }
 
   click(x, y) {
@@ -134,11 +140,15 @@ class Phone extends Puzzle {
     this.verdictTime -= milliseconds;
     if (this.verdictTime > 0) return;
     if (this.correct) this.game.finishPuzzle(this, true);
-    else this.entered = [];
+    else {
+      this.entered = [];
+      this.game.phoneEntered = [];
+    }
   }
 
+  // The right number counts as soon as it's typed, so leaving while it shows still solves it.
   softRight() {
-    this.game.finishPuzzle(this, false);
+    this.game.finishPuzzle(this, this.correct);
     return true;
   }
 
@@ -816,6 +826,11 @@ class Pearls extends Puzzle {
 
   acceptsItem(item) {
     return PEARLS.includes(item);
+  }
+
+  // A cavity was under the cursor when the inventory opened, so every item offers Use.
+  takesAnyItem() {
+    return this.chosenSlot > -1;
   }
 
   place(item) {
