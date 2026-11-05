@@ -5,6 +5,7 @@ import { parseLan, parseScript, walkCode } from '../web/engine/format.mjs';
 import { GameClock } from '../web/engine/clock.mjs';
 import { EVENT, Game, MENU, VERB, verbWheelCenter } from '../web/engine/game.mjs';
 import { controlsText, gameplayText } from '../web/engine/help-text.mjs';
+import { languageName } from '../web/engine/main-menu.mjs';
 import { pixelFontGlyph } from '../web/pixel-font.mjs';
 import { ARCHIVE_JARS, inspectJar, loadGameData, readJar } from '../web/engine/jar.mjs';
 import { ScriptThread, Script, STATUS, toBoolean } from '../web/engine/vm.mjs';
@@ -1616,13 +1617,59 @@ test('a plus in the text files is a space that lines do not break at', () => {
 
 test('the builds the port accepts offer the languages they have files for', async () => {
   const counts = new Map();
+  const builtIn = [];
   for (const { id } of buildsOf('sh1')) {
     const inspection = await inspectJar(readInput(id));
     if (inspection.status === 'rejected') continue;
-    const { languages } = new Game(inspection.data, { roomSize: inspection.roomSize });
-    counts.set(languages.join(), (counts.get(languages.join()) ?? 0) + 1);
+    const game = new Game(inspection.data, { roomSize: inspection.roomSize });
+    const languages = game.languages.join();
+    counts.set(languages, (counts.get(languages) ?? 0) + 1);
+    if (game.languagesAreBuiltIn) builtIn.push(id);
   }
-  assert.deepEqual(Object.fromEntries(counts), { 'en,fr,de,it,es,pt': 94, 'en,fr': 4, en: 7 });
+  assert.deepEqual(Object.fromEntries(counts), { 'en,fr,de,it,es,pt': 94, 'en,fr': 4, en: 6, 'en,es,pt': 1 });
+  assert.deepEqual(builtIn, ['sh1-en-v153']);
+});
+
+test('sh1-en-v153 reads the right text, though its files name only its own languages', async () => {
+  const touchBuild = loadGameData(await readJar(readInput('sh1-en-v153')));
+  const game = new Game(touchBuild, { language: 'en' });
+  assert.deepEqual(game.languages, ['en', 'es', 'pt']);
+  assert.deepEqual(
+    game.languages.map((language) => languageName(game, language)),
+    ['English', 'Español', 'Português'],
+  );
+  const rows = () => game.pauseSettings().map((choice) => choice.text);
+  assert.deepEqual(rows(), ['Sound: On', 'Transitions: On', 'Pixel font: Off', 'Mouse recoil: Off']);
+
+  // Its label for vibration has no setting behind it, and doesn't read as one.
+  assert.equal(game.engineText(game.text.VIBRATION), '???');
+
+  // Otherwise its text says the same as a31's under every name, apart from the year in About.
+  const usual = new Game(loadGameData(await readJar(readInput('sh1-2007-a31'))), { language: 'en' });
+  const [rights] = game.text.ABOUT_SECTIONS;
+  assert.match(game.engineText(rights), /^© 2010 Konami/);
+  const named = Object.values(game.text).flat();
+  for (const index of named.filter((index) => index !== rights && index !== game.text.VIBRATION)) {
+    assert.equal(game.engineText(index), usual.engineText(index), `Text ${index}`);
+  }
+  assert.deepEqual(
+    Game.SPEAKER_TEXTS.map(([index]) => game.engineText(index)),
+    ['Ben', 'Moon', 'Karen'],
+  );
+  assert.equal(game.engineText(game.text.SELECT), 'Select');
+  assert.equal(game.engineText(game.text.OUT_OF_AMMO), 'No more bullets. Where did I get those?');
+
+  for (const language of game.languages) {
+    game.setLanguage(language);
+    assert.doesNotMatch(controlsText(game), /<JAVA/, language);
+    assert.doesNotMatch(gameplayText(game), /softkey|teclas de selección|teclas de menu/i, language);
+  }
+  assert.match(controlsText(game), /Clique \/ Enter \(apenas quando o cursor está destacado\)/);
+
+  game.setLanguage('es');
+  assert.deepEqual(rows(), ['Sonido: Sí', 'Transiciones: Sí', 'Fuente píxel: No', 'Retroceso ratón: No']);
+  game.setLanguage('pt');
+  assert.deepEqual(rows(), ['Som: Ligado', 'Transições: Ligado', 'Fonte píxel: Desligado', 'Recuo rato: Desligado']);
 });
 
 test('a build whose Spanish file ends in a stray line feed still loads it', async () => {
@@ -1662,7 +1709,7 @@ test('every language an accepted build offers loads', async () => {
       loaded++;
     }
   }
-  assert.equal(loaded, 94 * 6 + 4 * 2 + 7);
+  assert.equal(loaded, 94 * 6 + 4 * 2 + 6 + 3);
 });
 
 // A game standing in `room`, with the room's opening text and scripts out of the way.

@@ -54,6 +54,20 @@ export const SILENT_HILL_TEXT = {
   ABOUT_SECTIONS: [159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169],
 };
 
+// sh1-en-v153 is the only build with no INK-Languages in settings.ini, because its code
+// lists these languages, in h.a.
+export const BUILT_IN_LANGUAGES = ['en', 'es', 'pt'];
+
+// Its localization files name only those languages, so each text from Select on sits 3
+// lines earlier than the table above says. This puts the 3 lines back, so that the table
+// and every other number for this game apply. Its code never reads its "Vibra:" label and
+// has no such setting, so the label doesn't come along.
+export function withUsualNumbering([language, english, spanish, portuguese, ...rest]) {
+  const lines = [language, english, null, null, null, spanish, portuguese, ...rest];
+  lines[SILENT_HILL_TEXT.VIBRATION] = null;
+  return lines;
+}
+
 // From the calls in sh2-2015-base's e.java and h.java, checked against its en.properties.
 export const MOBILE_2_TEXT = {
   LANGUAGE: 0,

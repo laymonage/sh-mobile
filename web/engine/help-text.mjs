@@ -122,17 +122,19 @@ export function controlsText(game) {
   const help = helpFor(gameplayParagraphs(game)[0]);
   if (!help) return originalControlsText(game);
   const section = (name, keys, replacement) => game.engineText(CONTROLS_SECTIONS[name]).replace(keys, replacement);
+  // sh1-en-v153's text doesn't mention the 5 key.
+  const fireKey = game.languagesAreBuiltIn ? placeholder('FIRE') : FIRE_KEY;
   return [
     section('moveCursor', MOVE_KEYS, help.mouse),
     help.cycle,
     help.aim,
-    section('openMenu', FIRE_KEY, help.click),
+    section('openMenu', fireKey, help.click),
     section('closeMenu', placeholder('SOFTKEY_B'), help.back),
     help.walk,
     section('weapon', placeholder('NUM1'), '1'),
     section('menuSelection', MENU_KEYS, help.menu),
     help.scroll,
-    section('select', FIRE_KEY, help.select),
+    section('select', fireKey, help.select),
     section('pause', placeholder('SOFTKEY_B'), help.back),
     section('map', placeholder('SOFTKEY_A'), 'M'),
     section('inventory', INVENTORY_KEYS, 'I'),

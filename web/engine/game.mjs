@@ -14,7 +14,7 @@ import {
 } from './format.mjs';
 import { integerArgument, Script, ScriptThread, STATUS, toBoolean, toInt } from './vm.mjs';
 import { adaptTutorialText, controlsText, gameplayText } from './help-text.mjs';
-import { SILENT_HILL_TEXT } from './text-tables.mjs';
+import { BUILT_IN_LANGUAGES, SILENT_HILL_TEXT, withUsualNumbering } from './text-tables.mjs';
 import {
   MainMenu,
   mouseLockChoice,
@@ -693,7 +693,7 @@ export class Game {
     this.writePreference(MOUSE_RECOIL_PREFERENCE, this.mouseLock);
   }
 
-  // sh1-en-v153 has no vibration, and its texts are numbered differently, so this isn't a label.
+  // sh1-en-v153 has no vibration, and withUsualNumbering leaves out its label.
   get canVibrate() {
     return Boolean(this.vibrator) && /[:：]\s*$/.test(this.engineText(this.text.VIBRATION));
   }
@@ -814,7 +814,7 @@ export class Game {
   findLanguages() {
     const { entries, files } = this.data;
     const settings = files.get('settings.ini');
-    const listed = settings ? (parseIni(settings).get('INK-Languages') ?? '').split(/[,_]/) : [];
+    const listed = settings ? (parseIni(settings).get('INK-Languages')?.split(/[,_]/) ?? BUILT_IN_LANGUAGES) : [];
     const present = listed.filter(
       (language) =>
         entries.has(`${this.dataDir}/lan/${language}.lan`) && files.has(`localization/${language}.properties`),
@@ -854,11 +854,17 @@ export class Game {
   }
 
   readEngineTexts(language) {
-    return new TextDecoder('utf-8')
+    const texts = new TextDecoder('utf-8')
       .decode(this.data.files.get(`localization/${language}.properties`))
       .split(/\r?\n/)
       .filter((line) => line.length > 0)
       .map(displayText);
+    return this.languagesAreBuiltIn ? withUsualNumbering(texts) : texts;
+  }
+
+  get languagesAreBuiltIn() {
+    const settings = this.data.files.get('settings.ini');
+    return Boolean(settings) && !parseIni(settings).has('INK-Languages');
   }
 
   setLanguage(language) {
