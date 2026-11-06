@@ -50,7 +50,7 @@ Everything in the first game works, from the startup screens to the ending: the 
 
 The original's Select, Menu, Map, Back and OK keys appear as buttons when they apply. Those and the in-game text follow the language you choose, while the page's other buttons stay in English. The text boxes and the rusted steel behind the buttons are art from your JAR, not files in this repo.
 
-Settings, in the main menu and the pause menu, and the first menu after the logo can turn the transitions between rooms off, turn on a pixel font that imitates an old phone's text, and turn on mouse recoil for fights, which captures the mouse while aiming.
+Settings, in the main menu and the pause menu, and the first menu after the logo can turn off the transitions between rooms and the pixel font that imitates an old phone's text, and turn on mouse recoil for fights, which captures the mouse while aiming.
 
 Tabbing away stops the game and its sound, and tabbing back carries on from the same moment. Unlike the original, which opens the pause menu, this doesn't interrupt play.
 

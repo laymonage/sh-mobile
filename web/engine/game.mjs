@@ -679,7 +679,7 @@ export class Game {
 
   // Whether text looks like an old phone's, which the renderer draws.
   storedPixelFont() {
-    return this.readPreference(PIXEL_FONT_PREFERENCE) === 'on';
+    return this.readPreference(PIXEL_FONT_PREFERENCE) !== 'off';
   }
 
   togglePixelFont() {

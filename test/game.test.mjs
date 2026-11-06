@@ -1243,7 +1243,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
   assert.deepEqual(menuTexts(game), [
     'Sound: On',
     'Transitions: On',
-    'Pixel font: Off',
+    'Pixel font: On',
     'Mouse recoil: Off',
     'Language: English',
     'Continue',
@@ -1255,7 +1255,7 @@ test('the sound question plays the shot when sound goes on, and the splash plays
   assert.deepEqual(menuTexts(game), [
     'Sound: Off',
     'Transitions: On',
-    'Pixel font: Off',
+    'Pixel font: On',
     'Mouse recoil: Off',
     'Language: English',
     'Continue',
@@ -1339,7 +1339,7 @@ test('the first menu also changes transitions and language, in place, and stays 
   assert.deepEqual(menuTexts(game), [
     'Sound: On',
     'Transitions: Off',
-    'Pixel font: Off',
+    'Pixel font: On',
     'Mouse recoil: Off',
     'Language: English',
     'Continue',
@@ -1383,7 +1383,7 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   assert.deepEqual(menuTexts(game), [
     'Sound: On',
     'Transitions: On',
-    'Pixel font: Off',
+    'Pixel font: On',
     'Mouse recoil: Off',
     'Language: English',
   ]);
@@ -1401,7 +1401,7 @@ test('Settings changes sound and language, in place, and arrow keys move the hig
   assert.deepEqual(menuTexts(game), [
     `${game.engineText(19)} ${game.engineText(21)}`,
     `Transitions\u00a0: ${game.engineText(21)}`,
-    `Police pixel\u00a0: ${game.engineText(22)}`,
+    `Police pixel\u00a0: ${game.engineText(21)}`,
     `Recul souris\u00a0: ${game.engineText(22)}`,
     `${game.engineText(0)} Français`,
   ]);
@@ -1544,7 +1544,7 @@ test('the pause menu continues, saves, and changes sound', () => {
   assert.equal(audio.enabled, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: Off', 'Transitions: On', 'Pixel font: Off', 'Mouse recoil: Off'],
+    ['Sound: Off', 'Transitions: On', 'Pixel font: On', 'Mouse recoil: Off'],
   );
 });
 
@@ -1642,7 +1642,7 @@ test('sh1-en-v153 reads the right text, though its files name only its own langu
     ['English', 'Español', 'Português'],
   );
   const rows = () => game.pauseSettings().map((choice) => choice.text);
-  assert.deepEqual(rows(), ['Sound: On', 'Transitions: On', 'Pixel font: Off', 'Mouse recoil: Off']);
+  assert.deepEqual(rows(), ['Sound: On', 'Transitions: On', 'Pixel font: On', 'Mouse recoil: Off']);
 
   // Its label for vibration has no setting behind it, and doesn't read as one.
   assert.equal(game.engineText(game.text.VIBRATION), '???');
@@ -1670,9 +1670,9 @@ test('sh1-en-v153 reads the right text, though its files name only its own langu
   assert.match(controlsText(game), /Clique \/ Enter \(apenas quando o cursor está destacado\)/);
 
   game.setLanguage('es');
-  assert.deepEqual(rows(), ['Sonido: Sí', 'Transiciones: Sí', 'Fuente píxel: No', 'Retroceso ratón: No']);
+  assert.deepEqual(rows(), ['Sonido: Sí', 'Transiciones: Sí', 'Fuente píxel: Sí', 'Retroceso ratón: No']);
   game.setLanguage('pt');
-  assert.deepEqual(rows(), ['Som: Ligado', 'Transições: Ligado', 'Fonte píxel: Desligado', 'Recuo rato: Desligado']);
+  assert.deepEqual(rows(), ['Som: Ligado', 'Transições: Ligado', 'Fonte píxel: Ligado', 'Recuo rato: Desligado']);
 });
 
 test('a build whose Spanish file ends in a stray line feed still loads it', async () => {
@@ -1984,7 +1984,7 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   pauseChoice(game, 'Transitions: On');
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: Off', 'Pixel font: Off', 'Mouse recoil: Off'],
+    ['Sound: On', 'Transitions: Off', 'Pixel font: On', 'Mouse recoil: Off'],
   );
   assert.equal(game.menus.at(-1).choices[1].values.length, 2);
   game.pressKey('Escape');
@@ -2011,22 +2011,22 @@ test('room transitions can be turned off, and the choice is remembered', () => {
   assert.equal(new Game(data, { storage }).roomTransitions, true);
 });
 
-test('the pixel font is off unless turned on, and the choice is remembered', () => {
-  assert.equal(new Game(data).pixelFont, false);
+test('the pixel font is on unless turned off, and the choice is remembered', () => {
+  assert.equal(new Game(data).pixelFont, true);
   const storage = memoryStorage();
   const game = savableGame(storage);
-  assert.equal(game.pixelFont, false);
+  assert.equal(game.pixelFont, true);
   game.pressKey('Escape');
   game.advance();
   pauseChoice(game, 'Settings');
-  pauseChoice(game, 'Pixel font: Off');
-  assert.equal(game.pixelFont, true);
+  pauseChoice(game, 'Pixel font: On');
+  assert.equal(game.pixelFont, false);
   assert.deepEqual(
     game.menus.at(-1).choices.map(({ text }) => text),
-    ['Sound: On', 'Transitions: On', 'Pixel font: On', 'Mouse recoil: Off'],
+    ['Sound: On', 'Transitions: On', 'Pixel font: Off', 'Mouse recoil: Off'],
   );
   assert.equal(game.menus.at(-1).choices[2].values.length, 2);
-  assert.equal(new Game(data, { storage }).pixelFont, true);
+  assert.equal(new Game(data, { storage }).pixelFont, false);
 
   const broken = {
     getItem: () => {
@@ -2037,9 +2037,9 @@ test('the pixel font is off unless turned on, and the choice is remembered', () 
     },
   };
   const blocked = new Game(data, { storage: broken });
-  assert.equal(blocked.pixelFont, false);
-  blocked.togglePixelFont();
   assert.equal(blocked.pixelFont, true);
+  blocked.togglePixelFont();
+  assert.equal(blocked.pixelFont, false);
 });
 
 test('the pixel font has a well-formed glyph for every character in all six languages', () => {
