@@ -251,6 +251,12 @@ h1 span {
 #credits p {
   margin: 0;
 }
+#credits a {
+  color: inherit;
+}
+#credits a:hover {
+  color: #ddd8cf;
+}
 #message {
   width: min(440px, 100%);
   margin: 0;
