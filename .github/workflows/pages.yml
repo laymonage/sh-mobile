@@ -20,12 +20,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      # The repo has no game files, so CI runs only the tests that need none:
-      # the manifest checks and the SoundFont reader. The rest need the JARs locally.
+      # The repo has no game files. CI downloads the three copies the page offers from
+      # the Internet Archive and keeps them in the cache, keyed on the hashes in jar.mjs.
+      - uses: actions/cache@v6
+        with:
+          path: archive
+          key: archive-${{ hashFiles('web/engine/jar.mjs') }}
+      - run: npm run fetch-archive
+        timeout-minutes: 5
+      # The tests that need no game files, and each Archive copy played to the ending.
+      # The rest need the pinned builds locally.
       - run: >-
           node --test
           --test-skip-pattern="every input matches its recorded hash|an instrument for every note both games play"
-          test/inputs.test.mjs test/soundfont.test.mjs
+          test/inputs.test.mjs test/soundfont.test.mjs test/archive.test.mjs
+      - run: node --test --test-name-pattern="^sh3-2010-v1\.0\.20-a can be played" test/mobile3-route.test.mjs
 
   deploy:
     needs: test

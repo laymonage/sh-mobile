@@ -15,6 +15,7 @@
     "all": "node scripts/all.mjs",
     "pin": "node scripts/pin-inputs.mjs",
     "verify": "node scripts/verify-inputs.mjs",
+    "fetch-archive": "node scripts/fetch-archive.mjs",
     "compare": "node scripts/compare-builds.mjs",
     "analyze": "node scripts/analyze-data.mjs",
     "opcodes": "node scripts/opcode-table.mjs",

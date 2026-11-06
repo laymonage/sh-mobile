@@ -35,11 +35,17 @@ function readContainer(path) {
   return containers.get(path);
 }
 
-// A build is either a file of its own or a member of a downloaded ZIP.
+// `npm run fetch-archive` saves the Internet Archive's copies here, named by build ID.
+export const ARCHIVE_ROOT = join(INPUT_ROOT, 'archive');
+export const archivePath = (id) => join(ARCHIVE_ROOT, `${id}.jar`);
+
+// A build is either a file of its own or a member of a downloaded ZIP. Without those,
+// it can also be the Internet Archive's copy.
 export function readInput(id) {
   const { path, member } = input(id);
   const fullPath = join(INPUT_ROOT, path);
   if (!existsSync(fullPath)) {
+    if (existsSync(archivePath(id))) return readFileSync(archivePath(id));
     throw new Error(`Missing input "${id}": expected ${fullPath}. See docs/DEVELOPMENT.md.`);
   }
   return member ? readContainer(fullPath).read(member) : readFileSync(fullPath);

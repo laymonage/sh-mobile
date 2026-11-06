@@ -22,6 +22,8 @@ Put these in the repo root. Downloads can stay zipped: builds are read from insi
 
 To keep them somewhere else, set `SHM_INPUTS` to the folder that contains them.
 
+Without the downloads, `npm run fetch-archive` gets the three copies the page offers from the Internet Archive, and saves them in `archive/`. That's enough for `test/archive.test.mjs`, which plays the first two games' copies to the ending, and for Mobile 3's copy in `test/mobile3-route.test.mjs`. CI runs those this way, along with the tests that need no game files.
+
 ## Usage
 
 Run the whole analysis, then check the results against the recorded findings:
@@ -44,6 +46,7 @@ You can also run each step on its own:
 | `npm run format` | Formats the code with Biome. `npm run format:check` only reports what it would change | Console |
 | `npm run lint` | Lints the code with Biome. `npm run check` does this and checks the formatting | Console |
 | `npm run verify` | Checks every build's hash | Console |
+| `npm run fetch-archive` | Downloads the Internet Archive's three copies, checked against their pinned hashes | `archive/` |
 | `npm run compare` | Compares every build of each game | `build/reports/builds-sh1.md`, `builds-sh2.md`, `builds-sh3.md`, `builds.json` |
 | `npm run analyze` | Decodes every INK script and room | `build/reports/data.json` |
 | `npm run opcodes` | Names each script command and event, with usage counts | `build/reports/opcodes.md` |

@@ -5,6 +5,7 @@
 sh1/
 sh2/
 sh3/
+archive/
 
 # Generated output contains game art and decompiled code.
 build/
