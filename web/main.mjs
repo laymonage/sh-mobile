@@ -51,6 +51,7 @@ const MENU_ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
 const archiveButtons = [...document.querySelectorAll('[data-archive]')];
+const chooseRow = document.getElementById('choose');
 const message = document.getElementById('message');
 const canvas = document.getElementById('game');
 const saveButton = document.getElementById('save');
@@ -84,8 +85,23 @@ function returnToStartPage() {
   location.assign(url);
 }
 
-async function start(bytes) {
-  showMessage('Loading...');
+// A spinner turns beside the row the game came from, `source`, until the game has
+// started, which hides the rows. The words are there only for screen readers.
+function showBusy(source, text) {
+  source?.setAttribute('aria-busy', 'true');
+  showMessage(text, 'screen-reader-only');
+}
+
+async function start(bytes, source = null) {
+  showBusy(source, 'Loading...');
+  try {
+    await startGame(bytes);
+  } finally {
+    source?.removeAttribute('aria-busy');
+  }
+}
+
+async function startGame(bytes) {
   const inspection = await inspectJar(bytes);
   if (inspection.status === 'rejected') {
     showMessage(inspection.message, 'error');
@@ -535,7 +551,7 @@ function run(game, renderer) {
 }
 
 async function startFromFile(file) {
-  if (file) await start(new Uint8Array(await file.arrayBuffer()));
+  if (file) await start(new Uint8Array(await file.arrayBuffer()), chooseRow);
 }
 
 // The copy kept from an earlier download, if it can still be read as a game.
@@ -555,14 +571,15 @@ function setArchiveButtonsDisabled(disabled) {
   for (const button of archiveButtons) button.disabled = disabled;
 }
 
-async function startFromArchive(jar) {
+async function startFromArchive(jar, button) {
   setArchiveButtonsDisabled(true);
+  showBusy(button, 'Loading...');
   const stored = await storedArchiveJar(jar);
   if (stored) {
-    await start(stored);
+    await start(stored, button);
     return;
   }
-  showMessage('Downloading from the Internet Archive...');
+  showBusy(button, 'Downloading from the Internet Archive...');
   let bytes;
   try {
     const response = await fetch(jar.url, { integrity: jar.integrity });
@@ -572,13 +589,14 @@ async function startFromArchive(jar) {
   } catch {
     showMessage("Couldn't download the game from the Internet Archive. Try again, or choose a JAR.", 'error');
     setArchiveButtonsDisabled(false);
+    button.removeAttribute('aria-busy');
     return;
   }
-  await start(bytes);
+  await start(bytes, button);
 }
 
 for (const button of archiveButtons) {
-  button.addEventListener('click', () => startFromArchive(ARCHIVE_JARS[button.dataset.archive]));
+  button.addEventListener('click', () => startFromArchive(ARCHIVE_JARS[button.dataset.archive], button));
 }
 fileInput.addEventListener('change', () => startFromFile(fileInput.files[0]));
 drop.addEventListener('dragover', (event) => {

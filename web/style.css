@@ -165,7 +165,9 @@ h1 span {
 /* Menu rows, picked out with the grey bar the games use for the chosen row. */
 #archive-sources button,
 #choose {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
   width: calc(100% + 20px);
   margin: 0 -10px;
   min-height: 40px;
@@ -191,8 +193,39 @@ h1 span {
 #archive-sources button:disabled {
   color: var(--ink-muted);
 }
+/* The row a game is downloading or loading from keeps its ink, with a spinner after its
+   title. For your own JAR, it takes the place of the ellipsis. */
+#archive-sources button[aria-busy="true"] {
+  color: var(--ink);
+}
+#archive-sources button[aria-busy="true"]::after,
+#choose[aria-busy="true"]::after {
+  content: "";
+  flex: none;
+  margin-left: 0;
+  box-sizing: border-box;
+  width: 0.875em;
+  height: 0.875em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #archive-sources button[aria-busy="true"]::after,
+  #choose[aria-busy="true"]::after {
+    animation-duration: 2.4s;
+  }
+}
+/* Flex drops the space before it, so the gap stands in for one. */
 #choose::after {
-  content: " …";
+  content: "…";
+  margin-left: -0.25em;
 }
 #file {
   position: absolute;
@@ -245,6 +278,14 @@ body.playing #message {
 }
 #message.error {
   color: var(--error);
+}
+#message.screen-reader-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 #game {
   display: none;
